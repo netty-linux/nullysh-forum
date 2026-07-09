@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Nullysh Forum
 
-## Getting Started
+MVP protótipo do **Nullysh Forum** — comunidade VIP com feed social, comunidades, vídeos, materiais e bate-papo.
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** (App Router) + TypeScript
+- **Tailwind CSS v4**
+- **Zustand** (auth + forum CRUD em localStorage)
+- **Phosphor Icons**
+
+## Design
+
+White minimalist / product minimalism:
+
+- Fundo branco, tipografia limpa (Geist)
+- Botões pretos, muito whitespace
+- Grid editorial suíço, UI SaaS limpa
+
+## Como rodar
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Contas demo
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Conta | E-mail | Senha | Acesso |
+|-------|--------|-------|--------|
+| Admin VIP | `admin@nullysh.com` | `admin123` | VIP + admin |
+| Membro free | `demo@nullysh.com` | `demo123` | Free |
 
-## Learn More
+Ou crie uma conta em `/register`.
 
-To learn more about Next.js, take a look at the following resources:
+## Funcionalidades do MVP
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Landing + pricing (Plano VIP único, R$ 47/mês simulado)
+- Cadastro / login / logout / editar perfil / excluir conta (CRUD local)
+- Feed com posts, likes e publicação
+- Comunidades (algumas VIP)
+- Vídeos e materiais com paywall VIP
+- Bate-papo por canais (salas VIP bloqueadas)
+- Favicon monograma **N**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Próximos passos
 
-## Deploy on Vercel
+- OAuth (Google / GitHub)
+- Backend real + banco
+- Pagamento (Stripe / Hotmart / etc.)
+- Upload real de vídeos e arquivos
+- Chat em tempo real (WebSocket)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Estrutura
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+  app/           # rotas (landing, auth, /app/*)
+  components/    # UI + layout
+  hooks/         # useAuth
+  lib/           # stores, types, mock data
+public/          # favicon.svg
+```
