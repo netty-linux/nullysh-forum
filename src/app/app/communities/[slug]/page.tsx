@@ -59,29 +59,29 @@ export default function CommunityDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
+    <div className="app-page mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <Link
         href="/app/communities"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-950"
+        className="mb-6 inline-flex items-center gap-1.5 text-[13px] text-neutral-500 transition-colors hover:text-neutral-950"
       >
-        <ArrowLeft size={16} />
+        <ArrowLeft size={15} />
         Comunidades
       </Link>
 
-      <div className="mb-8 rounded-2xl border border-neutral-200/80 bg-white p-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-950">
+      <div className="surface-card-quiet mb-7 p-6">
+        <h1 className="text-[1.5rem] font-semibold tracking-[-0.03em] text-neutral-950">
           {community.name}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-neutral-500">
           {community.description}
         </p>
-        <p className="mt-4 text-xs text-neutral-400">
+        <p className="mt-4 text-xs tabular-nums text-neutral-400">
           {community.members.toLocaleString("pt-BR")} membros ·{" "}
           {community.posts} posts
         </p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {communityPosts.map((post) => (
           <PostCard key={post.id} post={post} />
         ))}

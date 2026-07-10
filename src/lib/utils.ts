@@ -46,3 +46,29 @@ export function initials(name: string) {
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
 }
+
+/** Normaliza URL para href seguro (adiciona https se faltar). */
+export function normalizeUrl(raw: string): string {
+  const t = raw.trim();
+  if (!t) return "";
+  if (/^https?:\/\//i.test(t)) return t;
+  return `https://${t}`;
+}
+
+export function isValidUrl(raw: string): boolean {
+  try {
+    const u = new URL(normalizeUrl(raw));
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** Domínio amigável para exibir quando não há label. */
+export function displayHost(url: string): string {
+  try {
+    return new URL(normalizeUrl(url)).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}

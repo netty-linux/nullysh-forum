@@ -26,6 +26,49 @@ npm run dev
 
 Abra [http://localhost:3000](http://localhost:3000).
 
+## Supabase (banco + storage)
+
+O app usa **Supabase** quando a anon key está configurada; sem ela, continua no modo local (Zustand/localStorage).
+
+### 1. Variáveis de ambiente
+
+Copie `.env.local.example` → `.env.local` e preencha:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://rijnjymmivsftkjnhnup.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_anon_key
+```
+
+A key fica em: Dashboard → **Settings → API → anon public**.
+
+### 2. Schema SQL
+
+No Dashboard → **SQL Editor**, execute o arquivo:
+
+`supabase/migrations/20260710_nullysh_init.sql`
+
+Isso cria: `profiles`, `posts`, `comments`, `chat_messages`, `custom_emojis`, `verification_requests`, progress/RSVP, RLS e buckets de Storage (`avatars`, `banners`, `emojis`, `posts`).
+
+### 3. Auth
+
+- Cadastro/login usam **Supabase Auth**
+- Perfil extra em `public.profiles` (trigger cria linha no signup)
+- Avatar/banner/GIF sobem para **Storage** (não estouram localStorage)
+
+### 4. Admin
+
+Após criar sua conta:
+
+```sql
+update public.profiles
+set role = 'admin', is_vip = true, is_verified = true
+where email = 'seu@email.com';
+```
+
+### 5. MCP (opcional)
+
+Config em `.vscode/mcp.json` (projeto `rijnjymmivsftkjnhnup`, read-only).
+
 ## Contas demo
 
 | Conta | E-mail | Senha | Acesso |

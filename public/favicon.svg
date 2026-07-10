@@ -1,4 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="8" fill="#0a0a0a"/>
-  <path d="M9 23V9h3.2l5.4 8.6V9H21v14h-3.2l-5.4-8.6V23H9z" fill="#ffffff"/>
+  <!-- Fallback monochrome mark: fox+N simplified if JPG fails -->
+  <rect width="32" height="32" rx="7" fill="#ffffff"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" stroke="#e5e5e5"/>
+  <path fill="#1f1f1f" d="M8 24V8h3.4l4.2 7.8L20 8h3.4v16h-3.1v-9.4L16.1 22h-1.4L10.9 14.6V24H8z"/>
 </svg>

@@ -17,81 +17,104 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const result = register({ name, email, password });
-    setLoading(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    try {
+      const result = await register({ name, email, password });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      router.push("/app");
+    } finally {
+      setLoading(false);
     }
-    router.push("/app");
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-white">
-      <div className="border-b border-neutral-200/80 px-4 py-4 sm:px-6">
+    <div className="flex min-h-[100dvh] flex-col bg-[#ebebeb]">
+      <div className="h-1.5 w-full bg-black" />
+      <div className="border-b border-neutral-300 bg-white px-4 py-4 sm:px-6">
         <Logo />
       </div>
-      <div className="flex flex-1 items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-950">
-            Criar conta
-          </h1>
-          <p className="mt-2 text-sm text-neutral-500">
-            Cadastro local do MVP. Depois integramos Gmail e GitHub.
-          </p>
 
-          <form onSubmit={onSubmit} className="mt-8 space-y-4">
-            <Input
-              label="Nome"
-              name="name"
-              type="text"
-              autoComplete="name"
-              placeholder="Seu nome"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-            <Input
-              label="E-mail"
-              name="email"
-              type="email"
-              autoComplete="email"
-              placeholder="voce@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <Input
-              label="Senha"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              placeholder="Mínimo 6 caracteres"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              hint="Guarde a senha: no MVP ela fica no navegador (localStorage)."
-              required
-              minLength={6}
-            />
-            {error && (
-              <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {error}
+      <div className="flex flex-1 items-center justify-center px-4 py-12 sm:py-16">
+        <div className="app-page w-full max-w-[440px]">
+          <div className="overflow-hidden rounded-2xl border border-neutral-300 bg-white shadow-[0_20px_50px_-20px_rgba(0,0,0,0.25)]">
+            <div className="border-b border-neutral-200 bg-black px-6 py-5 text-white sm:px-8">
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-neutral-400">
+                Cadastro
               </p>
-            )}
-            <Button type="submit" className="w-full" size="lg" disabled={loading}>
-              {loading ? "Criando..." : "Criar conta"}
-            </Button>
-          </form>
+              <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">
+                Criar conta
+              </h1>
+            </div>
 
-          <p className="mt-8 text-center text-sm text-neutral-500">
+            <div className="p-6 sm:p-8">
+              <p className="text-sm leading-relaxed text-neutral-600">
+                Conta na Nullysh Forum (Supabase Auth). Use um e-mail real.
+              </p>
+
+              <form onSubmit={onSubmit} className="mt-6 space-y-4">
+                <Input
+                  label="Nome"
+                  name="name"
+                  type="text"
+                  autoComplete="name"
+                  placeholder="Seu nome"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+                <Input
+                  label="E-mail"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="voce@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+                <Input
+                  label="Senha"
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Mínimo 6 caracteres"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  hint="Senha gerenciada pelo Supabase Auth (não fica em localStorage)."
+                  required
+                  minLength={6}
+                />
+                {error && (
+                  <p
+                    role="alert"
+                    className="rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm leading-relaxed text-red-700"
+                  >
+                    {error}
+                  </p>
+                )}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  size="lg"
+                  disabled={loading}
+                >
+                  {loading ? "Criando..." : "Criar conta"}
+                </Button>
+              </form>
+            </div>
+          </div>
+
+          <p className="mt-8 text-center text-sm text-neutral-600">
             Já tem conta?{" "}
             <Link
               href="/login"
-              className="font-medium text-neutral-950 underline-offset-4 hover:underline"
+              className="font-semibold text-black underline underline-offset-4"
             >
               Entrar
             </Link>

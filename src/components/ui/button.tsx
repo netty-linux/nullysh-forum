@@ -1,26 +1,40 @@
+"use client";
+
 import { cn } from "@/lib/utils";
 import { ButtonHTMLAttributes, forwardRef } from "react";
 
-type Variant = "primary" | "secondary" | "ghost" | "outline" | "danger";
+type Variant =
+  | "primary"
+  | "secondary"
+  | "ghost"
+  | "outline"
+  | "danger"
+  | "inverse"
+  | "outlineInverse";
 type Size = "sm" | "md" | "lg" | "icon";
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-neutral-950 text-white hover:bg-neutral-800 active:scale-[0.98] disabled:bg-neutral-300",
+    "bg-[#1f1f1f] text-white shadow-[0_1px_2px_rgb(0_0_0/0.12),0_4px_12px_-4px_rgb(0_0_0/0.2)] hover:bg-[#2a2a2a] hover:shadow-[0_2px_8px_-2px_rgb(0_0_0/0.25)] hover:-translate-y-px active:translate-y-0 active:scale-[0.97] active:shadow-sm disabled:bg-neutral-300 disabled:text-white disabled:shadow-none disabled:translate-y-0 disabled:scale-100",
   secondary:
-    "bg-neutral-100 text-neutral-950 hover:bg-neutral-200 active:scale-[0.98]",
-  ghost: "bg-transparent text-neutral-700 hover:bg-neutral-100 active:scale-[0.98]",
+    "bg-neutral-200 text-[#1f1f1f] hover:bg-neutral-300 hover:shadow-sm hover:-translate-y-px active:translate-y-0 active:scale-[0.97]",
+  ghost:
+    "bg-transparent text-neutral-600 hover:bg-neutral-100 hover:text-[#1f1f1f] active:scale-[0.97]",
   outline:
-    "border border-neutral-200 bg-white text-neutral-950 hover:border-neutral-400 hover:bg-neutral-50 active:scale-[0.98]",
+    "border-2 border-[#1f1f1f] bg-white text-[#1f1f1f] shadow-sm hover:bg-neutral-50 hover:shadow-md hover:-translate-y-px active:translate-y-0 active:scale-[0.97]",
+  inverse:
+    "bg-white text-[#1f1f1f] shadow-[0_2px_12px_-2px_rgb(0_0_0/0.25)] hover:bg-neutral-100 hover:-translate-y-px active:translate-y-0 active:scale-[0.97]",
+  outlineInverse:
+    "border-2 border-white bg-transparent text-white hover:bg-white hover:text-[#1f1f1f] active:scale-[0.97]",
   danger:
-    "bg-red-600 text-white hover:bg-red-700 active:scale-[0.98]",
+    "bg-red-600 text-white shadow-sm hover:bg-red-700 hover:shadow-md hover:-translate-y-px active:translate-y-0 active:scale-[0.97]",
 };
 
 const sizes: Record<Size, string> = {
-  sm: "h-8 px-3 text-sm gap-1.5 rounded-lg",
-  md: "h-10 px-4 text-sm gap-2 rounded-xl",
-  lg: "h-12 px-6 text-base gap-2 rounded-xl",
-  icon: "h-10 w-10 rounded-xl inline-flex items-center justify-center",
+  sm: "h-9 px-3.5 text-sm gap-1.5 rounded-lg",
+  md: "h-11 px-5 text-sm gap-2 rounded-xl",
+  lg: "h-12 px-6 text-[15px] gap-2 rounded-xl",
+  icon: "h-11 w-11 rounded-xl inline-flex items-center justify-center",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -29,14 +43,18 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "primary", size = "md", type = "button", ...props }, ref) => {
+  (
+    { className, variant = "primary", size = "md", type = "button", ...props },
+    ref
+  ) => {
     return (
       <button
         ref={ref}
         type={type}
         className={cn(
-          "inline-flex items-center justify-center font-medium transition-all duration-200",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2",
+          "inline-flex items-center justify-center font-semibold whitespace-nowrap select-none",
+          "transition-[transform,background-color,box-shadow,color,border-color] duration-200 ease-[cubic-bezier(0.34,1.4,0.64,1)]",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1f1f1f] focus-visible:ring-offset-2",
           "disabled:pointer-events-none disabled:opacity-50",
           variants[variant],
           sizes[size],

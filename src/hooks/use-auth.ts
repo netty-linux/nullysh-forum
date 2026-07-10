@@ -1,8 +1,19 @@
 "use client";
 
 import { useAuthStore } from "@/lib/auth-store";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { useEffect, useState } from "react";
 
+/**
+ * Hook de auth.
+ *
+ * NÃO marca hydrated=true no mount — isso causava logout fantasma:
+ * currentUserId ainda null (rehydrate async) + hydrated true → AuthGuard
+ * redirecionava para /login a cada reload.
+ *
+ * - Supabase: SupabaseAuthBridge define hydrated após INITIAL_SESSION
+ * - Local: onFinishHydration do zustand persist
+ */
 export function useAuth() {
   const hydrated = useAuthStore((s) => s.hydrated);
   const setHydrated = useAuthStore((s) => s.setHydrated);
@@ -12,9 +23,15 @@ export function useAuth() {
   const [user, setUser] = useState(getCurrentUser());
 
   useEffect(() => {
-    const finish = () => setHydrated(true);
-    finish();
-    const unsub = useAuthStore.persist.onFinishHydration(finish);
+    // Com Supabase, a bridge controla hydrated (sessão real).
+    if (isSupabaseConfigured()) return;
+
+    const mark = () => setHydrated(true);
+
+    if (useAuthStore.persist.hasHydrated()) {
+      mark();
+    }
+    const unsub = useAuthStore.persist.onFinishHydration(mark);
     return unsub;
   }, [setHydrated]);
 

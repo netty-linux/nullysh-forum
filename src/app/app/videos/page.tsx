@@ -26,12 +26,12 @@ export default function VideosPage() {
   );
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-950">
+    <div className="app-page mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+      <div className="mb-6">
+        <h1 className="text-3xl font-semibold tracking-tight text-black">
           Vídeos
         </h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-2 text-base text-neutral-600">
           Tutoriais, aulas e tours da metodologia Nullysh.
         </p>
       </div>
@@ -44,8 +44,8 @@ export default function VideosPage() {
             onClick={() => setCategory(c)}
             className={
               category === c
-                ? "rounded-full bg-neutral-950 px-3 py-1.5 text-xs font-medium text-white"
-                : "rounded-full bg-white px-3 py-1.5 text-xs font-medium text-neutral-500 ring-1 ring-neutral-200 hover:text-neutral-950"
+                ? "chip rounded-full bg-[#1f1f1f] px-3 py-1.5 text-xs font-medium text-white shadow-sm"
+                : "chip rounded-full bg-white px-3 py-1.5 text-xs font-medium text-neutral-500 ring-1 ring-neutral-200 hover:text-[#1f1f1f]"
             }
           >
             {c}
@@ -57,14 +57,14 @@ export default function VideosPage() {
         {list.map((v) => {
           const locked = v.vipOnly && !isVip;
           const Card = (
-            <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-neutral-200/80 bg-white transition-all hover:border-neutral-400 hover:shadow-sm">
-              <div className="relative flex aspect-video items-center justify-center bg-neutral-100">
+            <article className="card-interactive group flex h-full flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_1px_2px_rgb(0_0_0/0.04)]">
+              <div className="relative flex aspect-video items-center justify-center border-b border-neutral-100 bg-neutral-100">
                 <div className="absolute inset-0 hero-grid opacity-50" />
-                <span className="relative font-mono text-4xl font-semibold text-neutral-200">
+                <span className="relative font-mono text-5xl font-bold tabular-nums text-neutral-300">
                   {v.thumbnail}
                 </span>
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-neutral-950 text-white shadow-lg">
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
+                  <span className="inline-flex h-12 w-12 scale-90 items-center justify-center rounded-full bg-[#1f1f1f] text-white shadow-lg transition-transform duration-300 group-hover:scale-100">
                     {locked ? (
                       <Lock size={18} weight="bold" />
                     ) : (
@@ -72,24 +72,24 @@ export default function VideosPage() {
                     )}
                   </span>
                 </div>
-                <span className="absolute bottom-2 right-2 rounded-md bg-neutral-950/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                <span className="absolute bottom-2 right-2 rounded-md bg-[#1f1f1f] px-2 py-0.5 text-[10px] font-bold tabular-nums text-white">
                   {v.duration}
                 </span>
               </div>
               <div className="flex flex-1 flex-col p-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">
                     {v.category}
                   </span>
                   {v.vipOnly && <VipBadge />}
                 </div>
-                <h2 className="mt-2 text-sm font-semibold leading-snug text-neutral-950">
+                <h2 className="mt-2 text-sm font-semibold leading-snug text-black">
                   {v.title}
                 </h2>
-                <p className="mt-1.5 flex-1 text-xs leading-relaxed text-neutral-500">
+                <p className="mt-1.5 flex-1 text-xs leading-relaxed text-neutral-600">
                   {v.description}
                 </p>
-                <p className="mt-3 text-[11px] text-neutral-400">
+                <p className="mt-3 text-[11px] font-medium tabular-nums text-neutral-500">
                   {v.views.toLocaleString("pt-BR")} views ·{" "}
                   {formatDate(v.createdAt)}
                 </p>

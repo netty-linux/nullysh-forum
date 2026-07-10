@@ -1,4 +1,12 @@
+import type { AvatarFrameId } from "./avatar-frames";
+import type { EmblemId } from "./emblems";
+import type { FavoriteTrack } from "./music";
+
 export type UserRole = "member" | "vip" | "admin";
+
+export type { AvatarFrameId };
+export type { EmblemId };
+export type { FavoriteTrack, MusicPlatform } from "./music";
 
 export interface User {
   id: string;
@@ -6,14 +14,146 @@ export interface User {
   email: string;
   password: string;
   bio: string;
+  /** Inicial(is) de fallback quando não há foto */
   avatar: string;
+  /** Foto de perfil (data URL ou URL) */
+  avatarUrl: string | null;
+  /** Banner do perfil (data URL ou URL) */
+  bannerUrl: string | null;
+  /**
+   * Enquadramento do banner (útil p/ GIF animado — sem re-encodar).
+   * x/y: object-position 0–100; zoom: 1–2.5
+   */
+  bannerFit: BannerFit | null;
+  /**
+   * Moldura sazonal do avatar (VIP).
+   * Free ignora na UI; VIP escolhe entre 6 frames estilo Nitro.
+   */
+  avatarFrame: AvatarFrameId | null;
   role: UserRole;
   isVip: boolean;
+  /** Selo de verificado (estilo Instagram / X) */
+  isVerified: boolean;
+  /** Tags de interesse (IA, programação, pantheon...) */
+  interests: string[];
+  /** Objetivos em texto livre (ex.: quero ser expert em IA) */
+  goals: string[];
+  /** Quer receber mentoria */
+  seekingMentorship: boolean;
+  /** Oferece mentoria */
+  offeringMentorship: boolean;
+  /** Temas em que mentoraria (subset de interesses) */
+  mentorTopics: string[];
+  /** Links clicáveis na bio (1 free / 6 VIP) */
+  links: ProfileLink[];
+  /**
+   * Músicas favoritas / “ouvindo agora” (VIP).
+   * Spotify, YouTube ou SoundCloud — até 6.
+   */
+  favoriteTracks: FavoriteTrack[];
+  /** Emblemas desbloqueados (conquistas) — todos salvos na conta */
+  badgesUnlocked: EmblemId[];
+  /** Emblema fixo visível no perfil (apenas 1) */
+  badgeEquipped: EmblemId | null;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface ProfileLink {
+  id: string;
+  /** Rótulo opcional (ex.: Instagram, Site) */
+  label: string;
+  url: string;
+}
+
+/** Campos editáveis do perfil (local + Supabase) */
+export type ProfileUpdate = Partial<
+  Pick<
+    User,
+    | "name"
+    | "bio"
+    | "email"
+    | "password"
+    | "avatarUrl"
+    | "bannerUrl"
+    | "bannerFit"
+    | "avatarFrame"
+    | "interests"
+    | "goals"
+    | "seekingMentorship"
+    | "offeringMentorship"
+    | "mentorTopics"
+    | "links"
+    | "favoriteTracks"
+    | "badgesUnlocked"
+    | "badgeEquipped"
+  >
+>;
+
+/** Posição/zoom do banner (GIF ou imagem cobrindo o frame 3:1) */
+export interface BannerFit {
+  /** 0–100, eixo X (object-position) */
+  x: number;
+  /** 0–100, eixo Y (object-position) */
+  y: number;
+  /** 1 = caber, até 2.5 = zoom in */
+  zoom: number;
+}
+
+export const DEFAULT_BANNER_FIT: BannerFit = { x: 50, y: 50, zoom: 1 };
+
+export function normalizeBannerFit(raw: unknown): BannerFit | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Partial<BannerFit>;
+  const x = Number(r.x);
+  const y = Number(r.y);
+  const zoom = Number(r.zoom);
+  if (![x, y, zoom].every((n) => Number.isFinite(n))) return null;
+  return {
+    x: Math.min(100, Math.max(0, x)),
+    y: Math.min(100, Math.max(0, y)),
+    zoom: Math.min(2.5, Math.max(1, zoom)),
+  };
+}
+
+export interface TrailProgress {
+  trailId: string;
+  completedStepIds: string[];
+  startedAt: string;
+  updatedAt: string;
+}
+
+export interface EventRsvp {
+  eventId: string;
+  userId: string;
+  createdAt: string;
+}
+
 export type UserPublic = Omit<User, "password">;
+
+export type VerificationStatus = "pending" | "approved" | "rejected";
+
+export interface VerificationRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  /** Por que pede verificação */
+  reason: string;
+  /** Quem é / o que faz */
+  identity: string;
+  /** Links de redes / site (prova social) */
+  links: string;
+  /** Como usa a comunidade */
+  communityUse: string;
+  /** Declaração anti-fake */
+  isRealPerson: boolean;
+  status: VerificationStatus;
+  adminNote: string;
+  createdAt: string;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+}
 
 export interface Community {
   id: string;
@@ -32,14 +172,24 @@ export interface Post {
   authorId: string;
   authorName: string;
   authorAvatar: string;
+  authorAvatarUrl?: string | null;
   communityId?: string;
   communityName?: string;
-  title: string;
+  /** Opcional — posts estilo X usam só content */
+  title?: string;
   content: string;
+  /** Imagem do post (data URL ou URL) */
+  imageUrl?: string | null;
+  /** Localização livre (ex.: São Paulo, BR) */
+  location?: string | null;
   type: "discussion" | "news" | "tutorial" | "announcement";
   likes: number;
+  dislikes: number;
   comments: number;
   likedBy: string[];
+  dislikedBy: string[];
+  /** IDs de usuários que salvaram o post */
+  savedBy: string[];
   createdAt: string;
   vipOnly: boolean;
 }

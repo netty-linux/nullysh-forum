@@ -4,10 +4,10 @@ import { HTMLAttributes } from "react";
 type Variant = "default" | "vip" | "muted" | "outline";
 
 const variants: Record<Variant, string> = {
-  default: "bg-neutral-950 text-white",
-  vip: "bg-neutral-950 text-white",
+  default: "bg-[#1f1f1f] text-white",
+  vip: "bg-[#1f1f1f] text-white",
   muted: "bg-neutral-100 text-neutral-600",
-  outline: "border border-neutral-200 text-neutral-600 bg-white",
+  outline: "border border-neutral-200/90 text-neutral-500 bg-white",
 };
 
 export function Badge({
@@ -18,7 +18,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium tracking-wide",
+        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium tracking-[-0.01em]",
         variants[variant],
         className
       )}
