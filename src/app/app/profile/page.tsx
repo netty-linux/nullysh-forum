@@ -47,6 +47,7 @@ import {
   validateBannerFile,
   validateImageFile,
 } from "@/lib/image";
+import { useSocialStore } from "@/lib/social-store";
 import {
   detectMusicPlatform,
   fetchMusicMeta,
@@ -84,7 +85,11 @@ export default function ProfilePage() {
   const deleteAccount = useAuthStore((s) => s.deleteAccount);
   const logout = useAuthStore((s) => s.logout);
   const posts = useForumStore((s) => s.posts);
+  const follows = useSocialStore((s) => s.follows);
+  const followerCount = useSocialStore((s) => s.followerCount);
+  const followingCount = useSocialStore((s) => s.followingCount);
   const router = useRouter();
+  void follows;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -764,6 +769,22 @@ export default function ProfilePage() {
             <p className="mt-1 text-[12px] text-neutral-400">
               Membro desde {formatDate(user.createdAt)}
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-4 text-[13px]">
+              <span>
+                <strong className="font-semibold tabular-nums text-[#1f1f1f]">
+                  {followerCount(user.id)}
+                </strong>{" "}
+                <span className="text-neutral-500">
+                  {followerCount(user.id) === 1 ? "seguidor" : "seguidores"}
+                </span>
+              </span>
+              <span>
+                <strong className="font-semibold tabular-nums text-[#1f1f1f]">
+                  {followingCount(user.id)}
+                </strong>{" "}
+                <span className="text-neutral-500">seguindo</span>
+              </span>
+            </div>
             {user.bio && (
               <p className="mt-3 max-w-[42ch] text-[14px] leading-relaxed text-neutral-600">
                 <RichText text={user.bio} emojiSize={18} />

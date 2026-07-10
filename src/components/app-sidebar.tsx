@@ -15,6 +15,7 @@ import {
   CalendarBlank,
   ChatsCircle,
   CrownSimple,
+  Fire,
   Handshake,
   House,
   Path,
@@ -32,6 +33,7 @@ import { useMemo } from "react";
 
 const baseNav = [
   { href: "/app", label: "Feed", icon: House },
+  { href: "/app/populares", label: "Populares", icon: Fire },
   { href: "/app/saved", label: "Salvos", icon: BookmarkSimple },
   { href: "/app/trails", label: "Trilhas", icon: Path },
   { href: "/app/mentorship", label: "Mentorias", icon: Handshake },
@@ -72,23 +74,23 @@ export function AppSidebar({
   }, [user?.role]);
 
   const content = (
-    <div className="flex h-full flex-col bg-white dark:bg-[#141414]">
-      <div className="flex h-16 items-center justify-between border-b border-neutral-200/80 px-4 dark:border-zinc-800/80">
+    <div className="flex h-full flex-col bg-[var(--surface-elevated)]">
+      <div className="flex h-14 items-center justify-between border-b border-[var(--border)] px-4">
         <Logo href="/app" size="sm" />
         {onClose && (
           <motion.button
             type="button"
             onClick={onClose}
-            whileTap={reduce ? undefined : { scale: 0.9 }}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 dark:border-zinc-700 lg:hidden"
+            whileTap={reduce ? undefined : { scale: 0.96 }}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] lg:hidden"
             aria-label="Fechar menu"
           >
-            <X size={16} />
+            <X size={16} aria-hidden />
           </motion.button>
         )}
       </div>
 
-      <nav className="flex-1 space-y-1 p-3">
+      <nav className="flex-1 space-y-0.5 p-3">
         {nav.map((item, i) => {
           const active =
             item.href === "/app"
@@ -100,26 +102,25 @@ export function AppSidebar({
           return (
             <motion.div
               key={item.href}
-              initial={reduce ? false : { opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
+              initial={reduce ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
               transition={{
-                delay: reduce ? 0 : i * 0.03,
-                type: "spring",
-                stiffness: 400,
-                damping: 30,
+                delay: reduce ? 0 : i * 0.02,
+                duration: 0.15,
+                ease: [0.16, 1, 0.3, 1],
               }}
             >
               <Link
                 href={item.href}
                 onClick={onClose}
                 className={cn(
-                  "nav-item relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold",
+                  "nav-item relative flex items-center gap-3 text-[14px]",
                   active
-                    ? "bg-[#1f1f1f] text-white shadow-[0_2px_8px_-2px_rgb(0_0_0/0.25)] dark:bg-white/12 dark:text-white dark:shadow-none"
-                    : "text-neutral-600 hover:bg-neutral-100 hover:text-[#1f1f1f] dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-white"
+                    ? "bg-[#1f1f1f] font-medium text-white shadow-[var(--shadow-sm)] dark:bg-white/12 dark:text-white dark:shadow-none"
+                    : "font-normal text-[var(--text-secondary)] hover:bg-neutral-100 hover:text-[var(--text-primary)] dark:hover:bg-zinc-800/80 dark:hover:text-white"
                 )}
               >
-                <Icon size={18} weight={active ? "fill" : "regular"} />
+                <Icon size={18} weight={active ? "fill" : "regular"} aria-hidden />
                 <span className="flex-1">{item.label}</span>
                 {item.href === "/app/admin" && pendingCount > 0 && (
                   <span
@@ -140,17 +141,16 @@ export function AppSidebar({
         })}
       </nav>
 
-      <div className="mt-auto space-y-3 border-t border-neutral-200/80 p-4 dark:border-zinc-800/80">
-        {/* Dark mode knob — sempre clicável, perto do perfil */}
+      <div className="mt-auto space-y-3 border-t border-[var(--border)] p-4">
         <ThemeToggle />
 
         {!user?.isVip && (
           <Link
             href="/pricing"
             onClick={onClose}
-            className="pressable flex items-center gap-2 rounded-xl bg-[#1f1f1f] px-3 py-3 text-sm font-semibold text-white shadow-sm transition-shadow hover:shadow-md"
+            className="pressable flex items-center gap-2 rounded-[var(--radius-md)] bg-[#1f1f1f] px-3 py-2.5 text-[14px] font-medium text-white shadow-[var(--shadow-sm)]"
           >
-            <CrownSimple size={16} weight="fill" />
+            <CrownSimple size={16} weight="fill" aria-hidden />
             Assinar Plano VIP
           </Link>
         )}
@@ -173,7 +173,7 @@ export function AppSidebar({
               onClick={onClose}
               className="min-w-0 flex-1"
             >
-              <p className="flex items-center gap-1 truncate text-sm font-semibold text-[#1f1f1f] transition-opacity hover:opacity-70">
+              <p className="flex items-center gap-1 truncate text-[14px] font-medium text-[var(--text-primary)] transition-opacity hover:opacity-70">
                 <span className="truncate">{user.name}</span>
                 {user.isVerified && <VerifiedBadge size={14} />}
               </p>
@@ -181,7 +181,7 @@ export function AppSidebar({
                 {user.isVip ? (
                   <Badge variant="vip">VIP</Badge>
                 ) : (
-                  <span className="text-xs font-medium text-neutral-500">
+                  <span className="text-[13px] font-medium text-[var(--text-tertiary)]">
                     Membro
                   </span>
                 )}
@@ -189,16 +189,16 @@ export function AppSidebar({
             </Link>
             <motion.button
               type="button"
-              whileTap={reduce ? undefined : { scale: 0.9 }}
+              whileTap={reduce ? undefined : { scale: 0.96 }}
               onClick={() => {
                 logout();
                 window.location.href = "/";
               }}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 transition-colors hover:border-[#1f1f1f] hover:text-[#1f1f1f] dark:border-zinc-600"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
               aria-label="Sair"
               title="Sair"
             >
-              <SignOut size={18} />
+              <SignOut size={18} aria-hidden />
             </motion.button>
           </div>
         )}

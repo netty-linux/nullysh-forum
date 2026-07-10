@@ -15,20 +15,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthGuard>
-      <div className="flex min-h-[100dvh] bg-[#e8e8e8] dark:bg-[#0c0c0c]">
+      <div className="flex min-h-[100dvh] bg-[var(--background)]">
         <AppSidebar open={open} onClose={() => setOpen(false)} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-neutral-200/80 bg-white/90 px-4 backdrop-blur-xl dark:border-zinc-800 dark:bg-[#141414]/95 lg:hidden">
+          <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface-elevated)]/90 px-4 backdrop-blur-xl lg:hidden">
             <motion.button
               type="button"
               onClick={() => setOpen(true)}
-              whileTap={reduce ? undefined : { scale: 0.92 }}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-800"
+              whileTap={reduce ? undefined : { scale: 0.96 }}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-elevated)] shadow-[var(--shadow-sm)]"
               aria-label="Abrir menu"
             >
-              <List size={18} weight="bold" />
+              <List size={18} weight="bold" aria-hidden />
             </motion.button>
-            <span className="flex-1 text-sm font-bold tracking-tight text-[#1f1f1f]">
+            <span className="font-display flex-1 text-[15px] font-medium tracking-tight text-[var(--text-primary)]">
               Nullysh Forum
             </span>
             <div className="w-14 shrink-0">

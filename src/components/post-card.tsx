@@ -243,14 +243,14 @@ export function PostCard({ post }: { post: Post }) {
       }
       style={{ transformOrigin: "top right" }}
       className={cn(
-        "rounded-2xl border border-neutral-200/90 bg-white p-4 sm:p-5",
-        "shadow-[0_1px_2px_rgb(0_0_0/0.04)]",
+        "card-interactive rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-elevated)] p-4",
         locked && "relative overflow-hidden",
         trashing && "pointer-events-none z-10"
       )}
     >
       <div
         className={cn(
+          "flex flex-col gap-2",
           locked && "pointer-events-none select-none blur-[3px] opacity-40"
         )}
       >
@@ -271,13 +271,13 @@ export function PostCard({ post }: { post: Post }) {
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
                 <Link
                   href={`/app/u/${post.authorId}`}
-                  className="inline-flex items-center gap-1 text-sm font-semibold text-[#1f1f1f] transition-colors hover:text-neutral-600 dark:text-zinc-100"
+                  className="inline-flex items-center text-[15px] font-medium text-[var(--text-primary)] transition-colors hover:opacity-70"
                 >
                   {post.authorName}
                   {author?.isVerified && <VerifiedBadge size={14} />}
                 </Link>
                 {post.vipOnly && <VipBadge />}
-                <span className="text-xs text-neutral-400">
+                <span className="text-[13px] text-[var(--text-tertiary)] tabular-nums">
                   · {formatRelative(post.createdAt)}
                 </span>
               </div>
@@ -289,12 +289,12 @@ export function PostCard({ post }: { post: Post }) {
                     onClick={() => setMenuOpen((v) => !v)}
                     disabled={deleting || trashing}
                     className={cn(
-                      "inline-flex h-8 w-8 items-center justify-center rounded-full",
-                      "text-neutral-400 transition",
-                      "hover:bg-neutral-100 hover:text-[#1f1f1f]",
+                      "inline-flex h-10 w-10 items-center justify-center rounded-full",
+                      "text-[var(--text-tertiary)] transition-[background-color,color] duration-[var(--duration-fast)]",
+                      "hover:bg-neutral-100 hover:text-[var(--text-primary)]",
                       "dark:hover:bg-zinc-800 dark:hover:text-zinc-100",
                       menuOpen &&
-                        "bg-neutral-100 text-[#1f1f1f] dark:bg-zinc-800",
+                        "bg-neutral-100 text-[var(--text-primary)] dark:bg-zinc-800",
                       (deleting || trashing) && "pointer-events-none opacity-40"
                     )}
                     aria-label="Opções do post"
@@ -302,24 +302,31 @@ export function PostCard({ post }: { post: Post }) {
                     aria-haspopup="menu"
                     title="Opções"
                   >
-                    <DotsThree size={20} weight="bold" />
+                    <DotsThree size={20} weight="bold" aria-hidden />
                   </button>
 
                   <AnimatePresence>
                     {menuOpen && (
                       <motion.div
                         initial={
-                          reduce ? false : { opacity: 0, y: -4, scale: 0.98 }
+                          reduce
+                            ? false
+                            : { opacity: 0, y: 4, scale: 0.98 }
                         }
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={reduce ? undefined : { opacity: 0, y: -4 }}
-                        transition={{ duration: 0.15 }}
+                        exit={
+                          reduce
+                            ? undefined
+                            : { opacity: 0, y: 2, scale: 0.98 }
+                        }
+                        transition={{
+                          duration: reduce ? 0 : 0.2,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
                         role="menu"
+                        style={{ transformOrigin: "top right" }}
                         className={cn(
-                          "absolute right-0 top-full z-20 mt-1 min-w-[10.5rem] overflow-hidden",
-                          "rounded-xl border border-neutral-200/90 bg-white py-1",
-                          "shadow-[0_8px_28px_-8px_rgb(0_0_0/0.28)]",
-                          "dark:border-zinc-700 dark:bg-zinc-900"
+                          "popover-panel absolute right-0 top-full z-20 mt-1 min-w-[10.5rem] overflow-hidden py-1"
                         )}
                       >
                         {canReport && (
@@ -366,7 +373,7 @@ export function PostCard({ post }: { post: Post }) {
             </div>
 
             {hasTitle && (
-              <h3 className="mt-2 text-[15px] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
+              <h3 className="mt-1 line-clamp-2 text-[15px] font-medium tracking-tight text-[var(--text-primary)]">
                 {post.title}
               </h3>
             )}
@@ -374,20 +381,21 @@ export function PostCard({ post }: { post: Post }) {
             {body && body !== " " && (
               <p
                 className={cn(
-                  "text-[15px] leading-relaxed text-[#0f1419] dark:text-zinc-200",
-                  hasTitle ? "mt-1.5" : "mt-1"
+                  "text-[15px] leading-[1.5] text-[var(--text-primary)]",
+                  hasTitle ? "mt-1" : "mt-0.5"
                 )}
               >
-                <RichText text={body} emojiSize={22} />
+                <RichText text={body} emojiSize={20} />
               </p>
             )}
 
             {post.imageUrl && (
-              <div className="relative mt-3 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="relative mt-2 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={post.imageUrl}
                   alt=""
+                  loading="lazy"
                   className="max-h-[min(480px,70vh)] w-full object-contain object-center"
                 />
                 {/* Download de anexo — VIP */}
@@ -441,24 +449,21 @@ export function PostCard({ post }: { post: Post }) {
               <p className="mt-2 text-xs font-medium text-red-600">{error}</p>
             )}
 
-            {/* Ações: like · dislike · comentário · (espaço) · salvar por último */}
-            <div className="mt-3 flex items-center gap-0.5 border-t border-neutral-100 pt-2.5 dark:border-zinc-800 sm:gap-1">
+            {/* Ações: like · dislike · comentário · salvar — touch 40×40, gap 6px */}
+            <div className="mt-2 flex items-center gap-0.5 border-t border-[var(--border)] pt-2">
               <motion.button
                 type="button"
                 disabled={!user || locked}
                 onClick={onLike}
                 whileTap={
-                  !user || locked || reduce ? undefined : { scale: 0.88 }
+                  !user || locked || reduce ? undefined : { scale: 0.96 }
                 }
                 title="Curtir"
                 aria-label={liked ? "Remover curtida" : "Curtir"}
                 aria-pressed={liked}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold sm:px-3",
-                  "transition-colors duration-200",
-                  liked
-                    ? "bg-red-50 text-red-600 dark:bg-red-950/30"
-                    : "text-neutral-400 hover:bg-neutral-50 hover:text-[#1f1f1f] dark:hover:bg-zinc-800",
+                  "post-action px-2.5",
+                  liked && "bg-red-50 text-red-600 dark:bg-red-950/30",
                   (!user || locked) && "cursor-not-allowed opacity-50"
                 )}
               >
@@ -467,9 +472,15 @@ export function PostCard({ post }: { post: Post }) {
                     size={18}
                     weight={liked ? "fill" : "regular"}
                     className={liked ? "text-red-500" : undefined}
+                    aria-hidden
                   />
                 </span>
-                <span className="tabular-nums">{post.likes}</span>
+                <span
+                  key={`likes-${post.likes}`}
+                  className={cn("tabular-nums", pop && "count-slide-in")}
+                >
+                  {post.likes}
+                </span>
               </motion.button>
 
               <motion.button
@@ -477,24 +488,22 @@ export function PostCard({ post }: { post: Post }) {
                 disabled={!user || locked}
                 onClick={onDislike}
                 whileTap={
-                  !user || locked || reduce ? undefined : { scale: 0.88 }
+                  !user || locked || reduce ? undefined : { scale: 0.96 }
                 }
                 title="Não gostei"
                 aria-label={disliked ? "Remover dislike" : "Não gostei"}
                 aria-pressed={disliked}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold sm:px-3",
-                  "transition-colors duration-200",
-                  disliked
-                    ? "bg-neutral-100 text-[#1f1f1f] dark:bg-zinc-800 dark:text-zinc-100"
-                    : "text-neutral-400 hover:bg-neutral-50 hover:text-[#1f1f1f] dark:hover:bg-zinc-800",
+                  "post-action px-2.5",
+                  disliked &&
+                    "bg-neutral-100 text-[var(--text-primary)] dark:bg-zinc-800",
                   (!user || locked) && "cursor-not-allowed opacity-50"
                 )}
               >
                 <ThumbsDown
                   size={18}
                   weight={disliked ? "fill" : "regular"}
-                  className={disliked ? "text-[#1f1f1f] dark:text-zinc-100" : undefined}
+                  aria-hidden
                 />
                 <span className="tabular-nums">{dislikes}</span>
               </motion.button>
@@ -504,10 +513,9 @@ export function PostCard({ post }: { post: Post }) {
                 disabled={!user || locked}
                 onClick={toggleComments}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold transition-colors sm:px-3",
-                  openComments
-                    ? "bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400"
-                    : "text-neutral-400 hover:bg-neutral-50 hover:text-[#1f1f1f] dark:hover:bg-zinc-800",
+                  "post-action px-2.5",
+                  openComments &&
+                    "bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400",
                   (!user || locked) && "cursor-not-allowed opacity-50"
                 )}
                 aria-expanded={openComments}
@@ -520,39 +528,38 @@ export function PostCard({ post }: { post: Post }) {
                 <ChatCircle
                   size={18}
                   weight={openComments ? "fill" : "regular"}
+                  aria-hidden
                 />
                 <span className="tabular-nums">{commentCount}</span>
               </button>
 
-              {/* Salvar — último, alinhado à direita */}
               <motion.button
                 type="button"
                 disabled={!user || locked}
                 onClick={onSave}
                 whileTap={
-                  !user || locked || reduce ? undefined : { scale: 0.88 }
+                  !user || locked || reduce ? undefined : { scale: 0.96 }
                 }
                 title={saved ? "Remover dos salvos" : "Salvar postagem"}
                 aria-label={saved ? "Remover dos salvos" : "Salvar postagem"}
                 aria-pressed={saved}
                 className={cn(
-                  "ml-auto inline-flex items-center justify-center rounded-full p-1.5 sm:px-3 sm:py-1.5",
-                  "text-sm font-semibold transition-colors duration-200",
-                  saved
-                    ? "bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400"
-                    : "text-neutral-400 hover:bg-neutral-50 hover:text-[#1f1f1f] dark:hover:bg-zinc-800",
+                  "post-action ml-auto px-2.5",
+                  saved &&
+                    "bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400",
                   (!user || locked) && "cursor-not-allowed opacity-50",
                   savePop && "like-pop"
                 )}
               >
                 <BookmarkSimple
-                  size={20}
+                  size={18}
                   weight={saved ? "fill" : "regular"}
                   className={
                     saved ? "text-amber-500 dark:text-amber-400" : undefined
                   }
+                  aria-hidden
                 />
-                <span className="sr-only sm:not-sr-only sm:ml-1.5">
+                <span className="sr-only sm:not-sr-only">
                   {saved ? "Salvo" : "Salvar"}
                 </span>
               </motion.button>

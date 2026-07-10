@@ -3,6 +3,7 @@
 import { EmojiPicker } from "@/components/emoji-picker";
 import { ImageCropEditor } from "@/components/image-crop-editor";
 import { PostCard } from "@/components/post-card";
+import { StoriesTray } from "@/components/stories-tray";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -17,6 +18,7 @@ import { useForumStore } from "@/lib/forum-store";
 import { fileToObjectUrl, revokeObjectUrl } from "@/lib/image";
 import { maxPostChars } from "@/lib/post-limits";
 import { consumeRateLimit } from "@/lib/rate-limit";
+import { useSocialStore } from "@/lib/social-store";
 import { cn } from "@/lib/utils";
 import {
   Crop as CropIcon,
@@ -28,6 +30,7 @@ import {
   SpinnerGap,
   X,
 } from "@phosphor-icons/react";
+import Link from "next/link";
 import {
   FormEvent,
   useCallback,
@@ -54,6 +57,8 @@ export default function FeedPage() {
   const createPost = useForumStore((s) => s.createPost);
   const blocks = useBlockStore((s) => s.blocks);
   const isEitherBlocked = useBlockStore((s) => s.isEitherBlocked);
+  const follows = useSocialStore((s) => s.follows);
+  const followingOf = useSocialStore((s) => s.followingOf);
   const vipPlan = !!isVip || user?.role === "admin" || user?.role === "vip";
   const maxChars = maxPostChars(vipPlan);
 
@@ -83,18 +88,21 @@ export default function FeedPage() {
   const searchAbort = useRef<AbortController | null>(null);
   const cropSourceRef = useRef<string | null>(null);
 
-  // Ranking: qualidade (like vs dislike) × volume × freshness
-  // + esconde posts de quem bloqueou / foi bloqueado por mim
+  // Feed social: meus posts + de quem eu sigo
+  // Ranking: qualidade × volume × freshness (+ boost de lançamento)
+  // Esconde bloqueados
   const visible = useMemo(() => {
-    const filtered = user
-      ? posts.filter(
-          (p) =>
-            p.authorId === user.id || !isEitherBlocked(user.id, p.authorId)
-        )
-      : posts;
+    if (!user) return rankFeedPosts(posts);
+    const following = new Set(followingOf(user.id));
+    following.add(user.id);
+    void follows;
+    void blocks;
+    const filtered = posts.filter((p) => {
+      if (isEitherBlocked(user.id, p.authorId)) return false;
+      return following.has(p.authorId);
+    });
     return rankFeedPosts(filtered);
-    // blocks força recompute quando a lista muda
-  }, [posts, user, isEitherBlocked, blocks]);
+  }, [posts, user, isEitherBlocked, blocks, follows, followingOf]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -350,27 +358,44 @@ export default function FeedPage() {
     content.length <= maxChars;
 
   return (
-    <div className="app-page mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
+    <div className="app-page mx-auto max-w-[var(--feed-max)] px-4 py-8 sm:px-6 sm:py-10">
       <div className="mb-5">
-        <h1 className="text-3xl font-semibold tracking-tight text-black dark:text-zinc-50">
+        <h1 className="font-display text-[32px] font-medium tracking-tight text-[var(--text-primary)]">
           Feed
         </h1>
-        <p className="mt-1.5 text-sm text-neutral-500">
+        <p className="mt-1.5 text-[14px] text-[var(--text-secondary)]">
           Olá,{" "}
-          <span className="font-semibold text-neutral-800 dark:text-zinc-200">
+          <span className="font-medium text-[var(--text-primary)]">
             {user?.name?.split(" ")[0]}
           </span>
-          . O que está rolando?
+          . Stories e posts de quem você segue.
         </p>
+      </div>
+
+      {/* Stories — estilo Instagram */}
+      <div className="mb-4 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-3 sm:px-4">
+        <StoriesTray
+          user={
+            user
+              ? {
+                  id: user.id,
+                  name: user.name,
+                  avatar: user.avatar,
+                  avatarUrl: user.avatarUrl,
+                }
+              : null
+          }
+          mode="feed"
+        />
       </div>
 
       {/* Composer — overflow visível para o painel de emojis */}
       <form
         id="feed-composer"
         onSubmit={onCreate}
-        className="relative z-10 mb-4 rounded-2xl border border-neutral-200/90 bg-white shadow-[0_1px_3px_rgb(0_0_0/0.04)] transition-[box-shadow] duration-300 dark:border-zinc-800 dark:bg-[#141414]"
+        className="relative z-10 mb-4 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-elevated)] transition-[border-color,box-shadow] duration-[var(--duration-fast)]"
       >
-        <div className="flex gap-3 p-4 sm:p-5">
+        <div className="flex gap-3 p-4">
           <div className="shrink-0 pt-0.5">
             <Avatar
               name={user?.name || "U"}
@@ -392,8 +417,8 @@ export default function FeedPage() {
               placeholder={placeholder}
               rows={2}
               className={cn(
-                "composer-input w-full resize-none border-0 bg-transparent text-[17px] leading-relaxed",
-                "text-[#0f1419] placeholder:text-neutral-400",
+                "composer-input w-full resize-none border-0 bg-transparent text-[15px] leading-[1.5]",
+                "text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]",
                 "outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none",
                 "dark:text-zinc-100 dark:placeholder:text-zinc-500",
                 "min-h-[52px]"
@@ -666,13 +691,28 @@ export default function FeedPage() {
         </div>
       </form>
 
-      <div className="space-y-3">
-        {visible.map((post) => (
-          <PostCard key={post.id} post={post} />
+      <div className="stagger-in space-y-3">
+        {visible.map((post, i) => (
+          <div key={post.id} style={{ ["--i" as string]: Math.min(i, 7) }}>
+            <PostCard post={post} />
+          </div>
         ))}
         {visible.length === 0 && (
-          <div className="rounded-2xl border-2 border-dashed border-neutral-300 bg-white p-12 text-center text-sm font-medium text-neutral-500 dark:border-zinc-700 dark:bg-[#141414]">
-            Nenhum post ainda. Seja o primeiro a publicar.
+          <div className="empty-state">
+            <div className="empty-state__icon" aria-hidden>
+              <span className="text-[20px]">✦</span>
+            </div>
+            <h2 className="empty-state__title">Seu feed está vazio</h2>
+            <p className="empty-state__desc">
+              Publique algo ou siga pessoas em{" "}
+              <Link
+                href="/app/populares"
+                className="font-medium text-[var(--text-primary)] underline underline-offset-2"
+              >
+                Populares
+              </Link>{" "}
+              para ver posts e stories delas aqui.
+            </p>
           </div>
         )}
       </div>

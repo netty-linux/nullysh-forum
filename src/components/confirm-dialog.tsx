@@ -79,8 +79,8 @@ export function ConfirmDialog({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            className="absolute inset-0 bg-black/55 backdrop-blur-[3px]"
+            transition={{ duration: reduce ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute inset-0 overscroll-contain bg-black/55 backdrop-blur-[3px]"
             onClick={() => {
               if (!loading) onCancel();
             }}
@@ -88,43 +88,43 @@ export function ConfirmDialog({
 
           <motion.div
             initial={
-              reduce ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.96 }
+              reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97 }
             }
-            animate={{ opacity: 1, y: 0, scale: 1 }}
+            animate={{ opacity: 1, scale: 1 }}
             exit={
-              reduce ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.98 }
+              reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98 }
             }
-            transition={{ type: "spring", stiffness: 420, damping: 32 }}
+            transition={{
+              duration: reduce ? 0 : 0.25,
+              ease: [0.16, 1, 0.3, 1],
+            }}
             className={cn(
-              "relative z-10 w-full max-w-[22rem]",
-              "rounded-2xl border-2 border-[#1f1f1f] bg-white",
-              "shadow-[0_24px_64px_-16px_rgb(0_0_0/0.5)]",
-              "dark:border-zinc-600 dark:bg-[#141414]"
+              "modal-panel relative z-10 w-full max-w-[22rem] overscroll-contain"
             )}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start gap-3 border-b border-neutral-100 px-5 pb-3 pt-5 dark:border-zinc-800">
+            <div className="flex items-start gap-3 border-b border-[var(--border)] px-5 pb-3 pt-5">
               <div
                 className={cn(
                   "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
                   variant === "danger"
                     ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
-                    : "bg-neutral-100 text-[#1f1f1f] dark:bg-zinc-800 dark:text-zinc-100"
+                    : "bg-neutral-100 text-[var(--text-primary)] dark:bg-zinc-800"
                 )}
               >
-                <WarningCircle size={22} weight="fill" />
+                <WarningCircle size={22} weight="fill" aria-hidden />
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
                 <h2
                   id="nullysh-confirm-title"
-                  className="text-[15px] font-bold tracking-tight text-[#1f1f1f] dark:text-zinc-50"
+                  className="font-display text-[15px] font-medium tracking-tight text-[var(--text-primary)]"
                 >
                   {title}
                 </h2>
                 {description && (
                   <p
                     id="nullysh-confirm-desc"
-                    className="mt-1.5 text-[13px] leading-relaxed text-neutral-500 dark:text-zinc-400"
+                    className="mt-1.5 text-[13px] leading-relaxed text-[var(--text-secondary)]"
                   >
                     {description}
                   </p>
@@ -135,10 +135,10 @@ export function ConfirmDialog({
                 onClick={() => {
                   if (!loading) onCancel();
                 }}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-400 transition hover:bg-neutral-100 hover:text-[#1f1f1f] dark:hover:bg-zinc-800"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--text-tertiary)] transition-colors hover:bg-neutral-100 hover:text-[var(--text-primary)] dark:hover:bg-zinc-800"
                 aria-label="Fechar"
               >
-                <X size={16} weight="bold" />
+                <X size={16} weight="bold" aria-hidden />
               </button>
             </div>
 

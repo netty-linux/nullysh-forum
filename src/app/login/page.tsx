@@ -90,9 +90,9 @@ export default function LoginPage() {
                   type="submit"
                   className="w-full"
                   size="lg"
-                  disabled={loading}
+                  loading={loading}
                 >
-                  {loading ? "Entrando..." : "Entrar"}
+                  Entrar
                 </Button>
               </form>
 

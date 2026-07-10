@@ -20,6 +20,7 @@ import {
 } from "@/lib/emblems";
 import { useForumStore } from "@/lib/forum-store";
 import { isGifDataUrl } from "@/lib/image";
+import { useSocialStore } from "@/lib/social-store";
 import { displayHost, formatDate, normalizeUrl } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -29,6 +30,8 @@ import {
   Headphones,
   PencilSimple,
   Prohibit,
+  UserMinus,
+  UserPlus,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -47,10 +50,22 @@ export default function PublicProfilePage() {
   const blockUser = useBlockStore((s) => s.blockUser);
   const unblockUser = useBlockStore((s) => s.unblockUser);
   const blocks = useBlockStore((s) => s.blocks);
+  const follows = useSocialStore((s) => s.follows);
+  const follow = useSocialStore((s) => s.follow);
+  const unfollow = useSocialStore((s) => s.unfollow);
+  const isFollowing = useSocialStore((s) => s.isFollowing);
+  const followerCount = useSocialStore((s) => s.followerCount);
+  const followingCount = useSocialStore((s) => s.followingCount);
   const [tab, setTab] = useState<Tab>("posts");
   const [blockError, setBlockError] = useState("");
+  const [followError, setFollowError] = useState("");
 
   const isOwn = me?.id === id;
+  // re-render quando grafo social muda
+  void follows;
+  const amFollowing = !!(me && !isOwn && isFollowing(me.id, id));
+  const nFollowers = followerCount(id);
+  const nFollowing = followingCount(id);
 
   // Quem me bloqueou: perfil “não encontrado”
   const blockedByThem =
@@ -110,7 +125,13 @@ export default function PublicProfilePage() {
     );
     if (!ok) return;
     const res = blockUser(me.id, id);
-    if (!res.ok) setBlockError(res.error);
+    if (!res.ok) {
+      setBlockError(res.error);
+      return;
+    }
+    // Remove follows em ambas as direções
+    unfollow(me.id, id);
+    unfollow(id, me.id);
   }
 
   function onUnblock() {
@@ -118,6 +139,17 @@ export default function PublicProfilePage() {
     setBlockError("");
     const res = unblockUser(me.id, id);
     if (!res.ok) setBlockError(res.error);
+  }
+
+  function onToggleFollow() {
+    if (!me || isOwn) return;
+    setFollowError("");
+    if (amFollowing) {
+      unfollow(me.id, id);
+      return;
+    }
+    const res = follow(me.id, id);
+    if (!res.ok) setFollowError(res.error);
   }
 
   // Eu bloqueei: blur + opção de desbloquear
@@ -222,8 +254,10 @@ export default function PublicProfilePage() {
           )}
         </div>
       </div>
-      {blockError && (
-        <p className="mb-3 text-xs font-medium text-red-600">{blockError}</p>
+      {(blockError || followError) && (
+        <p className="mb-3 text-xs font-medium text-red-600">
+          {blockError || followError}
+        </p>
       )}
 
       {/* Profile card */}
@@ -263,6 +297,25 @@ export default function PublicProfilePage() {
 
             {!isOwn && me && (
               <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={amFollowing ? "outline" : "primary"}
+                  onClick={onToggleFollow}
+                  className="min-w-[7.5rem]"
+                >
+                  {amFollowing ? (
+                    <>
+                      <UserMinus size={14} weight="bold" />
+                      Seguindo
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={14} weight="bold" />
+                      Seguir
+                    </>
+                  )}
+                </Button>
                 <Link href={`/app/chat?dm=${encodeURIComponent(id)}`}>
                   <Button variant="outline" size="sm">
                     <ChatCircle size={14} weight="bold" />
@@ -398,10 +451,10 @@ export default function PublicProfilePage() {
               </div>
             )}
 
-            {/* Stats — linha limpa */}
-            <div className="mt-5 flex items-center gap-0 divide-x divide-neutral-200 border-t border-neutral-100 pt-4 text-center">
+            {/* Stats — estilo Instagram */}
+            <div className="mt-5 flex items-center gap-0 divide-x divide-neutral-200 border-t border-neutral-100 pt-4 text-center dark:divide-zinc-700 dark:border-zinc-800">
               <div className="flex-1 px-2">
-                <p className="text-base font-semibold tabular-nums tracking-tight text-[#1f1f1f]">
+                <p className="text-base font-semibold tabular-nums tracking-tight text-[#1f1f1f] dark:text-zinc-50">
                   {userPosts.length}
                 </p>
                 <p className="mt-0.5 text-[11px] font-medium text-neutral-400">
@@ -409,19 +462,19 @@ export default function PublicProfilePage() {
                 </p>
               </div>
               <div className="flex-1 px-2">
-                <p className="text-base font-semibold tracking-tight text-[#1f1f1f]">
-                  {profile.isVip ? "VIP" : "Free"}
+                <p className="text-base font-semibold tabular-nums tracking-tight text-[#1f1f1f] dark:text-zinc-50">
+                  {nFollowers}
                 </p>
                 <p className="mt-0.5 text-[11px] font-medium text-neutral-400">
-                  plano
+                  {nFollowers === 1 ? "seguidor" : "seguidores"}
                 </p>
               </div>
               <div className="flex-1 px-2">
-                <p className="text-base font-semibold tracking-tight text-[#1f1f1f]">
-                  {formatDate(profile.createdAt)}
+                <p className="text-base font-semibold tabular-nums tracking-tight text-[#1f1f1f] dark:text-zinc-50">
+                  {nFollowing}
                 </p>
                 <p className="mt-0.5 text-[11px] font-medium text-neutral-400">
-                  entrou em
+                  seguindo
                 </p>
               </div>
             </div>
