@@ -1,12 +1,18 @@
 import { SupabaseAuthBridge } from "@/components/supabase-auth-bridge";
 import { ThemeProvider } from "@/components/theme-provider";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/**
+ * Body/UI: Inter variable — features cv05/cv11/ss01 aproximam Chirp / gg sans.
+ * Display: Satoshi (Fontshare) via CSS link — personalidade sem clone.
+ */
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
+  weight: ["400", "500", "600"],
 });
 
 const geistMono = Geist_Mono({
@@ -67,13 +73,23 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {/* Satoshi — display / headings (Fontshare) */}
+        <link
+          href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600&display=swap"
+          rel="stylesheet"
+        />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `:root { --font-satoshi: "Satoshi", var(--font-inter), system-ui, sans-serif; }`,
+          }}
+        />
       </head>
-      <body className="min-h-full bg-background text-foreground antialiased transition-colors duration-200">
+      <body className="min-h-full bg-background text-foreground antialiased">
         <ThemeProvider>
           <SupabaseAuthBridge>{children}</SupabaseAuthBridge>
         </ThemeProvider>
