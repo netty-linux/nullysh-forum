@@ -16,10 +16,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!hydrated) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-white">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-pulse rounded-lg bg-neutral-950" />
-          <p className="text-sm text-neutral-400">Carregando...</p>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[var(--background)]">
+        <div className="flex w-full max-w-sm flex-col gap-3 px-6">
+          <div className="skeleton h-10 w-10 rounded-full" />
+          <div className="skeleton h-4 w-2/3" />
+          <div className="skeleton h-4 w-full" />
+          <div className="skeleton h-24 w-full rounded-[var(--radius-lg)]" />
+          <p className="text-[13px] text-[var(--text-tertiary)]">Carregando…</p>
         </div>
       </div>
     );
@@ -27,8 +30,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-white">
-        <p className="text-sm text-neutral-400">Redirecionando...</p>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[var(--background)]">
+        <p className="text-[13px] text-[var(--text-tertiary)]">Redirecionando…</p>
       </div>
     );
   }

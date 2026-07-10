@@ -1,4 +1,7 @@
+"use client";
+
 import { cn } from "@/lib/utils";
+import { WarningCircle } from "@phosphor-icons/react";
 import { InputHTMLAttributes, forwardRef } from "react";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -15,7 +18,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="text-sm font-semibold text-neutral-900"
+            className="text-[13px] font-medium text-[var(--text-primary)]"
           >
             {label}
           </label>
@@ -23,20 +26,38 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           id={inputId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={
+            error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined
+          }
           className={cn(
-            "h-12 w-full rounded-xl border-2 bg-white px-4 text-sm text-[#1f1f1f]",
-            "placeholder:text-neutral-400",
-            "hover:border-neutral-400",
-            "focus:border-[#1f1f1f] focus:outline-none focus:ring-4 focus:ring-[#1f1f1f]/8",
-            error ? "border-red-500" : "border-neutral-200",
+            "h-10 w-full rounded-[var(--radius-md)] border bg-[var(--surface-elevated)] px-3 text-[14px] text-[var(--text-primary)]",
+            "placeholder:text-[var(--text-tertiary)]",
+            "hover:border-[rgba(0,0,0,0.14)] dark:hover:border-[rgba(255,255,255,0.16)]",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2",
+            error
+              ? "border-red-500 focus-visible:ring-red-500"
+              : "border-[var(--border)]",
             className
           )}
           {...props}
         />
         {error ? (
-          <p className="text-sm text-red-600">{error}</p>
+          <p
+            id={`${inputId}-error`}
+            role="alert"
+            className="field-error"
+          >
+            <WarningCircle size={14} weight="fill" aria-hidden />
+            {error}
+          </p>
         ) : hint ? (
-          <p className="text-xs text-neutral-500">{hint}</p>
+          <p
+            id={`${inputId}-hint`}
+            className="text-[13px] text-[var(--text-tertiary)]"
+          >
+            {hint}
+          </p>
         ) : null}
       </div>
     );

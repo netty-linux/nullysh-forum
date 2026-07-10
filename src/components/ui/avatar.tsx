@@ -1,4 +1,7 @@
+"use client";
+
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 const sizeMap = {
   sm: "h-8 w-8 text-[11px]",
@@ -23,15 +26,22 @@ export function Avatar({
   framed?: boolean;
 }) {
   const letter = (name || "U").slice(0, 1).toUpperCase();
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-  if (src) {
+  if (src && !failed) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
         alt={name}
+        width={40}
+        height={40}
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
         className={cn(
-          "shrink-0 overflow-hidden rounded-full bg-neutral-200 object-cover",
+          "shrink-0 overflow-hidden rounded-full bg-neutral-200 object-cover transition-opacity duration-[var(--duration-base)] ease-[var(--ease-out)]",
+          loaded ? "opacity-100" : "opacity-0",
           sizeMap[size],
           className
         )}
@@ -42,7 +52,7 @@ export function Avatar({
   return (
     <div
       className={cn(
-        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#1f1f1f] font-medium tracking-tight text-white",
+        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#1a1a1a] font-medium tracking-tight text-white",
         sizeMap[size],
         className
       )}

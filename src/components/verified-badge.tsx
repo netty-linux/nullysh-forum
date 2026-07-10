@@ -12,7 +12,10 @@ export function VerifiedBadge({
 }) {
   return (
     <span
-      className={cn("inline-flex shrink-0 text-[#1d9bf0]", className)}
+      className={cn(
+        "inline-flex shrink-0 text-[#1d9bf0] [margin-inline-start:4px]",
+        className
+      )}
       title={title}
       aria-label={title}
     >
