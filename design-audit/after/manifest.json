@@ -1,0 +1,267 @@
+{
+  "phase": "after",
+  "base": "http://localhost:3000",
+  "at": "2026-07-10T21:19:34.872Z",
+  "results": [
+    {
+      "label": "feed_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\feed_light_desktop.png"
+    },
+    {
+      "label": "populares_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\populares_light_desktop.png"
+    },
+    {
+      "label": "saved_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\saved_light_desktop.png"
+    },
+    {
+      "label": "trails_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\trails_light_desktop.png"
+    },
+    {
+      "label": "mentorship_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\mentorship_light_desktop.png"
+    },
+    {
+      "label": "events_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\events_light_desktop.png"
+    },
+    {
+      "label": "communities_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\communities_light_desktop.png"
+    },
+    {
+      "label": "videos_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\videos_light_desktop.png"
+    },
+    {
+      "label": "materials_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\materials_light_desktop.png"
+    },
+    {
+      "label": "chat_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\chat_light_desktop.png"
+    },
+    {
+      "label": "profile_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\profile_light_desktop.png"
+    },
+    {
+      "label": "admin_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\admin_light_desktop.png"
+    },
+    {
+      "label": "login_light_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\login_light_desktop.png"
+    },
+    {
+      "label": "feed_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\feed_dark_desktop.png"
+    },
+    {
+      "label": "populares_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\populares_dark_desktop.png"
+    },
+    {
+      "label": "saved_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\saved_dark_desktop.png"
+    },
+    {
+      "label": "trails_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\trails_dark_desktop.png"
+    },
+    {
+      "label": "mentorship_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\mentorship_dark_desktop.png"
+    },
+    {
+      "label": "events_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\events_dark_desktop.png"
+    },
+    {
+      "label": "communities_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\communities_dark_desktop.png"
+    },
+    {
+      "label": "videos_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\videos_dark_desktop.png"
+    },
+    {
+      "label": "materials_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\materials_dark_desktop.png"
+    },
+    {
+      "label": "chat_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\chat_dark_desktop.png"
+    },
+    {
+      "label": "profile_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\profile_dark_desktop.png"
+    },
+    {
+      "label": "admin_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\admin_dark_desktop.png"
+    },
+    {
+      "label": "login_dark_desktop",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\login_dark_desktop.png"
+    },
+    {
+      "label": "feed_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\feed_light_mobile.png"
+    },
+    {
+      "label": "populares_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\populares_light_mobile.png"
+    },
+    {
+      "label": "saved_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\saved_light_mobile.png"
+    },
+    {
+      "label": "trails_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\trails_light_mobile.png"
+    },
+    {
+      "label": "mentorship_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\mentorship_light_mobile.png"
+    },
+    {
+      "label": "events_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\events_light_mobile.png"
+    },
+    {
+      "label": "communities_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\communities_light_mobile.png"
+    },
+    {
+      "label": "videos_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\videos_light_mobile.png"
+    },
+    {
+      "label": "materials_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\materials_light_mobile.png"
+    },
+    {
+      "label": "chat_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\chat_light_mobile.png"
+    },
+    {
+      "label": "profile_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\profile_light_mobile.png"
+    },
+    {
+      "label": "admin_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\admin_light_mobile.png"
+    },
+    {
+      "label": "login_light_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\login_light_mobile.png"
+    },
+    {
+      "label": "feed_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\feed_dark_mobile.png"
+    },
+    {
+      "label": "populares_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\populares_dark_mobile.png"
+    },
+    {
+      "label": "saved_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\saved_dark_mobile.png"
+    },
+    {
+      "label": "trails_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\trails_dark_mobile.png"
+    },
+    {
+      "label": "mentorship_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\mentorship_dark_mobile.png"
+    },
+    {
+      "label": "events_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\events_dark_mobile.png"
+    },
+    {
+      "label": "communities_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\communities_dark_mobile.png"
+    },
+    {
+      "label": "videos_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\videos_dark_mobile.png"
+    },
+    {
+      "label": "materials_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\materials_dark_mobile.png"
+    },
+    {
+      "label": "chat_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\chat_dark_mobile.png"
+    },
+    {
+      "label": "profile_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\profile_dark_mobile.png"
+    },
+    {
+      "label": "admin_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\admin_dark_mobile.png"
+    },
+    {
+      "label": "login_dark_mobile",
+      "ok": true,
+      "file": "D:\\Nullysh.DEV\\NULLYSH-FORUM\\nullysh-forum\\design-audit\\after\\login_dark_mobile.png"
+    }
+  ]
+}
