@@ -15,7 +15,6 @@ import {
   CalendarBlank,
   ChatsCircle,
   CrownSimple,
-  Fire,
   Handshake,
   House,
   Path,
@@ -31,9 +30,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 
+/** Layout clássico da sidebar (espaçamento e hierarquia do MVP). */
 const baseNav = [
   { href: "/app", label: "Feed", icon: House },
-  { href: "/app/populares", label: "Populares", icon: Fire },
   { href: "/app/saved", label: "Salvos", icon: BookmarkSimple },
   { href: "/app/trails", label: "Trilhas", icon: Path },
   { href: "/app/mentorship", label: "Mentorias", icon: Handshake },
@@ -74,15 +73,15 @@ export function AppSidebar({
   }, [user?.role]);
 
   const content = (
-    <div className="flex h-full flex-col bg-[var(--surface-elevated)]">
-      <div className="flex h-14 items-center justify-between border-b border-[var(--border)] px-4">
+    <div className="flex h-full flex-col bg-white dark:bg-[#141414]">
+      <div className="flex h-16 items-center justify-between border-b border-neutral-200/80 px-5 dark:border-zinc-800/80">
         <Logo href="/app" size="sm" />
         {onClose && (
           <motion.button
             type="button"
             onClick={onClose}
-            whileTap={reduce ? undefined : { scale: 0.96 }}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] lg:hidden"
+            whileTap={reduce ? undefined : { scale: 0.9 }}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 dark:border-zinc-700 lg:hidden"
             aria-label="Fechar menu"
           >
             <X size={16} aria-hidden />
@@ -90,7 +89,7 @@ export function AppSidebar({
         )}
       </div>
 
-      <nav className="flex-1 space-y-0.5 p-3">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3 thin-scroll">
         {nav.map((item, i) => {
           const active =
             item.href === "/app"
@@ -102,22 +101,23 @@ export function AppSidebar({
           return (
             <motion.div
               key={item.href}
-              initial={reduce ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={reduce ? false : { opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
               transition={{
-                delay: reduce ? 0 : i * 0.02,
-                duration: 0.15,
-                ease: [0.16, 1, 0.3, 1],
+                delay: reduce ? 0 : i * 0.03,
+                type: "spring",
+                stiffness: 400,
+                damping: 30,
               }}
             >
               <Link
                 href={item.href}
                 onClick={onClose}
                 className={cn(
-                  "nav-item relative flex items-center gap-3 text-[14px]",
+                  "nav-item relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                   active
-                    ? "bg-[#1f1f1f] font-medium text-white shadow-[var(--shadow-sm)] dark:bg-white/12 dark:text-white dark:shadow-none"
-                    : "font-normal text-[var(--text-secondary)] hover:bg-neutral-100 hover:text-[var(--text-primary)] dark:hover:bg-zinc-800/80 dark:hover:text-white"
+                    ? "bg-[#1f1f1f] text-white shadow-[0_2px_8px_-2px_rgb(0_0_0/0.25)] dark:bg-white/12 dark:text-white dark:shadow-none"
+                    : "text-neutral-600 hover:bg-neutral-100 hover:text-[#1f1f1f] dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-white"
                 )}
               >
                 <Icon size={18} weight={active ? "fill" : "regular"} aria-hidden />
@@ -125,7 +125,7 @@ export function AppSidebar({
                 {item.href === "/app/admin" && pendingCount > 0 && (
                   <span
                     className={cn(
-                      "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums",
+                      "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-medium tabular-nums",
                       active
                         ? "bg-white text-[#1f1f1f] dark:bg-white dark:text-zinc-900"
                         : "bg-red-500 text-white",
@@ -141,14 +141,14 @@ export function AppSidebar({
         })}
       </nav>
 
-      <div className="mt-auto space-y-3 border-t border-[var(--border)] p-4">
+      <div className="mt-auto space-y-3 border-t border-neutral-200/80 p-4 dark:border-zinc-800/80">
         <ThemeToggle />
 
         {!user?.isVip && (
           <Link
             href="/pricing"
             onClick={onClose}
-            className="pressable flex items-center gap-2 rounded-[var(--radius-md)] bg-[#1f1f1f] px-3 py-2.5 text-[14px] font-medium text-white shadow-[var(--shadow-sm)]"
+            className="pressable mb-0 flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm font-medium text-neutral-950 transition-colors hover:border-neutral-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-500"
           >
             <CrownSimple size={16} weight="fill" aria-hidden />
             Assinar Plano VIP
@@ -173,7 +173,7 @@ export function AppSidebar({
               onClick={onClose}
               className="min-w-0 flex-1"
             >
-              <p className="flex items-center gap-1 truncate text-[14px] font-medium text-[var(--text-primary)] transition-opacity hover:opacity-70">
+              <p className="flex items-center gap-1 truncate text-sm font-medium text-[#1f1f1f] transition-opacity hover:opacity-70 dark:text-zinc-100">
                 <span className="truncate">{user.name}</span>
                 {user.isVerified && <VerifiedBadge size={14} />}
               </p>
@@ -181,20 +181,18 @@ export function AppSidebar({
                 {user.isVip ? (
                   <Badge variant="vip">VIP</Badge>
                 ) : (
-                  <span className="text-[13px] font-medium text-[var(--text-tertiary)]">
-                    Membro
-                  </span>
+                  <span className="text-xs text-neutral-400">Membro</span>
                 )}
               </div>
             </Link>
             <motion.button
               type="button"
-              whileTap={reduce ? undefined : { scale: 0.96 }}
+              whileTap={reduce ? undefined : { scale: 0.9 }}
               onClick={() => {
                 logout();
                 window.location.href = "/";
               }}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-950 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
               aria-label="Sair"
               title="Sair"
             >
@@ -220,7 +218,7 @@ export function AppSidebar({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+              className="absolute inset-0 bg-neutral-950/30 backdrop-blur-[2px]"
               onClick={onClose}
               aria-label="Fechar"
             />
@@ -229,7 +227,7 @@ export function AppSidebar({
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 34 }}
-              className="absolute inset-y-0 left-0 w-[min(100%,18rem)] border-r border-neutral-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-[#141414]"
+              className="absolute inset-y-0 left-0 w-[min(100%,18rem)] border-r border-neutral-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-[#141414]"
             >
               {content}
             </motion.aside>
