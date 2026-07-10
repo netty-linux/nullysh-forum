@@ -2,14 +2,14 @@
 
 import { useAuthStore } from "@/lib/auth-store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { useEffect, useState } from "react";
+import type { UserPublic } from "@/lib/types";
+import { useEffect, useMemo } from "react";
 
 /**
- * Hook de auth.
+ * Hook de auth — deriva o user do store sem setState em effect.
  *
- * NÃO marca hydrated=true no mount — isso causava logout fantasma:
- * currentUserId ainda null (rehydrate async) + hydrated true → AuthGuard
- * redirecionava para /login a cada reload.
+ * Antes: getCurrentUser() + setUser no effect gerava objeto novo a cada
+ * chamada → "Maximum update depth exceeded" / getSnapshot loop (React 19).
  *
  * - Supabase: SupabaseAuthBridge define hydrated após INITIAL_SESSION
  * - Local: onFinishHydration do zustand persist
@@ -18,26 +18,34 @@ export function useAuth() {
   const hydrated = useAuthStore((s) => s.hydrated);
   const setHydrated = useAuthStore((s) => s.setHydrated);
   const currentUserId = useAuthStore((s) => s.currentUserId);
-  const getCurrentUser = useAuthStore((s) => s.getCurrentUser);
   const users = useAuthStore((s) => s.users);
-  const [user, setUser] = useState(getCurrentUser());
 
   useEffect(() => {
-    // Com Supabase, a bridge controla hydrated (sessão real).
     if (isSupabaseConfigured()) return;
 
-    const mark = () => setHydrated(true);
-
     if (useAuthStore.persist.hasHydrated()) {
-      mark();
+      // só grava se ainda false — evita notify desnecessário
+      if (!useAuthStore.getState().hydrated) {
+        setHydrated(true);
+      }
     }
-    const unsub = useAuthStore.persist.onFinishHydration(mark);
+    const unsub = useAuthStore.persist.onFinishHydration(() => {
+      if (!useAuthStore.getState().hydrated) {
+        setHydrated(true);
+      }
+    });
     return unsub;
   }, [setHydrated]);
 
-  useEffect(() => {
-    setUser(getCurrentUser());
-  }, [currentUserId, getCurrentUser, hydrated, users]);
+  const user = useMemo((): UserPublic | null => {
+    if (!currentUserId) return null;
+    const raw = users.find((u) => u.id === currentUserId);
+    if (!raw) return null;
+    // Remove password sem re-normalizar (evita objeto "novo" a toa no store)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _pw, ...rest } = raw;
+    return rest as UserPublic;
+  }, [currentUserId, users]);
 
   return {
     user,

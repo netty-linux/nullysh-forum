@@ -1,5 +1,10 @@
 "use client";
 
+import { BlockUserModal } from "@/components/block-user-modal";
+import {
+  FollowListModal,
+  type FollowListMode,
+} from "@/components/follow-list-modal";
 import { BannerImage } from "@/components/gif-banner-editor";
 import { MusicTrackPlayer } from "@/components/music-track-player";
 import { PostCard } from "@/components/post-card";
@@ -21,7 +26,7 @@ import {
 import { useForumStore } from "@/lib/forum-store";
 import { isGifDataUrl } from "@/lib/image";
 import { useSocialStore } from "@/lib/social-store";
-import { displayHost, formatDate, normalizeUrl } from "@/lib/utils";
+import { displayHost, displayUsername, formatDate, normalizeUrl } from "@/lib/utils";
 import {
   ArrowLeft,
   ChatCircle,
@@ -59,6 +64,11 @@ export default function PublicProfilePage() {
   const [tab, setTab] = useState<Tab>("posts");
   const [blockError, setBlockError] = useState("");
   const [followError, setFollowError] = useState("");
+  const [blockModalOpen, setBlockModalOpen] = useState(false);
+  const [blocking, setBlocking] = useState(false);
+  const [followListOpen, setFollowListOpen] = useState(false);
+  const [followListMode, setFollowListMode] =
+    useState<FollowListMode>("followers");
 
   const isOwn = me?.id === id;
   // re-render quando grafo social muda
@@ -117,21 +127,29 @@ export default function PublicProfilePage() {
     );
   }
 
-  function onBlock() {
+  function openBlockModal() {
+    if (!me || isOwn) return;
+    setBlockError("");
+    setBlockModalOpen(true);
+  }
+
+  function confirmBlock() {
     if (!me) return;
     setBlockError("");
-    const ok = confirm(
-      `Bloquear ${profile!.name}? Vocês não verão posts um do outro, não poderão se mandar DM e o perfil ficará restrito.`
-    );
-    if (!ok) return;
-    const res = blockUser(me.id, id);
-    if (!res.ok) {
-      setBlockError(res.error);
-      return;
+    setBlocking(true);
+    try {
+      const res = blockUser(me.id, id);
+      if (!res.ok) {
+        setBlockError(res.error);
+        return;
+      }
+      // Remove follows em ambas as direções
+      unfollow(me.id, id);
+      unfollow(id, me.id);
+      setBlockModalOpen(false);
+    } finally {
+      setBlocking(false);
     }
-    // Remove follows em ambas as direções
-    unfollow(me.id, id);
-    unfollow(id, me.id);
   }
 
   function onUnblock() {
@@ -218,7 +236,8 @@ export default function PublicProfilePage() {
     );
   }
 
-  const handle = profile.email.split("@")[0];
+  // Handle público — nunca e-mail
+  const handle = displayUsername(profile);
 
   return (
     <div className="app-page mx-auto max-w-[40rem] px-4 py-6 sm:px-6 sm:py-8">
@@ -245,7 +264,7 @@ export default function PublicProfilePage() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={onBlock}
+              onClick={openBlockModal}
               className="text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
             >
               <Prohibit size={14} weight="bold" />
@@ -451,7 +470,7 @@ export default function PublicProfilePage() {
               </div>
             )}
 
-            {/* Stats — estilo Instagram */}
+            {/* Stats — estilo Instagram (clique em seguidores/seguindo abre modal) */}
             <div className="mt-5 flex items-center gap-0 divide-x divide-neutral-200 border-t border-neutral-100 pt-4 text-center dark:divide-zinc-700 dark:border-zinc-800">
               <div className="flex-1 px-2">
                 <p className="text-base font-semibold tabular-nums tracking-tight text-[#1f1f1f] dark:text-zinc-50">
@@ -461,22 +480,38 @@ export default function PublicProfilePage() {
                   publicações
                 </p>
               </div>
-              <div className="flex-1 px-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setFollowListMode("followers");
+                  setFollowListOpen(true);
+                }}
+                className="pressable flex-1 px-2 transition hover:opacity-80"
+                aria-label={`Ver ${nFollowers === 1 ? "seguidor" : "seguidores"}`}
+              >
                 <p className="text-base font-semibold tabular-nums tracking-tight text-[#1f1f1f] dark:text-zinc-50">
                   {nFollowers}
                 </p>
                 <p className="mt-0.5 text-[11px] font-medium text-neutral-400">
                   {nFollowers === 1 ? "seguidor" : "seguidores"}
                 </p>
-              </div>
-              <div className="flex-1 px-2">
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFollowListMode("following");
+                  setFollowListOpen(true);
+                }}
+                className="pressable flex-1 px-2 transition hover:opacity-80"
+                aria-label="Ver quem este perfil segue"
+              >
                 <p className="text-base font-semibold tabular-nums tracking-tight text-[#1f1f1f] dark:text-zinc-50">
                   {nFollowing}
                 </p>
                 <p className="mt-0.5 text-[11px] font-medium text-neutral-400">
                   seguindo
                 </p>
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -618,6 +653,32 @@ export default function PublicProfilePage() {
           </div>
         )}
       </div>
+
+      <FollowListModal
+        open={followListOpen}
+        onClose={() => setFollowListOpen(false)}
+        profileUserId={id}
+        profileName={profile.name}
+        mode={followListMode}
+      />
+
+      <BlockUserModal
+        open={blockModalOpen}
+        onClose={() => {
+          if (!blocking) setBlockModalOpen(false);
+        }}
+        onConfirm={confirmBlock}
+        loading={blocking}
+        user={{
+          id: profile.id,
+          name: profile.name,
+          username: profile.username,
+          email: profile.email,
+          avatarUrl: profile.avatarUrl,
+          isVip: profile.isVip,
+          avatarFrame: profile.avatarFrame,
+        }}
+      />
     </div>
   );
 }

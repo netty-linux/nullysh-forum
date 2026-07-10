@@ -903,11 +903,15 @@ html.dark .hero-grid {
   .skeleton {
     animation: none !important;
   }
-  *,
-  *::before,
-  *::after {
+  /* Não zerar TODAS as transitions — o rail do menu precisa de width no hover.
+     Só animações decorativas e transform de press. */
+  .like-pop,
+  .heart-fill,
+  .count-slide-in,
+  .toast-enter,
+  .app-page,
+  .stagger-in > * {
     animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }

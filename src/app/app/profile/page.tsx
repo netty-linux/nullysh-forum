@@ -3,6 +3,10 @@
 import { EmblemPicker } from "@/components/emblem-picker";
 import { EmojiPicker } from "@/components/emoji-picker";
 import {
+  FollowListModal,
+  type FollowListMode,
+} from "@/components/follow-list-modal";
+import {
   BannerImage,
   GifBannerEditor,
 } from "@/components/gif-banner-editor";
@@ -59,7 +63,16 @@ import {
 } from "@/lib/music";
 import type { BannerFit, ProfileLink } from "@/lib/types";
 import { DEFAULT_BANNER_FIT } from "@/lib/types";
-import { cn, formatDate, isValidUrl, normalizeUrl, uid } from "@/lib/utils";
+import {
+  cn,
+  displayUsername,
+  formatDate,
+  isValidUrl,
+  normalizeUrl,
+  normalizeUsername,
+  uid,
+  usernameValidationError,
+} from "@/lib/utils";
 import {
   Camera,
   CheckCircle,
@@ -92,9 +105,13 @@ export default function ProfilePage() {
   void follows;
 
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [bio, setBio] = useState("");
   const [password, setPassword] = useState("");
+  const [followListOpen, setFollowListOpen] = useState(false);
+  const [followListMode, setFollowListMode] =
+    useState<FollowListMode>("followers");
   /** Só envia senha ao Supabase quando o usuário abre “Alterar senha” de propósito */
   const [changePassword, setChangePassword] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -139,6 +156,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) {
       setName(user.name);
+      setUsername(displayUsername(user));
       setEmail(user.email);
       setBio(user.bio || "");
       setAvatarUrl(user.avatarUrl ?? null);
@@ -480,10 +498,17 @@ export default function ProfilePage() {
       setError("A nova senha precisa ter no mínimo 6 caracteres.");
       return;
     }
+    const handleErr = usernameValidationError(username);
+    if (handleErr) {
+      setError(handleErr);
+      return;
+    }
+
     setSaving(true);
     try {
       const result = await updateProfile({
         name,
+        username: normalizeUsername(username),
         email,
         bio,
         // Nunca manda senha no save normal — autofill do browser quebrava o upload
@@ -549,6 +574,7 @@ export default function ProfilePage() {
     if (!user) return false;
     if (changePassword && password.length > 0) return true;
     if (name.trim() !== user.name) return true;
+    if (normalizeUsername(username) !== displayUsername(user)) return true;
     if (email.trim().toLowerCase() !== user.email) return true;
     if ((bio || "") !== (user.bio || "")) return true;
     if ((avatarUrl || null) !== (user.avatarUrl || null)) return true;
@@ -579,6 +605,7 @@ export default function ProfilePage() {
     changePassword,
     password,
     name,
+    username,
     email,
     bio,
     avatarUrl,
@@ -760,30 +787,41 @@ export default function ProfilePage() {
               )}
             </div>
             <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-neutral-400">
-              <span>
-                @
-                {(email || user.email).split("@")[0]?.toLowerCase() || "user"}
-              </span>
+              <span>@{displayUsername({ username, email: user.email })}</span>
               <ProfileEmblem id={badgeEquipped} size={22} />
             </p>
             <p className="mt-1 text-[12px] text-neutral-400">
               Membro desde {formatDate(user.createdAt)}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-4 text-[13px]">
-              <span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFollowListMode("followers");
+                  setFollowListOpen(true);
+                }}
+                className="pressable rounded-lg text-left transition hover:opacity-80"
+              >
                 <strong className="font-semibold tabular-nums text-[#1f1f1f]">
                   {followerCount(user.id)}
                 </strong>{" "}
                 <span className="text-neutral-500">
                   {followerCount(user.id) === 1 ? "seguidor" : "seguidores"}
                 </span>
-              </span>
-              <span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFollowListMode("following");
+                  setFollowListOpen(true);
+                }}
+                className="pressable rounded-lg text-left transition hover:opacity-80"
+              >
                 <strong className="font-semibold tabular-nums text-[#1f1f1f]">
                   {followingCount(user.id)}
                 </strong>{" "}
                 <span className="text-neutral-500">seguindo</span>
-              </span>
+              </button>
             </div>
             {user.bio && (
               <p className="mt-3 max-w-[42ch] text-[14px] leading-relaxed text-neutral-600">
@@ -822,14 +860,6 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <p className="mb-6 text-[13px] leading-relaxed text-neutral-500">
-        Ao enviar foto ou banner, um editor abre para você{" "}
-        <span className="font-medium text-neutral-700">
-          posicionar e dar zoom
-        </span>{" "}
-        antes de aplicar.
-      </p>
-
       {!user.isVip && (
         <Link
           href="/pricing"
@@ -865,7 +895,24 @@ export default function ProfilePage() {
           required
         />
         <Input
-          label="E-mail"
+          label="Nome de usuário (@)"
+          name="profile-username"
+          autoComplete="username"
+          spellCheck={false}
+          value={username}
+          onChange={(e) =>
+            setUsername(
+              e.target.value
+                .replace(/^@+/, "")
+                .toLowerCase()
+                .replace(/[^a-z0-9_]/g, "")
+            )
+          }
+          placeholder="seunome"
+          required
+        />
+        <Input
+          label="E-mail de cadastro"
           type="email"
           name="profile-email"
           autoComplete="email"
@@ -886,17 +933,8 @@ export default function ProfilePage() {
             label="Bio"
             value={bio}
             onChange={(e) => setBio(e.target.value)}
-            placeholder={
-              user?.isVip
-                ? "Conte um pouco sobre você… VIP: use emojis custom com :nome:"
-                : "Conte um pouco sobre você..."
-            }
+            placeholder="Conte um pouco sobre você..."
             className="min-h-[100px]"
-            hint={
-              user?.isVip
-                ? "Emojis custom (:nome:) aparecem na bio pública."
-                : undefined
-            }
           />
           {user?.isVip && (
             <div className="relative mt-2">
@@ -944,16 +982,9 @@ export default function ProfilePage() {
         {/* Links na bio */}
         <div className="rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-white to-neutral-50/80 p-4 shadow-[0_1px_2px_rgb(0_0_0/0.03)] sm:p-5">
           <div className="mb-3 flex items-end justify-between gap-2">
-            <div>
-              <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
-                Links na biografia
-              </p>
-              <p className="mt-0.5 text-xs text-neutral-500">
-                {user?.isVip
-                  ? `VIP: até ${linkLimit} links clicáveis`
-                  : `Free: 1 link · VIP libera até 6`}
-              </p>
-            </div>
+            <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
+              Links na biografia
+            </p>
             <span className="text-[11px] font-medium tabular-nums text-neutral-400">
               {links.length}/{linkLimit}
             </span>
@@ -1037,22 +1068,15 @@ export default function ProfilePage() {
         {/* Músicas favoritas — VIP */}
         <div className="rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-white to-neutral-50/80 p-4 shadow-[0_1px_2px_rgb(0_0_0/0.03)] sm:p-5 dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-950">
           <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <p className="flex items-center gap-1.5 text-[13px] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
-                <Headphones size={16} weight="bold" />
-                Ouvindo agora
-                <CrownSimple
-                  size={13}
-                  weight="fill"
-                  className="text-amber-500"
-                />
-              </p>
-              <p className="mt-0.5 text-xs text-neutral-500">
-                {user?.isVip
-                  ? `Spotify, YouTube ou SoundCloud · até ${trackLimit} faixas`
-                  : "Exclusivo VIP — mostre o que você está escutando"}
-              </p>
-            </div>
+            <p className="flex items-center gap-1.5 text-[13px] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
+              <Headphones size={16} weight="bold" />
+              Ouvindo agora
+              <CrownSimple
+                size={13}
+                weight="fill"
+                className="text-amber-500"
+              />
+            </p>
             {user?.isVip ? (
               <span className="text-[11px] font-medium tabular-nums text-neutral-400">
                 {tracks.length}/{trackLimit}
@@ -1195,9 +1219,6 @@ export default function ProfilePage() {
               <MusicPlatformIcon platform="spotify" size={22} />
               <MusicPlatformIcon platform="youtube" size={22} />
               <MusicPlatformIcon platform="soundcloud" size={22} />
-              <p className="text-xs text-neutral-500">
-                Assine o VIP para listar suas faixas favoritas no perfil.
-              </p>
             </div>
           )}
         </div>
@@ -1205,14 +1226,9 @@ export default function ProfilePage() {
         {/* Interesses */}
         <div className="rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-white to-neutral-50/80 p-4 shadow-[0_1px_2px_rgb(0_0_0/0.03)] sm:p-5">
           <div className="mb-3 flex items-end justify-between gap-2">
-            <div>
-              <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
-                Interesses
-              </p>
-              <p className="mt-0.5 text-xs text-neutral-500">
-                Selecione os temas mais relevantes para você
-              </p>
-            </div>
+            <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
+              Interesses
+            </p>
             {interests.length > 0 && (
               <span className="text-[11px] font-medium tabular-nums text-neutral-400">
                 {interests.length} selecionado
@@ -1230,14 +1246,9 @@ export default function ProfilePage() {
         {/* Objetivos */}
         <div className="rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-white to-neutral-50/80 p-4 shadow-[0_1px_2px_rgb(0_0_0/0.03)] sm:p-5">
           <div className="mb-3 flex items-end justify-between gap-2">
-            <div>
-              <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
-                Objetivos
-              </p>
-              <p className="mt-0.5 text-xs text-neutral-500">
-                Até {MAX_GOALS} objetivos pessoais
-              </p>
-            </div>
+            <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
+              Objetivos
+            </p>
             <span className="text-[11px] font-medium tabular-nums text-neutral-400">
               {goals.length}/{MAX_GOALS}
             </span>
@@ -1293,14 +1304,9 @@ export default function ProfilePage() {
 
         {/* Mentoria */}
         <div className="space-y-4 rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-white to-neutral-50/80 p-4 shadow-[0_1px_2px_rgb(0_0_0/0.03)] sm:p-5">
-          <div>
-            <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
-              Mentoria
-            </p>
-            <p className="mt-0.5 text-xs text-neutral-500">
-              Ative se busca ou oferece mentoria na comunidade
-            </p>
-          </div>
+          <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
+            Mentoria
+          </p>
 
           <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200/80 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.02)] transition-colors hover:border-neutral-300">
             <input
@@ -1415,14 +1421,9 @@ export default function ProfilePage() {
             e o Supabase recusava “same password”, abortando foto/GIF. */}
         <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
-                Senha
-              </p>
-              <p className="mt-0.5 text-xs text-neutral-500">
-                Opcional — não é necessária para salvar foto, banner ou GIF.
-              </p>
-            </div>
+            <p className="text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
+              Senha
+            </p>
             <Button
               type="button"
               variant="outline"
@@ -1445,38 +1446,10 @@ export default function ProfilePage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Mínimo 6 caracteres"
-                hint="Só será enviada se você digitar aqui e salvar."
               />
             </div>
           )}
         </div>
-        <p className="text-xs text-neutral-500">
-          Foto e banner estáticos: até 20 MB no envio. Após o recorte, a imagem
-          é comprimida em alta qualidade (WebP/JPEG) para ocupar menos storage.
-          {user.isVip ? (
-            <>
-              {" "}
-              <span className="font-semibold text-[#1f1f1f]">
-                VIP: banners GIF animados liberados
-              </span>{" "}
-              (até 15 MB; GIFs não são re-encodados para manter a animação). Use
-              Posicionar GIF para enquadrar antes de salvar.
-            </>
-          ) : (
-            <>
-              {" "}
-              Banners animados (GIF) são exclusivos do{" "}
-              <Link
-                href="/pricing"
-                className="font-semibold text-[#1f1f1f] underline underline-offset-2"
-              >
-                Plano VIP
-              </Link>
-              .
-            </>
-          )}
-        </p>
-
         <div className="flex flex-wrap gap-2 pt-2">
           <Button
             type="button"
@@ -1575,6 +1548,14 @@ export default function ProfilePage() {
           onConfirm={onGifFitConfirm}
         />
       )}
+
+      <FollowListModal
+        open={followListOpen}
+        onClose={() => setFollowListOpen(false)}
+        profileUserId={user.id}
+        profileName={user.name}
+        mode={followListMode}
+      />
     </div>
   );
 }

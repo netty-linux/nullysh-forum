@@ -1,7 +1,11 @@
 "use client";
 
 import type { ProfileUpdate, UserPublic } from "@/lib/types";
-import { initials } from "@/lib/utils";
+import {
+  initials,
+  normalizeUsername,
+  usernameValidationError,
+} from "@/lib/utils";
 import { getSupabaseBrowser, requireSupabaseBrowser } from "./client";
 import { profileRowToUser, userUpdateToRow, type ProfileRow } from "./mappers";
 import { ensureRemoteMedia } from "./storage";
@@ -268,7 +272,34 @@ export async function supabaseUpdateProfile(
       };
     }
 
-    // 2) E-mail só se mudou de verdade
+    // 2) Username (@) — único e público
+    let nextUsername: string | undefined;
+    if (data.username !== undefined) {
+      const err = usernameValidationError(data.username);
+      if (err) return { ok: false, error: err };
+      nextUsername = normalizeUsername(data.username);
+      if (
+        current?.username &&
+        normalizeUsername(current.username) === nextUsername
+      ) {
+        nextUsername = undefined; // sem mudança
+      } else if (nextUsername) {
+        const { data: clash } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("username", nextUsername)
+          .neq("id", userId)
+          .maybeSingle();
+        if (clash) {
+          return {
+            ok: false,
+            error: "Este @ já está em uso. Escolha outro.",
+          };
+        }
+      }
+    }
+
+    // 3) E-mail só se mudou de verdade (privado — auth, não perfil público)
     const nextEmail = data.email?.trim().toLowerCase();
     if (
       nextEmail &&
@@ -281,7 +312,7 @@ export async function supabaseUpdateProfile(
       if (emErr) return { ok: false, error: mapAuthError(emErr.message) };
     }
 
-    // 3) Senha só se o caller mandou explicitamente (UI "Alterar senha")
+    // 4) Senha só se o caller mandou explicitamente (UI "Alterar senha")
     // Nunca deve vir no save de foto/banner/GIF — autofill do browser gerava
     // "New password should be different from the old password" e abortava tudo.
     const nextPassword =
@@ -309,6 +340,7 @@ export async function supabaseUpdateProfile(
     const row = userUpdateToRow({
       ...data,
       name: nextName,
+      username: nextUsername,
       avatar: nextName !== undefined ? initials(nextName) || "U" : undefined,
       avatarUrl,
       bannerUrl,
@@ -328,6 +360,15 @@ export async function supabaseUpdateProfile(
       .from("profiles")
       .update(row)
       .eq("id", userId);
+
+    // Coluna username ainda não migrada → tenta sem ela
+    if (error && error.message.toLowerCase().includes("username")) {
+      console.warn(
+        "[profile] coluna username ausente — rode a migration. Salvando sem @."
+      );
+      delete row.username;
+      ({ error } = await supabase.from("profiles").update(row).eq("id", userId));
+    }
 
     // Colunas de emblema ainda não migradas no projeto → tenta sem elas
     if (

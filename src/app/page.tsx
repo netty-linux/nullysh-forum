@@ -192,8 +192,9 @@ export default function HomePage() {
                 <p className="mt-2 flex-1 text-sm leading-relaxed text-neutral-600">
                   {c.description}
                 </p>
-                <p className="mt-4 border-t border-neutral-200 pt-3 text-xs font-medium tabular-nums text-neutral-500">
-                  {c.members.toLocaleString("pt-BR")} membros · {c.posts} posts
+                <p className="mt-4 border-t border-neutral-200 pt-3 text-xs font-medium text-neutral-500">
+                  {c.source === "staff" ? "Oficial · Staff" : "Comunidade"}
+                  {c.vipOnly ? " · VIP" : ""}
                 </p>
               </div>
             ))}

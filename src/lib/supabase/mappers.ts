@@ -13,12 +13,14 @@ import {
   type UserPublic,
   type UserRole,
 } from "@/lib/types";
-import { initials } from "@/lib/utils";
+import { initials, suggestUsernameFromEmail } from "@/lib/utils";
 
 /** Linha da tabela public.profiles */
 export type ProfileRow = {
   id: string;
   email: string;
+  /** Handle público (@username) — coluna opcional até a migration rodar */
+  username?: string | null;
   name: string;
   bio: string | null;
   avatar: string | null;
@@ -66,9 +68,14 @@ export function profileRowToUser(row: ProfileRow): UserPublic {
     ? row.role
     : "member") as UserRole;
 
+  const username =
+    (row.username && String(row.username).trim()) ||
+    suggestUsernameFromEmail(row.email);
+
   return {
     id: row.id,
     email: row.email,
+    username,
     name: row.name,
     bio: row.bio ?? "",
     avatar: row.avatar || initials(row.name) || "U",
@@ -107,6 +114,7 @@ export function userUpdateToRow(
     Pick<
       User,
       | "name"
+      | "username"
       | "bio"
       | "email"
       | "avatarUrl"
@@ -134,6 +142,7 @@ export function userUpdateToRow(
   };
 
   if (data.name !== undefined) row.name = data.name;
+  if (data.username !== undefined) row.username = data.username;
   if (data.bio !== undefined) row.bio = data.bio;
   if (data.email !== undefined) row.email = data.email;
   if (data.avatar !== undefined) row.avatar = data.avatar;

@@ -43,24 +43,15 @@ export const metadata: Metadata = {
   },
 };
 
+/** Tema fixo light por enquanto (toggle de modo escuro desativado). */
 const themeInitScript = `
 (function(){
   try {
-    var k = 'nullysh-theme';
-    var t = localStorage.getItem(k);
-    if (t !== 'light' && t !== 'dark') {
-      t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
     var root = document.documentElement;
-    if (t === 'dark') {
-      root.classList.add('dark');
-      root.setAttribute('data-theme', 'dark');
-      root.style.colorScheme = 'dark';
-    } else {
-      root.classList.remove('dark');
-      root.setAttribute('data-theme', 'light');
-      root.style.colorScheme = 'light';
-    }
+    root.classList.remove('dark');
+    root.setAttribute('data-theme', 'light');
+    root.style.colorScheme = 'light';
+    try { localStorage.setItem('nullysh-theme', 'light'); } catch (e) {}
   } catch (e) {}
 })();
 `;

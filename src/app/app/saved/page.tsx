@@ -44,7 +44,7 @@ export default function SavedPostsPage() {
             </h1>
             <p className="mt-1.5 text-sm text-neutral-500">
               {saved.length === 0
-                ? "Posts que voc├¬ salvar no feed aparecem aqui."
+                ? "Posts que você salvar no feed aparecem aqui."
                 : `${saved.length} post${saved.length === 1 ? "" : "s"} guardado${saved.length === 1 ? "" : "s"} para ver depois.`}
             </p>
           </div>
@@ -60,11 +60,11 @@ export default function SavedPostsPage() {
             Nenhum post salvo ainda
           </h2>
           <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-neutral-500">
-            No feed, toque no ├¡cone de{" "}
+            No feed, toque no ícone de{" "}
             <span className="font-semibold text-neutral-700 dark:text-zinc-300">
               Salvar
             </span>{" "}
-            (bookmark) no canto direito de um post para guard├í-lo aqui.
+            (bookmark) no canto direito de um post para guardá-lo aqui.
           </p>
           <div className="mt-6">
             <Link href="/app">

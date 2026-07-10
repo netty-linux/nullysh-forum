@@ -1,6 +1,7 @@
 "use client";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ProtectedMedia } from "@/components/protected-media";
 import { ReportPostDialog } from "@/components/report-post-dialog";
 import { RichText } from "@/components/rich-text";
 import { Avatar } from "@/components/ui/avatar";
@@ -52,7 +53,7 @@ export function PostCard({ post }: { post: Post }) {
   const vipPlan =
     !!isVip || user?.role === "admin" || user?.role === "vip";
   const canDelete = isOwner || isAdmin;
-  /** Denunciar: posts de terceiros (n├úo o pr├│prio) */
+  /** Denunciar: posts de terceiros (não o próprio) */
   const canReport = !!user && !isOwner;
   const canDownload = canDownloadPostAttachments(vipPlan);
   const locked = post.vipOnly && !isVip;
@@ -102,7 +103,7 @@ export function PostCard({ post }: { post: Post }) {
     [allComments, post.id]
   );
 
-  // Contador real do store (n├úo depende s├│ do n├║mero seed no post)
+  // Contador real do store (não depende só do número seed no post)
   const commentCount = Math.max(post.comments, postComments.length);
 
   function onLike() {
@@ -143,7 +144,7 @@ export function PostCard({ post }: { post: Post }) {
   async function onDownloadAttachment() {
     if (!post.imageUrl || downloading) return;
     if (!canDownload) {
-      setError("Download de anexos ├® exclusivo do Plano VIP.");
+      setError("Download de anexos é exclusivo do Plano VIP.");
       return;
     }
     setDownloading(true);
@@ -154,7 +155,7 @@ export function PostCard({ post }: { post: Post }) {
         `nullysh-post-${post.id}`
       );
     } catch {
-      setError("N├úo foi poss├¡vel baixar o anexo.");
+      setError("Não foi possível baixar o anexo.");
     } finally {
       setDownloading(false);
     }
@@ -164,7 +165,7 @@ export function PostCard({ post }: { post: Post }) {
     if (!user || !canDelete || deleting || trashing) return;
     setConfirmDelete(false);
     setDeleting(true);
-    // anima├º├úo ÔÇ£joga na lixeiraÔÇØ, depois remove do store
+    // animação “joga na lixeira”, depois remove do store
     setTrashing(true);
     const delay = reduce ? 80 : 520;
     window.setTimeout(() => {
@@ -188,11 +189,11 @@ export function PostCard({ post }: { post: Post }) {
     if (!user || locked) return;
     const text = draft.trim();
     if (!text) {
-      setError("Escreva um coment├írio.");
+      setError("Escreva um comentário.");
       return;
     }
     if (text.length > MAX_COMMENT) {
-      setError(`M├íximo de ${MAX_COMMENT} caracteres.`);
+      setError(`Máximo de ${MAX_COMMENT} caracteres.`);
       return;
     }
     const rl = consumeRateLimit(user.id, "comment", {
@@ -278,7 +279,7 @@ export function PostCard({ post }: { post: Post }) {
                 </Link>
                 {post.vipOnly && <VipBadge />}
                 <span className="text-xs text-neutral-400">
-                  ┬À {formatRelative(post.createdAt)}
+                  · {formatRelative(post.createdAt)}
                 </span>
               </div>
 
@@ -297,10 +298,10 @@ export function PostCard({ post }: { post: Post }) {
                         "bg-neutral-100 text-[#1f1f1f] dark:bg-zinc-800",
                       (deleting || trashing) && "pointer-events-none opacity-40"
                     )}
-                    aria-label="Op├º├Áes do post"
+                    aria-label="Opções do post"
                     aria-expanded={menuOpen}
                     aria-haspopup="menu"
-                    title="Op├º├Áes"
+                    title="Opções"
                   >
                     <DotsThree size={20} weight="bold" />
                   </button>
@@ -384,19 +385,22 @@ export function PostCard({ post }: { post: Post }) {
 
             {post.imageUrl && (
               <div className="relative mt-3 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 dark:border-zinc-700 dark:bg-zinc-900">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                {/*
+                  Free: canvas + escudo anti “salvar como / abrir em guia”.
+                  VIP locked: não carrega a URL real no DOM.
+                  VIP liberado: img normal + botão Baixar oficial.
+                */}
+                <ProtectedMedia
                   src={post.imageUrl}
                   alt=""
-                  className="max-h-[min(480px,70vh)] w-full object-contain object-center"
-                />
-                {/* Download de anexo ÔÇö VIP */}
-                <div className="absolute bottom-2 right-2 z-10">
-                  {canDownload ? (
+                  protect={!canDownload || locked}
+                  locked={locked}
+                >
+                  {canDownload && !locked ? (
                     <button
                       type="button"
                       onClick={onDownloadAttachment}
-                      disabled={downloading || locked}
+                      disabled={downloading}
                       className={cn(
                         "inline-flex h-9 items-center gap-1.5 rounded-full border border-white/20",
                         "bg-black/75 px-3 text-[11px] font-bold text-white shadow-md backdrop-blur-sm",
@@ -406,9 +410,9 @@ export function PostCard({ post }: { post: Post }) {
                       aria-label="Baixar anexo"
                     >
                       <DownloadSimple size={15} weight="bold" />
-                      {downloading ? "BaixandoÔÇª" : "Baixar"}
+                      {downloading ? "Baixando…" : "Baixar"}
                     </button>
-                  ) : (
+                  ) : !locked ? (
                     <Link
                       href="/pricing"
                       className={cn(
@@ -425,8 +429,8 @@ export function PostCard({ post }: { post: Post }) {
                       />
                       VIP baixar
                     </Link>
-                  )}
-                </div>
+                  ) : null}
+                </ProtectedMedia>
               </div>
             )}
 
@@ -441,7 +445,7 @@ export function PostCard({ post }: { post: Post }) {
               <p className="mt-2 text-xs font-medium text-red-600">{error}</p>
             )}
 
-            {/* A├º├Áes: like ┬À dislike ┬À coment├írio ┬À (espa├ºo) ┬À salvar por ├║ltimo */}
+            {/* Ações: like · dislike · comentário · (espaço) · salvar por último */}
             <div className="mt-3 flex items-center gap-0.5 border-t border-neutral-100 pt-2.5 dark:border-zinc-800 sm:gap-1">
               <motion.button
                 type="button"
@@ -479,8 +483,8 @@ export function PostCard({ post }: { post: Post }) {
                 whileTap={
                   !user || locked || reduce ? undefined : { scale: 0.88 }
                 }
-                title="N├úo gostei"
-                aria-label={disliked ? "Remover dislike" : "N├úo gostei"}
+                title="Não gostei"
+                aria-label={disliked ? "Remover dislike" : "Não gostei"}
                 aria-pressed={disliked}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold sm:px-3",
@@ -513,8 +517,8 @@ export function PostCard({ post }: { post: Post }) {
                 aria-expanded={openComments}
                 aria-label={
                   openComments
-                    ? "Fechar coment├írios"
-                    : `Comentar ┬À ${commentCount} coment├írios`
+                    ? "Fechar comentários"
+                    : `Comentar · ${commentCount} comentários`
                 }
               >
                 <ChatCircle
@@ -524,7 +528,7 @@ export function PostCard({ post }: { post: Post }) {
                 <span className="tabular-nums">{commentCount}</span>
               </button>
 
-              {/* Salvar ÔÇö ├║ltimo, alinhado ├á direita */}
+              {/* Salvar — último, alinhado à direita */}
               <motion.button
                 type="button"
                 disabled={!user || locked}
@@ -558,7 +562,7 @@ export function PostCard({ post }: { post: Post }) {
               </motion.button>
             </div>
 
-            {/* Coment├írios */}
+            {/* Comentários */}
             <AnimatePresence initial={false}>
               {openComments && !locked && (
                 <motion.div
@@ -571,7 +575,7 @@ export function PostCard({ post }: { post: Post }) {
                   <div className="mt-3 space-y-3 border-t border-neutral-100 pt-3 dark:border-zinc-800">
                     {postComments.length === 0 && (
                       <p className="text-center text-xs text-neutral-400">
-                        Nenhum coment├írio ainda. Seja o primeiro a responder.
+                        Nenhum comentário ainda. Seja o primeiro a responder.
                       </p>
                     )}
 
@@ -617,7 +621,7 @@ export function PostCard({ post }: { post: Post }) {
                       })}
                     </ul>
 
-                    {/* Form de comentar ÔÇö qualquer usu├írio logado em qualquer post */}
+                    {/* Form de comentar — qualquer usuário logado em qualquer post */}
                     {user && (
                       <form
                         onSubmit={onSubmitComment}
@@ -644,7 +648,7 @@ export function PostCard({ post }: { post: Post }) {
                                   onSubmitComment(e);
                                 }
                               }}
-                              placeholder={`Comentar no post de ${post.authorName.split(" ")[0]}ÔÇª`}
+                              placeholder={`Comentar no post de ${post.authorName.split(" ")[0]}…`}
                               rows={1}
                               className="composer-input max-h-28 min-h-[36px] flex-1 resize-none border-0 bg-transparent py-1.5 text-sm text-[#0f1419] placeholder:text-neutral-400 outline-none focus:outline-none focus-visible:outline-none dark:text-zinc-100"
                             />
@@ -652,7 +656,7 @@ export function PostCard({ post }: { post: Post }) {
                               type="submit"
                               disabled={!draft.trim()}
                               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0a0a0a] text-white transition hover:bg-black disabled:opacity-35 dark:bg-white dark:text-black"
-                              aria-label="Enviar coment├írio"
+                              aria-label="Enviar comentário"
                             >
                               <PaperPlaneTilt size={15} weight="fill" />
                             </button>
@@ -664,7 +668,7 @@ export function PostCard({ post }: { post: Post }) {
                               </p>
                             ) : (
                               <p className="text-[11px] text-neutral-400">
-                                Enter para enviar ┬À Shift+Enter para nova linha
+                                Enter para enviar · Shift+Enter para nova linha
                               </p>
                             )}
                             {draft.length > 0 && (
@@ -691,7 +695,7 @@ export function PostCard({ post }: { post: Post }) {
             className="pressable inline-flex items-center gap-2 rounded-full border border-[#1f1f1f]/20 bg-white px-4 py-2 text-sm font-bold text-[#1f1f1f] shadow-md"
           >
             <Lock size={14} weight="bold" />
-            Conte├║do VIP
+            Conteúdo VIP
           </Link>
         </div>
       )}
@@ -701,8 +705,8 @@ export function PostCard({ post }: { post: Post }) {
         title="Apagar postagem?"
         description={
           isOwner
-            ? "Os coment├írios tamb├®m ser├úo removidos. Esta a├º├úo n├úo pode ser desfeita."
-            : "Voc├¬ est├í apagando como admin. Esta a├º├úo n├úo pode ser desfeita."
+            ? "Os comentários também serão removidos. Esta ação não pode ser desfeita."
+            : "Você está apagando como admin. Esta ação não pode ser desfeita."
         }
         confirmLabel="Apagar"
         cancelLabel="Cancelar"

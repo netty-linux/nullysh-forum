@@ -33,11 +33,23 @@ import {
   type User,
   type UserPublic,
 } from "./types";
-import { initials, uid } from "./utils";
+import {
+  isGhostUser,
+} from "./ghost-data";
+import {
+  initials,
+  isValidUsername,
+  normalizeUsername,
+  suggestUsernameFromEmail,
+  uid,
+  usernameValidationError,
+} from "./utils";
 
 export type { ProfileUpdate };
 
 const AUTH_STORAGE_KEY = "nullysh-auth";
+/** v2: remove contas seed fantasmas quando Supabase está ativo */
+const AUTH_STORAGE_VERSION = 2;
 
 /**
  * Persistência híbrida:
@@ -178,10 +190,15 @@ function tryMigrateBloatedAuthStorage() {
 
 tryMigrateBloatedAuthStorage();
 
-const SEED_USERS: User[] = [
+/**
+ * Seeds só para dev offline (sem Supabase).
+ * Com Supabase configurado o catálogo vem 100% de `profiles` — sem fantasmas.
+ */
+const LOCAL_SEED_USERS: User[] = [
   {
     id: "admin",
     name: "Nullysh",
+    username: "nullysh",
     email: "admin@nullysh.com",
     password: "admin123",
     bio: "Fundador da comunidade Nullysh. Conteúdo, metodologia e operação.",
@@ -208,6 +225,7 @@ const SEED_USERS: User[] = [
   {
     id: "demo",
     name: "Membro Demo",
+    username: "demo",
     email: "demo@nullysh.com",
     password: "demo123",
     bio: "Conta de demonstração do MVP.",
@@ -231,96 +249,26 @@ const SEED_USERS: User[] = [
     createdAt: "2026-06-01T00:00:00.000Z",
     updatedAt: "2026-06-01T00:00:00.000Z",
   },
-  {
-    id: "u2",
-    name: "Marina Costa",
-    email: "marina@nullysh.com",
-    password: "demo123",
-    bio: "Automação, agentes de IA e sistemas de conteúdo.",
-    avatar: "M",
-    avatarUrl: null,
-    bannerUrl: null,
-    bannerFit: null,
-    avatarFrame: "spring",
-    role: "vip",
-    isVip: true,
-    isVerified: true,
-    interests: ["IA", "Automação", "Produtividade", "Conteúdo"],
-    goals: ["Quero dominar automação com agentes"],
-    seekingMentorship: false,
-    offeringMentorship: true,
-    mentorTopics: ["IA", "Automação", "Produtividade"],
-    links: [
-      { id: "l_marina", label: "LinkedIn", url: "https://linkedin.com" },
-    ],
-    favoriteTracks: [],
-    badgesUnlocked: [],
-    badgeEquipped: null,
-    createdAt: "2026-05-10T00:00:00.000Z",
-    updatedAt: "2026-05-10T00:00:00.000Z",
-  },
-  {
-    id: "u3",
-    name: "Rafael Menezes",
-    email: "rafael@nullysh.com",
-    password: "demo123",
-    bio: "Ofertas, funis e validação de produtos digitais.",
-    avatar: "R",
-    avatarUrl: null,
-    bannerUrl: null,
-    bannerFit: null,
-    avatarFrame: "summer",
-    role: "vip",
-    isVip: true,
-    isVerified: false,
-    interests: ["Negócios Digitais", "Vendas", "Copy", "Programação"],
-    goals: ["Quero lançar um produto digital"],
-    seekingMentorship: false,
-    offeringMentorship: true,
-    mentorTopics: ["Negócios Digitais", "Vendas", "Copy"],
-    links: [],
-    favoriteTracks: [],
-    badgesUnlocked: [],
-    badgeEquipped: null,
-    createdAt: "2026-05-12T00:00:00.000Z",
-    updatedAt: "2026-05-12T00:00:00.000Z",
-  },
-  {
-    id: "u4",
-    name: "Ana Beatriz",
-    email: "ana@nullysh.com",
-    password: "demo123",
-    bio: "Cursos, info produtos e networking.",
-    avatar: "A",
-    avatarUrl: null,
-    bannerUrl: null,
-    bannerFit: null,
-    avatarFrame: null,
-    role: "member",
-    isVip: false,
-    isVerified: false,
-    interests: ["Conteúdo", "Marketing", "Comunidade"],
-    goals: ["Quero divulgar meu conteúdo com consistência"],
-    seekingMentorship: true,
-    offeringMentorship: false,
-    mentorTopics: [],
-    links: [],
-    favoriteTracks: [],
-    badgesUnlocked: [],
-    badgeEquipped: null,
-    createdAt: "2026-05-20T00:00:00.000Z",
-    updatedAt: "2026-05-20T00:00:00.000Z",
-  },
 ];
+
+const SEED_USERS: User[] = isSupabaseConfigured() ? [] : LOCAL_SEED_USERS;
 
 function normalizeUser(
   raw: Partial<User> & Pick<User, "id" | "name" | "email">
 ): User {
   const isAdmin = raw.role === "admin" || raw.email === "admin@nullysh.com";
+  const email = (raw.email || "").trim().toLowerCase();
+  const fromField = raw.username ? normalizeUsername(raw.username) : "";
+  // Aceita handles já gravados (incl. seeds como @nullysh); reserva só bloqueia na edição.
+  const username =
+    fromField && /^[a-z0-9_]{3,24}$/.test(fromField)
+      ? fromField
+      : suggestUsernameFromEmail(email || "user");
   return {
     id: raw.id,
     name: raw.name,
-    email: raw.email,
+    username,
+    email,
     password: raw.password ?? "",
     bio: raw.bio ?? "",
     avatar: raw.avatar || initials(raw.name) || "U",
@@ -356,6 +304,30 @@ function normalizeUser(
   };
 }
 
+/** Garante @ único no store local (suffix numérico se colidir) */
+function allocateUsername(
+  desired: string,
+  excludeUserId?: string,
+  existing: User[] = []
+): string {
+  let base = normalizeUsername(desired);
+  if (!isValidUsername(base)) {
+    base = suggestUsernameFromEmail(base || "user");
+  }
+  const taken = (u: string) =>
+    existing.some(
+      (x) =>
+        x.id !== excludeUserId &&
+        normalizeUsername(x.username || "") === u
+    );
+  if (!taken(base)) return base;
+  for (let i = 2; i < 1000; i++) {
+    const candidate = `${base.slice(0, 20)}_${i}`.slice(0, 24);
+    if (isValidUsername(candidate) && !taken(candidate)) return candidate;
+  }
+  return `user_${uid("").slice(-8)}`;
+}
+
 function stripPassword(user: User): UserPublic {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { password, ...rest } = user;
@@ -369,6 +341,12 @@ interface AuthState {
   /** true quando NEXT_PUBLIC_SUPABASE_ANON_KEY está setada */
   remoteMode: boolean;
   setHydrated: (v: boolean) => void;
+  /**
+   * Upsert de perfis públicos sem apagar o catálogo existente.
+   * Essencial para modal de seguidores / menções quando o bridge
+   * carrega só o user atual em falhas parciais de rede.
+   */
+  mergePublicUsers: (incoming: UserPublic[]) => void;
   /** Sincroniza sessão remota (Supabase) no store local */
   applyRemoteSession: (payload: {
     currentUser: UserPublic | null;
@@ -410,6 +388,37 @@ function publicToUser(p: UserPublic): User {
   return normalizeUser({ ...p, password: "" });
 }
 
+/** Mescla perfis remotos no catálogo local (remote vence campos de perfil). */
+function mergeUserCatalog(
+  existing: User[],
+  incoming: UserPublic[]
+): User[] {
+  const map = new Map<string, User>();
+  for (const u of existing) {
+    map.set(u.id, u);
+  }
+  for (const p of incoming) {
+    if (!p?.id) continue;
+    const next = publicToUser(p);
+    const prev = map.get(p.id);
+    if (!prev) {
+      map.set(p.id, next);
+      continue;
+    }
+    map.set(p.id, {
+      ...prev,
+      ...next,
+      // senha local só existe no modo offline
+      password: prev.password || next.password || "",
+      // se remote veio sem mídia, não apaga a local
+      avatarUrl: next.avatarUrl ?? prev.avatarUrl,
+      bannerUrl: next.bannerUrl ?? prev.bannerUrl,
+      bannerFit: next.bannerFit ?? prev.bannerFit,
+    });
+  }
+  return Array.from(map.values());
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -419,29 +428,48 @@ export const useAuthStore = create<AuthState>()(
       remoteMode: isSupabaseConfigured(),
       setHydrated: (v) => set({ hydrated: v }),
 
-      applyRemoteSession: ({ currentUser, users }) => {
-        const mapped = users.map(publicToUser);
+      mergePublicUsers: (incoming) => {
+        if (!incoming?.length) return;
+        set((s) => ({
+          users: mergeUserCatalog(s.users, incoming).filter(
+            (u) => !isGhostUser(u)
+          ),
+        }));
+      },
 
+      applyRemoteSession: ({ currentUser, users }) => {
         // Logout explícito (SIGNED_OUT / INITIAL_SESSION sem JWT)
         if (!currentUser) {
-          set({
+          set((s) => ({
             remoteMode: true,
-            users: mapped,
+            // Mescla perfis públicos recebidos; NÃO zera o catálogo
+            // (senão some quem te segue e o modal fica vazio).
+            users: (
+              users.length > 0
+                ? mergeUserCatalog(s.users, users)
+                : s.users
+            ).filter((u) => !isGhostUser(u)),
             currentUserId: null,
-          });
+          }));
           return;
         }
 
-        // Login / refresh: nunca perde o user atual
-        const nextUsers =
-          mapped.length > 0 ? [...mapped] : [publicToUser(currentUser)];
-        if (!nextUsers.some((u) => u.id === currentUser.id)) {
-          nextUsers.unshift(publicToUser(currentUser));
-        }
-        set({
-          remoteMode: true,
-          users: nextUsers,
-          currentUserId: currentUser.id,
+        // Login / refresh: mescla catálogo + garante o user atual.
+        // Antes: `users: mapped` apagava todo mundo se fetchAllProfiles
+        // falhasse ou viesse parcial → followersOf ok, mas modal filtrava tudo.
+        set((s) => {
+          const base =
+            users.length > 0
+              ? mergeUserCatalog(s.users, users)
+              : mergeUserCatalog(s.users, [currentUser]);
+          const withMe = mergeUserCatalog(base, [currentUser]).filter(
+            (u) => !isGhostUser(u)
+          );
+          return {
+            remoteMode: true,
+            users: withMe,
+            currentUserId: currentUser.id,
+          };
         });
       },
 
@@ -472,9 +500,15 @@ export const useAuthStore = create<AuthState>()(
           return { ok: false, error: "Este e-mail já está cadastrado." };
         }
         const now = new Date().toISOString();
+        const username = allocateUsername(
+          suggestUsernameFromEmail(normalized),
+          undefined,
+          get().users
+        );
         const user: User = {
           id: uid("user"),
           name: name.trim(),
+          username,
           email: normalized,
           password,
           bio: "",
@@ -591,6 +625,20 @@ export const useAuthStore = create<AuthState>()(
           if (taken) return { ok: false, error: "Este e-mail já está em uso." };
         }
 
+        if (data.username !== undefined) {
+          const err = usernameValidationError(data.username);
+          if (err) return { ok: false, error: err };
+          const handle = normalizeUsername(data.username);
+          const taken = get().users.some(
+            (u) =>
+              u.id !== id &&
+              normalizeUsername(u.username || "") === handle
+          );
+          if (taken) {
+            return { ok: false, error: "Este @ já está em uso. Escolha outro." };
+          }
+        }
+
         let updated: User | null = null;
         set((s) => ({
           users: s.users.map((raw) => {
@@ -598,9 +646,14 @@ export const useAuthStore = create<AuthState>()(
             if (u.id !== id) return u;
 
             const nextName = data.name?.trim() ?? u.name;
+            const nextUsername =
+              data.username !== undefined
+                ? normalizeUsername(data.username)
+                : u.username;
             updated = {
               ...u,
               name: nextName,
+              username: nextUsername,
               bio: data.bio !== undefined ? data.bio : u.bio,
               email: data.email?.trim().toLowerCase() ?? u.email,
               password:
@@ -747,56 +800,111 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: AUTH_STORAGE_KEY,
+      version: AUTH_STORAGE_VERSION,
       storage: createJSONStorage(() => authStateStorage),
       partialize: (s) => ({
         users: s.users,
         currentUserId: s.currentUserId,
       }),
+      migrate: (persisted) => {
+        const p = persisted as {
+          state?: { users?: User[]; currentUserId?: string | null };
+          users?: User[];
+          currentUserId?: string | null;
+        } | null;
+        if (!p) return p as never;
+        // Zustand passa o state parcial (não o envelope {state,version})
+        const rawUsers = Array.isArray(p.users)
+          ? p.users
+          : Array.isArray(p.state?.users)
+            ? p.state!.users!
+            : [];
+        const users = rawUsers.filter((u) => !isGhostUser(u as User));
+        const currentUserId =
+          p.currentUserId ?? p.state?.currentUserId ?? null;
+        const stillValid =
+          currentUserId && users.some((u) => u.id === currentUserId)
+            ? currentUserId
+            : currentUserId && isGhostUser({ id: currentUserId })
+              ? null
+              : currentUserId;
+        return {
+          users,
+          currentUserId: stillValid,
+        } as never;
+      },
       merge: (persisted, current) => {
         const p = persisted as Partial<AuthState> | undefined;
-        const users = (p?.users ?? current.users).map((u) =>
-          normalizeUser(u as User)
-        );
-        const ids = new Set(users.map((u) => u.id));
-        for (const seed of SEED_USERS) {
-          if (!ids.has(seed.id)) users.push(seed);
+        let users = (p?.users ?? current.users)
+          .map((u) => normalizeUser(u as User))
+          .filter((u) => !isGhostUser(u));
+
+        // Só injeta seeds no modo 100% local (sem Supabase)
+        if (!isSupabaseConfigured()) {
+          const ids = new Set(users.map((u) => u.id));
+          for (const seed of SEED_USERS) {
+            if (!ids.has(seed.id)) users.push(seed);
+          }
+          users = users.map((u) => {
+            const seed = SEED_USERS.find((s) => s.id === u.id);
+            const withHandle = normalizeUser({
+              ...u,
+              username:
+                u.username && isValidUsername(u.username)
+                  ? u.username
+                  : seed?.username || suggestUsernameFromEmail(u.email),
+            });
+            if (!seed) return withHandle;
+            return {
+              ...withHandle,
+              avatarUrl: withHandle.avatarUrl ?? seed.avatarUrl,
+              bannerUrl: withHandle.bannerUrl ?? seed.bannerUrl,
+              bannerFit: withHandle.bannerFit ?? seed.bannerFit,
+              interests: withHandle.interests.length
+                ? withHandle.interests
+                : seed.interests,
+              goals: withHandle.goals.length ? withHandle.goals : seed.goals,
+              seekingMentorship:
+                withHandle.seekingMentorship || seed.seekingMentorship,
+              offeringMentorship:
+                withHandle.offeringMentorship || seed.offeringMentorship,
+              mentorTopics: withHandle.mentorTopics.length
+                ? withHandle.mentorTopics
+                : seed.mentorTopics,
+              role:
+                withHandle.id === "admin" ||
+                withHandle.email === "admin@nullysh.com"
+                  ? ("admin" as const)
+                  : withHandle.role,
+              isVerified:
+                withHandle.id === "admin" ||
+                withHandle.email === "admin@nullysh.com"
+                  ? true
+                  : withHandle.isVerified,
+              isVip:
+                withHandle.id === "admin" ||
+                withHandle.email === "admin@nullysh.com"
+                  ? true
+                  : withHandle.isVip,
+            };
+          });
         }
-        // merge seed enrichment for empty interests on known ids (soft upgrade)
-        const enriched = users.map((u) => {
-          const seed = SEED_USERS.find((s) => s.id === u.id);
-          if (!seed) return u;
-          return {
-            ...u,
-            // preserva mídia já hidratada do IDB / local
-            avatarUrl: u.avatarUrl ?? seed.avatarUrl,
-            bannerUrl: u.bannerUrl ?? seed.bannerUrl,
-            bannerFit: u.bannerFit ?? seed.bannerFit,
-            interests: u.interests.length ? u.interests : seed.interests,
-            goals: u.goals.length ? u.goals : seed.goals,
-            seekingMentorship: u.seekingMentorship || seed.seekingMentorship,
-            offeringMentorship: u.offeringMentorship || seed.offeringMentorship,
-            mentorTopics: u.mentorTopics.length
-              ? u.mentorTopics
-              : seed.mentorTopics,
-            role:
-              u.id === "admin" || u.email === "admin@nullysh.com"
-                ? ("admin" as const)
-                : u.role,
-            isVerified:
-              u.id === "admin" || u.email === "admin@nullysh.com"
-                ? true
-                : u.isVerified,
-            isVip:
-              u.id === "admin" || u.email === "admin@nullysh.com"
-                ? true
-                : u.isVip,
-          };
-        });
+
+        let currentUserId = p?.currentUserId ?? current.currentUserId;
+        if (
+          currentUserId &&
+          (isGhostUser({ id: currentUserId }) ||
+            !users.some((u) => u.id === currentUserId))
+        ) {
+          // Com Supabase o bridge restaura a sessão; local offline zera se fantasma
+          if (!isSupabaseConfigured()) currentUserId = null;
+        }
+
         return {
           ...current,
           ...p,
-          users: enriched,
-          currentUserId: p?.currentUserId ?? current.currentUserId,
+          users,
+          currentUserId,
         };
       },
       onRehydrateStorage: () => (state, error) => {

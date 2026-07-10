@@ -1,12 +1,16 @@
 "use client";
 
 import { EmojiPicker } from "@/components/emoji-picker";
+import { HashtagSuggestMenu } from "@/components/hashtag-suggest-menu";
 import { ImageCropEditor } from "@/components/image-crop-editor";
 import { PostCard } from "@/components/post-card";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useHashtagSuggest } from "@/hooks/use-hashtag-suggest";
 import { useBlockStore } from "@/lib/block-store";
+import { validatePostHashtags } from "@/lib/community-hashtags";
+import { useCommunityStore } from "@/lib/community-store";
 import { rankFeedPosts } from "@/lib/feed-rank";
 import {
   reverseGeocode,
@@ -38,12 +42,12 @@ import {
 } from "react";
 
 const PLACEHOLDERS = [
-  "No que voc├¬ est├í pensando?",
-  "Como est├í o seu dia?",
+  "No que você está pensando?",
+  "Como está o seu dia?",
   "O que rolou na sua rotina hoje?",
-  "Compartilha um momento do dia a diaÔÇª",
+  "Compartilha um momento do dia a dia…",
   "Qual foi a melhor parte do seu dia?",
-  "Conta o que voc├¬ est├í construindo agoraÔÇª",
+  "Conta o que você está construindo agora…",
 ];
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -52,6 +56,7 @@ export default function FeedPage() {
   const { user, isVip } = useAuth();
   const posts = useForumStore((s) => s.posts);
   const createPost = useForumStore((s) => s.createPost);
+  const communities = useCommunityStore((s) => s.communities);
   const blocks = useBlockStore((s) => s.blocks);
   const isEitherBlocked = useBlockStore((s) => s.isEitherBlocked);
   const vipPlan = !!isVip || user?.role === "admin" || user?.role === "vip";
@@ -59,7 +64,7 @@ export default function FeedPage() {
 
   const [content, setContent] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  /** Original (blob) para reabrir o editor de propor├º├úo */
+  /** Original (blob) para reabrir o editor de proporção */
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
   const [location, setLocation] = useState("");
@@ -83,7 +88,19 @@ export default function FeedPage() {
   const searchAbort = useRef<AbortController | null>(null);
   const cropSourceRef = useRef<string | null>(null);
 
-  // Ranking: qualidade (like vs dislike) ├ù volume ├ù freshness
+  const hashtagSuggest = useHashtagSuggest({
+    content,
+    setContent,
+    communities,
+    author: {
+      role: user?.role,
+      isVip: !!isVip || user?.role === "vip" || user?.role === "admin",
+    },
+    textareaRef,
+    maxChars,
+  });
+
+  // Ranking: qualidade (like vs dislike) × volume × freshness
   // + esconde posts de quem bloqueou / foi bloqueado por mim
   const visible = useMemo(() => {
     const filtered = user
@@ -93,7 +110,7 @@ export default function FeedPage() {
         )
       : posts;
     return rankFeedPosts(filtered);
-    // blocks for├ºa recompute quando a lista muda
+    // blocks força recompute quando a lista muda
   }, [posts, user, isEitherBlocked, blocks]);
 
   useEffect(() => {
@@ -103,7 +120,7 @@ export default function FeedPage() {
     el.style.height = `${Math.min(Math.max(el.scrollHeight, 52), 220)}px`;
   }, [content]);
 
-  // Fecha pain├®is ao clicar fora
+  // Fecha painéis ao clicar fora
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       const t = e.target as Node;
@@ -121,8 +138,8 @@ export default function FeedPage() {
         locationPanelRef.current &&
         !locationPanelRef.current.contains(t)
       ) {
-        // mant├®m aberto se j├í escolheu location e s├│ clica fora do painel de busca
-        // fecha s├│ se n├úo tem location fixada e est├í vazio? melhor: fechar sugest├Áes mas manter se tem location
+        // mantém aberto se já escolheu location e só clica fora do painel de busca
+        // fecha só se não tem location fixada e está vazio? melhor: fechar sugestões mas manter se tem location
       }
     }
     document.addEventListener("mousedown", onDoc);
@@ -210,10 +227,10 @@ export default function FeedPage() {
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      setError("A imagem deve ter no m├íximo 4 MB.");
+      setError("A imagem deve ter no máximo 4 MB.");
       return;
     }
-    // Abre editor de propor├º├úo em vez de colar direto no post
+    // Abre editor de proporção em vez de colar direto no post
     releaseCropSource();
     const url = fileToObjectUrl(file);
     cropSourceRef.current = url;
@@ -232,13 +249,13 @@ export default function FeedPage() {
   function handleCropConfirm(dataUrl: string) {
     setImageUrl(dataUrl);
     setCropOpen(false);
-    // Mant├®m cropSource para poder reabrir e reenquadrar
+    // Mantém cropSource para poder reabrir e reenquadrar
     if (fileRef.current) fileRef.current.value = "";
   }
 
   function handleCropCancel() {
     setCropOpen(false);
-    // Se ainda n├úo aplicou nenhuma imagem, descarta a fonte
+    // Se ainda não aplicou nenhuma imagem, descarta a fonte
     if (!imageUrl) {
       releaseCropSource();
       if (fileRef.current) fileRef.current.value = "";
@@ -250,7 +267,7 @@ export default function FeedPage() {
       setCropOpen(true);
       return;
     }
-    // Reabre a partir da imagem j├í aplicada (data URL)
+    // Reabre a partir da imagem já aplicada (data URL)
     if (imageUrl) {
       setCropSource(imageUrl);
       setCropOpen(true);
@@ -266,7 +283,7 @@ export default function FeedPage() {
 
   function useMyLocation() {
     if (!navigator.geolocation) {
-      setPlaceError("Seu navegador n├úo suporta geolocaliza├º├úo.");
+      setPlaceError("Seu navegador não suporta geolocalização.");
       return;
     }
     setGeoLoading(true);
@@ -281,10 +298,10 @@ export default function FeedPage() {
           if (place) {
             selectPlace(place);
           } else {
-            setPlaceError("N├úo encontramos um endere├ºo para sua posi├º├úo.");
+            setPlaceError("Não encontramos um endereço para sua posição.");
           }
         } catch {
-          setPlaceError("N├úo foi poss├¡vel obter o endere├ºo.");
+          setPlaceError("Não foi possível obter o endereço.");
         } finally {
           setGeoLoading(false);
         }
@@ -292,7 +309,7 @@ export default function FeedPage() {
       () => {
         setGeoLoading(false);
         setPlaceError(
-          "Permiss├úo de localiza├º├úo negada ou indispon├¡vel. Busque pelo nome da cidade."
+          "Permissão de localização negada ou indisponível. Busque pelo nome da cidade."
         );
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 60_000 }
@@ -322,6 +339,20 @@ export default function FeedPage() {
       return;
     }
 
+    const tagCheck = validatePostHashtags(text || "", communities, {
+      role: user.role,
+      isVip: !!isVip || user.role === "vip",
+    });
+    if (!tagCheck.ok) {
+      setError(tagCheck.error);
+      return;
+    }
+    const matched = tagCheck.matched;
+    const primary = matched[0];
+    const anyVipOnly = matched.some(
+      (c) => c.access === "vip" || c.vipOnly
+    );
+
     createPost({
       authorId: user.id,
       authorName: user.name,
@@ -331,7 +362,9 @@ export default function FeedPage() {
       imageUrl,
       location: location.trim() || null,
       type: "discussion",
-      vipOnly: false,
+      communityId: primary?.id,
+      communityName: primary?.name,
+      vipOnly: anyVipOnly,
     });
 
     setContent("");
@@ -356,15 +389,15 @@ export default function FeedPage() {
           Feed
         </h1>
         <p className="mt-1.5 text-sm text-neutral-500">
-          Ol├í,{" "}
+          Olá,{" "}
           <span className="font-semibold text-neutral-800 dark:text-zinc-200">
             {user?.name?.split(" ")[0]}
           </span>
-          . O que est├í rolando?
+          . O que está rolando?
         </p>
       </div>
 
-      {/* Composer ÔÇö overflow vis├¡vel para o painel de emojis */}
+      {/* Composer — overflow visível para o painel de emojis */}
       <form
         id="feed-composer"
         onSubmit={onCreate}
@@ -380,14 +413,28 @@ export default function FeedPage() {
             />
           </div>
 
-          <div className="min-w-0 flex-1">
+          <div className="relative min-w-0 flex-1">
             <textarea
               ref={textareaRef}
               value={content}
               onChange={(e) => {
-                if (e.target.value.length <= maxChars) {
-                  setContent(e.target.value);
-                }
+                const el = e.target;
+                hashtagSuggest.onChangeText(
+                  el.value,
+                  el.selectionStart ?? el.value.length
+                );
+              }}
+              onKeyDown={hashtagSuggest.onKeyDown}
+              onClick={(e) => {
+                const el = e.currentTarget;
+                hashtagSuggest.refreshFromCaret(
+                  el.value,
+                  el.selectionStart ?? el.value.length
+                );
+              }}
+              onBlur={() => {
+                // delay: permite mousedown no menu
+                window.setTimeout(() => hashtagSuggest.close(), 120);
               }}
               placeholder={placeholder}
               rows={2}
@@ -400,13 +447,23 @@ export default function FeedPage() {
               )}
             />
 
-            {/* Preview ÔÇö propor├º├úo definida no editor de crop */}
+            {hashtagSuggest.open && (
+              <HashtagSuggestMenu
+                items={hashtagSuggest.items}
+                activeIndex={hashtagSuggest.activeIndex}
+                onSelect={hashtagSuggest.select}
+                onHover={hashtagSuggest.setActiveIndex}
+                className="absolute left-0 right-0 top-full z-30 mt-1"
+              />
+            )}
+
+            {/* Preview — proporção definida no editor de crop */}
             {imageUrl && (
               <div className="relative mt-2 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 dark:border-zinc-700 dark:bg-zinc-900">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={imageUrl}
-                  alt="Pr├®via do post"
+                  alt="Prévia do post"
                   className="max-h-[min(420px,55vh)] w-full object-contain object-center"
                 />
                 <div className="absolute right-2 top-2 z-10 flex gap-1.5">
@@ -414,8 +471,8 @@ export default function FeedPage() {
                     type="button"
                     onClick={reopenCrop}
                     className="inline-flex h-8 items-center gap-1 rounded-full bg-black/70 px-2.5 text-[11px] font-semibold text-white backdrop-blur-sm transition hover:bg-black"
-                    aria-label="Ajustar propor├º├úo"
-                    title="Ajustar propor├º├úo"
+                    aria-label="Ajustar proporção"
+                    title="Ajustar proporção"
                   >
                     <CropIcon size={14} weight="bold" />
                     Ajustar
@@ -432,7 +489,7 @@ export default function FeedPage() {
               </div>
             )}
 
-            {/* Localiza├º├úo com busca real */}
+            {/* Localização com busca real */}
             {showLocation && (
               <div
                 ref={locationPanelRef}
@@ -449,7 +506,7 @@ export default function FeedPage() {
                       setLocationQuery(e.target.value);
                       if (location) setLocation("");
                     }}
-                    placeholder="Buscar cidade, bairro ou endere├ºoÔÇª"
+                    placeholder="Buscar cidade, bairro ou endereço…"
                     className="composer-input h-8 flex-1 border-0 bg-transparent text-sm text-[#0f1419] placeholder:text-neutral-400 outline-none focus:outline-none focus-visible:outline-none dark:text-zinc-100"
                     autoFocus
                     autoComplete="off"
@@ -459,7 +516,7 @@ export default function FeedPage() {
                     onClick={useMyLocation}
                     disabled={geoLoading}
                     className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-sky-600 transition hover:bg-sky-500/10 disabled:opacity-50"
-                    title="Usar minha localiza├º├úo"
+                    title="Usar minha localização"
                   >
                     {geoLoading ? (
                       <SpinnerGap size={14} className="animate-spin" />
@@ -472,7 +529,7 @@ export default function FeedPage() {
                     type="button"
                     onClick={clearLocation}
                     className="text-neutral-400 hover:text-neutral-700"
-                    aria-label="Fechar localiza├º├úo"
+                    aria-label="Fechar localização"
                   >
                     <X size={14} weight="bold" />
                   </button>
@@ -501,7 +558,7 @@ export default function FeedPage() {
                     {placeLoading && (
                       <li className="flex items-center gap-2 px-3 py-2.5 text-xs text-neutral-500">
                         <SpinnerGap size={14} className="animate-spin" />
-                        Buscando locais reaisÔÇª
+                        Buscando locais reais…
                       </li>
                     )}
                     {placeError && !placeLoading && (
@@ -612,8 +669,8 @@ export default function FeedPage() {
                       ? "bg-sky-500/10 text-sky-500"
                       : "text-sky-500 hover:bg-sky-500/10"
                   )}
-                  title="Localiza├º├úo"
-                  aria-label="Adicionar localiza├º├úo"
+                  title="Localização"
+                  aria-label="Adicionar localização"
                 >
                   <MapPin size={20} />
                 </button>
@@ -631,7 +688,7 @@ export default function FeedPage() {
                     title={
                       vipPlan
                         ? "Limite VIP: 1.000 caracteres"
-                        : "Limite free: 200 caracteres ┬À VIP: 1.000"
+                        : "Limite free: 200 caracteres · VIP: 1.000"
                     }
                   >
                     {content.length}/{maxChars}
@@ -677,7 +734,7 @@ export default function FeedPage() {
         )}
       </div>
 
-      {/* Editor de propor├º├úo (abre ao subir imagem) */}
+      {/* Editor de proporção (abre ao subir imagem) */}
       {cropSource && (
         <ImageCropEditor
           open={cropOpen}

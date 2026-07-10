@@ -1,15 +1,19 @@
 "use client";
 
 import { EmojiPicker } from "@/components/emoji-picker";
+import { HashtagSuggestMenu } from "@/components/hashtag-suggest-menu";
 import { ImageCropEditor } from "@/components/image-crop-editor";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useHashtagSuggest } from "@/hooks/use-hashtag-suggest";
 import {
   reverseGeocode,
   searchPlaces,
   type PlaceSuggestion,
 } from "@/lib/geocode";
+import { validatePostHashtags } from "@/lib/community-hashtags";
+import { useCommunityStore } from "@/lib/community-store";
 import { useForumStore } from "@/lib/forum-store";
 import { fileToObjectUrl, revokeObjectUrl } from "@/lib/image";
 import { maxPostChars } from "@/lib/post-limits";
@@ -58,6 +62,7 @@ type Props = {
 export function ComposePostModal({ open, onClose, onPublished }: Props) {
   const { user, isVip } = useAuth();
   const createPost = useForumStore((s) => s.createPost);
+  const communities = useCommunityStore((s) => s.communities);
   const reduce = useReducedMotion();
   const vipPlan = !!isVip || user?.role === "admin" || user?.role === "vip";
   const maxChars = maxPostChars(vipPlan);
@@ -86,6 +91,18 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
   const emojiBtnRef = useRef<HTMLButtonElement>(null);
   const cropSourceRef = useRef<string | null>(null);
   const searchAbort = useRef<AbortController | null>(null);
+
+  const hashtagSuggest = useHashtagSuggest({
+    content,
+    setContent,
+    communities,
+    author: {
+      role: user?.role,
+      isVip: !!isVip || user?.role === "vip" || user?.role === "admin",
+    },
+    textareaRef,
+    maxChars,
+  });
 
   const reset = useCallback(() => {
     setContent("");
@@ -314,6 +331,22 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
       return;
     }
 
+    const tagCheck = validatePostHashtags(text || "", communities, {
+      role: user.role,
+      isVip: !!isVip || user.role === "vip",
+    });
+    if (!tagCheck.ok) {
+      setError(tagCheck.error);
+      return;
+    }
+
+    const matched = tagCheck.matched;
+    // Primeira comunidade marcada; se alguma for VIP, o post herda vipOnly no detalhe
+    const primary = matched[0];
+    const anyVipOnly = matched.some(
+      (c) => c.access === "vip" || c.vipOnly
+    );
+
     setPublishing(true);
     try {
       createPost({
@@ -325,7 +358,9 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
         imageUrl,
         location: location.trim() || null,
         type: "discussion",
-        vipOnly: false,
+        communityId: primary?.id,
+        communityName: primary?.name,
+        vipOnly: anyVipOnly,
       });
       reset();
       onPublished?.();
@@ -432,7 +467,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                       src={user?.avatarUrl}
                       size="md"
                     />
-                    <div className="min-w-0 flex-1">
+                    <div className="relative min-w-0 flex-1">
                       <p className="text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
                         {user?.name || "Você"}
                       </p>
@@ -440,9 +475,22 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                         ref={textareaRef}
                         value={content}
                         onChange={(e) => {
-                          if (e.target.value.length <= maxChars) {
-                            setContent(e.target.value);
-                          }
+                          const el = e.target;
+                          hashtagSuggest.onChangeText(
+                            el.value,
+                            el.selectionStart ?? el.value.length
+                          );
+                        }}
+                        onKeyDown={hashtagSuggest.onKeyDown}
+                        onClick={(e) => {
+                          const el = e.currentTarget;
+                          hashtagSuggest.refreshFromCaret(
+                            el.value,
+                            el.selectionStart ?? el.value.length
+                          );
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(() => hashtagSuggest.close(), 120);
                         }}
                         placeholder={placeholder}
                         rows={3}
@@ -454,6 +502,15 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                           "min-h-[88px]"
                         )}
                       />
+                      {hashtagSuggest.open && (
+                        <HashtagSuggestMenu
+                          items={hashtagSuggest.items}
+                          activeIndex={hashtagSuggest.activeIndex}
+                          onSelect={hashtagSuggest.select}
+                          onHover={hashtagSuggest.setActiveIndex}
+                          className="absolute left-0 right-0 top-full z-40 mt-1"
+                        />
+                      )}
                     </div>
                   </div>
 

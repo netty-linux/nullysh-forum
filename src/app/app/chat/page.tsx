@@ -57,17 +57,25 @@ function ChatPageInner() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Abre DM quando vem de ?dm=userId (ex.: botão Conversar no match)
+  // Depende de userId (primitivo), não do objeto user inteiro.
+  const userId = user?.id;
   useEffect(() => {
-    if (!user || !dmParam || dmParam === user.id) return;
-    if (isEitherBlocked(user.id, dmParam)) return;
+    if (!userId || !dmParam || dmParam === userId) return;
+    if (isEitherBlocked(userId, dmParam)) return;
     const peer = users.find((u) => u.id === dmParam);
     if (!peer) return;
-    setActive({
-      kind: "dm",
-      peerId: peer.id,
-      channelId: dmChannelId(user.id, peer.id),
+    const channelId = dmChannelId(userId, peer.id);
+    setActive((prev) => {
+      if (
+        prev.kind === "dm" &&
+        prev.peerId === peer.id &&
+        prev.channelId === channelId
+      ) {
+        return prev;
+      }
+      return { kind: "dm", peerId: peer.id, channelId };
     });
-  }, [dmParam, user, users, isEitherBlocked, blocks]);
+  }, [dmParam, userId, users, isEitherBlocked, blocks]);
 
   // Lista de DMs recentes (canais dm_* em que o usuário participa)
   const dmPeers = useMemo(() => {

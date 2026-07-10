@@ -1,10 +1,9 @@
 "use client";
 
+import { AppFabs } from "@/components/app-fabs";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AuthGuard } from "@/components/auth-guard";
-import { NullainAssistant } from "@/components/nullain-assistant";
 import { PageTransition } from "@/components/page-transition";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { List } from "@phosphor-icons/react";
 import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
@@ -32,15 +31,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="flex-1 text-sm font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
               Nullysh Forum
             </span>
-            <div className="w-14 shrink-0">
-              <ThemeToggle compact />
-            </div>
           </header>
           <main className="flex min-h-0 flex-1 flex-col">
             <PageTransition>{children}</PageTransition>
           </main>
         </div>
-        <NullainAssistant />
+        {/* FABs: Direct + Publicar (sem assistente virtual) */}
+        <AppFabs />
       </div>
     </AuthGuard>
   );

@@ -3,21 +3,35 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
-  initialChatMessages,
-  posts as seedPosts,
-} from "./mock-data";
+  isGhostComment,
+  isGhostMessage,
+  isGhostPost,
+  isGhostUserId,
+} from "./ghost-data";
 import type { ChatMessage, Comment, Post } from "./types";
 import { uid } from "./utils";
 
+/** v2: remove posts/comentários/chat seed (Marina, Nullysh demo, etc.) */
+const FORUM_STORAGE_VERSION = 2;
+
 function normalizePost(p: Post): Post {
+  const likedBy = (Array.isArray(p.likedBy) ? p.likedBy : []).filter(
+    (id) => !isGhostUserId(id)
+  );
+  const dislikedBy = (Array.isArray(p.dislikedBy) ? p.dislikedBy : []).filter(
+    (id) => !isGhostUserId(id)
+  );
+  const savedBy = (Array.isArray(p.savedBy) ? p.savedBy : []).filter(
+    (id) => !isGhostUserId(id)
+  );
   return {
     ...p,
-    likes: p.likes ?? 0,
-    dislikes: p.dislikes ?? 0,
+    likes: likedBy.length,
+    dislikes: dislikedBy.length,
     comments: p.comments ?? 0,
-    likedBy: Array.isArray(p.likedBy) ? p.likedBy : [],
-    dislikedBy: Array.isArray(p.dislikedBy) ? p.dislikedBy : [],
-    savedBy: Array.isArray(p.savedBy) ? p.savedBy : [],
+    likedBy,
+    dislikedBy,
+    savedBy,
   };
 }
 
@@ -70,21 +84,14 @@ interface ForumState {
 export const useForumStore = create<ForumState>()(
   persist(
     (set, get) => ({
-      posts: seedPosts.map(normalizePost),
-      comments: [
-        {
-          id: "cm1",
-          postId: "p1",
-          authorId: "u2",
-          authorName: "Marina Costa",
-          authorAvatar: "M",
-          content: "Comunidade incrível. Já explorei os materiais!",
-          createdAt: "2026-07-01T12:00:00.000Z",
-        },
-      ],
-      messages: initialChatMessages,
+      // Sem seeds: só conteúdo real criado pelos membros (ou importado do Supabase)
+      posts: [],
+      comments: [],
+      messages: [],
 
       createPost: (data) => {
+        const content = data.content.trim();
+        // Sync community via hashtags (opcional no payload; UI resolve antes)
         const post: Post = {
           id: uid("post"),
           authorId: data.authorId,
@@ -94,7 +101,7 @@ export const useForumStore = create<ForumState>()(
           communityId: data.communityId,
           communityName: data.communityName,
           title: data.title?.trim() || undefined,
-          content: data.content.trim(),
+          content,
           imageUrl: data.imageUrl ?? null,
           location: data.location?.trim() || null,
           type: data.type ?? "discussion",
@@ -105,6 +112,7 @@ export const useForumStore = create<ForumState>()(
           dislikedBy: [],
           savedBy: [],
           createdAt: new Date().toISOString(),
+          // VIP-only se o post foi marcado para comunidade VIP
           vipOnly: data.vipOnly ?? false,
         };
         set((s) => ({ posts: [post, ...s.posts] }));
@@ -261,19 +269,49 @@ export const useForumStore = create<ForumState>()(
     }),
     {
       name: "nullysh-forum",
+      version: FORUM_STORAGE_VERSION,
       partialize: (s) => ({
         posts: s.posts,
         comments: s.comments,
         messages: s.messages,
       }),
+      migrate: (persisted) => {
+        const p = (persisted || {}) as Partial<ForumState>;
+        const posts = (p.posts || [])
+          .filter((post) => !isGhostPost(post as Post))
+          .map((post) => normalizePost(post as Post));
+        const realPostIds = new Set(posts.map((x) => x.id));
+        const comments = (p.comments || []).filter((c) => {
+          if (isGhostComment(c as Comment)) return false;
+          // drop comentários órfãos de posts fantasma já apagados
+          const postId = (c as Comment).postId;
+          return !postId || realPostIds.has(postId) || !isGhostPost({ id: postId });
+        });
+        const messages = (p.messages || []).filter(
+          (m) => !isGhostMessage(m as ChatMessage)
+        );
+        return { ...p, posts, comments, messages } as never;
+      },
       merge: (persisted, current) => {
         const p = persisted as Partial<ForumState> | undefined;
+        const posts = (p?.posts ?? current.posts)
+          .filter((post) => !isGhostPost(post as Post))
+          .map((post) => normalizePost(post as Post));
+        const realPostIds = new Set(posts.map((x) => x.id));
+        const comments = (p?.comments ?? current.comments).filter((c) => {
+          if (isGhostComment(c as Comment)) return false;
+          const postId = (c as Comment).postId;
+          return !postId || realPostIds.has(postId);
+        });
+        const messages = (p?.messages ?? current.messages).filter(
+          (m) => !isGhostMessage(m as ChatMessage)
+        );
         return {
           ...current,
           ...p,
-          posts: (p?.posts ?? current.posts).map((post) =>
-            normalizePost(post as Post)
-          ),
+          posts,
+          comments,
+          messages,
         };
       },
     }

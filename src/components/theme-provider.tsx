@@ -35,78 +35,40 @@ function applyTheme(theme: Theme) {
   }
 }
 
-function readStoredTheme(): Theme {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "light" || stored === "dark") return stored;
-  } catch {
-    /* ignore */
-  }
-  try {
-    if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      return "dark";
-    }
-  } catch {
-    /* ignore */
-  }
-  return "light";
-}
-
-/** Fonte da verdade no DOM (evita knob “morto” por dessinc) */
-function readDomTheme(): Theme {
-  if (typeof document === "undefined") return "light";
-  return document.documentElement.classList.contains("dark") ? "dark" : "light";
-}
-
+/** Toggle desativado: app fica em light. setTheme/toggle no-ops por enquanto. */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Inicia alinhado ao DOM (script FOUC já rodou no client)
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "light";
-    return readDomTheme() || readStoredTheme();
-  });
+  const [theme, setThemeState] = useState<Theme>("light");
 
-  // Hidrata / re-sincroniza com storage + DOM
   useEffect(() => {
-    const t = readStoredTheme();
-    setThemeState(t);
-    applyTheme(t);
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== STORAGE_KEY) return;
-      const next =
-        e.newValue === "dark" || e.newValue === "light"
-          ? e.newValue
-          : readStoredTheme();
-      setThemeState(next);
-      applyTheme(next);
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    applyTheme("light");
+    try {
+      localStorage.setItem(STORAGE_KEY, "light");
+    } catch {
+      /* ignore */
+    }
   }, []);
 
-  // Mantém DOM sempre alinhado ao state
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
 
-  const setTheme = useCallback((t: Theme) => {
-    setThemeState(t);
-    applyTheme(t);
+  const setTheme = useCallback((_t: Theme) => {
+    // Tema escuro desativado — força light
+    setThemeState("light");
+    applyTheme("light");
     try {
-      localStorage.setItem(STORAGE_KEY, t);
+      localStorage.setItem(STORAGE_KEY, "light");
     } catch {
       /* ignore */
     }
   }, []);
 
   const toggleTheme = useCallback(() => {
-    // Alterna a partir do DOM real — 1º clique sempre muda o visual
-    const current = readDomTheme();
-    const next: Theme = current === "dark" ? "light" : "dark";
-    setThemeState(next);
-    applyTheme(next);
+    // Toggle desativado por enquanto
+    setThemeState("light");
+    applyTheme("light");
     try {
-      localStorage.setItem(STORAGE_KEY, next);
+      localStorage.setItem(STORAGE_KEY, "light");
     } catch {
       /* ignore */
     }

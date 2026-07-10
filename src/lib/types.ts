@@ -11,6 +11,15 @@ export type { FavoriteTrack, MusicPlatform } from "./music";
 export interface User {
   id: string;
   name: string;
+  /**
+   * Handle público (@username) — único, editável.
+   * Usado para buscar/exibir perfil. Nunca é o e-mail.
+   */
+  username: string;
+  /**
+   * E-mail de cadastro — PRIVADO.
+   * Só o próprio dono da conta deve ver/editar. Não exibir em perfil público.
+   */
   email: string;
   password: string;
   bio: string;
@@ -71,6 +80,7 @@ export type ProfileUpdate = Partial<
   Pick<
     User,
     | "name"
+    | "username"
     | "bio"
     | "email"
     | "password"
@@ -89,6 +99,12 @@ export type ProfileUpdate = Partial<
     | "badgeEquipped"
   >
 >;
+
+/**
+ * Dados seguros para exibir o perfil de OUTRA pessoa.
+ * Sem e-mail nem senha.
+ */
+export type UserCard = Omit<User, "password" | "email">;
 
 /** Posição/zoom do banner (GIF ou imagem cobrindo o frame 3:1) */
 export interface BannerFit {
@@ -155,16 +171,48 @@ export interface VerificationRequest {
   reviewedBy: string | null;
 }
 
+/** Quem pode ler posts dentro da comunidade */
+export type CommunityAccess = "everyone" | "vip";
+
+/** Origem da comunidade */
+export type CommunitySource = "staff" | "member";
+
+/**
+ * Quem pode incluir a #hashtag ao publicar.
+ * - everyone: free, VIP e admin
+ * - admin: só role admin (ex.: #staff em Anúncios Oficiais)
+ */
+export type CommunityTagPolicy = "everyone" | "admin";
+
 export interface Community {
   id: string;
   name: string;
   slug: string;
   description: string;
+  /**
+   * Palavra-chave de sync (sem #).
+   * Ex.: "staff", "geral", "vips"
+   * Posts com #palavra entram na comunidade.
+   */
+  hashtag: string;
   members: number;
   posts: number;
   icon: string;
   color: string;
+  /**
+   * true = só VIP lê posts (legado / atalho).
+   * Preferir `access` quando disponível.
+   */
   vipOnly: boolean;
+  /** Quem pode abrir e ler posts da comunidade */
+  access: CommunityAccess;
+  /** Quem pode marcar a #hashtag ao postar */
+  tagPolicy: CommunityTagPolicy;
+  /** staff = oficial Nullysh; member = criada por VIP */
+  source: CommunitySource;
+  creatorId: string;
+  creatorName: string;
+  createdAt: string;
 }
 
 export interface Post {

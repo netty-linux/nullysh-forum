@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { isGhostUserId } from "./ghost-data";
 import {
   isDataUrl,
   isMediaRef,
@@ -10,6 +11,9 @@ import {
   mediaSet,
 } from "./media-storage";
 import { uid } from "./utils";
+
+/** v2: remove follows/stories de contas seed */
+const SOCIAL_STORAGE_VERSION = 2;
 
 const STORY_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_ACTIVE_STORIES_PER_USER = 30;
@@ -511,6 +515,7 @@ export const useSocialStore = create<SocialState>()(
     }),
     {
       name: "nullysh-social",
+      version: SOCIAL_STORAGE_VERSION,
       partialize: (s) => ({
         follows: s.follows,
         // compact media: data: → idb ref keys (already stored in IDB on add)
@@ -537,10 +542,44 @@ export const useSocialStore = create<SocialState>()(
           };
         }),
       }),
+      migrate: (persisted) => {
+        const p = (persisted || {}) as {
+          follows?: FollowEdge[];
+          stories?: Story[];
+        };
+        const follows = (p.follows || []).filter(
+          (f) =>
+            !isGhostUserId(f.followerId) && !isGhostUserId(f.followingId)
+        );
+        const stories = (p.stories || []).filter(
+          (st) => !isGhostUserId(st.authorId)
+        );
+        return { ...p, follows, stories } as never;
+      },
+      merge: (persisted, current) => {
+        const p = persisted as Partial<SocialState> | undefined;
+        return {
+          ...current,
+          ...p,
+          follows: (p?.follows ?? current.follows).filter(
+            (f) =>
+              !isGhostUserId(f.followerId) && !isGhostUserId(f.followingId)
+          ),
+          stories: (p?.stories ?? current.stories)
+            .filter((st) => !isGhostUserId(st.authorId))
+            .map(normalizeStory),
+        };
+      },
       onRehydrateStorage: () => (state) => {
         if (!state) return;
         // normalize + hydrate media async
-        state.stories = (state.stories || []).map(normalizeStory);
+        state.stories = (state.stories || [])
+          .filter((st) => !isGhostUserId(st.authorId))
+          .map(normalizeStory);
+        state.follows = (state.follows || []).filter(
+          (f) =>
+            !isGhostUserId(f.followerId) && !isGhostUserId(f.followingId)
+        );
         void state.hydrateMedia();
       },
     }
