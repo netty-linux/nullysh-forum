@@ -24,13 +24,14 @@
       "id": "9982b19bc1634effa79a756043be2c4f"
     }
   ],
-  // R2 opcional — habilite no dashboard e descomente:
-  // "r2_buckets": [
-  //   {
-  //     "binding": "VIDEOS_BUCKET",
-  //     "bucket_name": "nullysh-forum-videos"
-  //   }
-  // ],
+  // Habilite R2 no dashboard Cloudflare antes do próximo deploy:
+  // https://dash.cloudflare.com → R2 → Enable
+  "r2_buckets": [
+    {
+      "binding": "VIDEOS_BUCKET",
+      "bucket_name": "nullysh-videos"
+    }
+  ],
   "observability": {
     "enabled": true
   }

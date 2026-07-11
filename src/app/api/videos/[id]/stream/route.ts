@@ -42,7 +42,43 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const rangeHeader = req.headers.get("range");
   const mime = video.mimeType || "video/mp4";
 
-  // ── 1) R2 / FS ────────────────────────────────────────────────
+  // ── 1) R2 por objectKey do catálogo (presign pipeline) ─────────
+  if (video.r2ObjectKey) {
+    try {
+      const ranged = await openR2VideoStream(video.r2ObjectKey, rangeHeader);
+      if (ranged) {
+        if (ranged.status === 416) {
+          const headers = new Headers();
+          headers.set(
+            "Content-Range",
+            ranged.contentRange || `bytes */0`
+          );
+          return new NextResponse(null, { status: 416, headers });
+        }
+        if (!rangeHeader || rangeHeader === "bytes=0-") {
+          void incrementViews(id);
+        } else if (ranged.contentRange?.startsWith("bytes 0-")) {
+          void incrementViews(id);
+        }
+        const headers = new Headers();
+        headers.set("Content-Type", mime);
+        headers.set("Accept-Ranges", "bytes");
+        headers.set("Cache-Control", "private, max-age=3600");
+        headers.set("Content-Length", String(ranged.contentLength));
+        if (ranged.contentRange) {
+          headers.set("Content-Range", ranged.contentRange);
+        }
+        return new NextResponse(ranged.body, {
+          status: ranged.status,
+          headers,
+        });
+      }
+    } catch (e) {
+      console.error("[stream] R2 objectKey failed", e);
+    }
+  }
+
+  // ── 2) R2 / FS legado (media/{id}.mp4) ─────────────────────────
   const blob = await getVideoBlobSource(id);
   if (blob?.kind === "r2") {
     try {
@@ -87,7 +123,18 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     }
   }
 
-  // ── 2) Telegram (só se ≤ ~20 MB) ───────────────────────────────
+  // ── 3) Telegram vault (só se ≤ ~20 MB e file_id real) ──────────
+  if (!video.telegramFileId || video.telegramFileId === "r2") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Playback indisponível (sem R2/FS e sem arquivo Telegram). Reenvie o vídeo.",
+      },
+      { status: 502 }
+    );
+  }
+
   if (!isTelegramConfigured()) {
     return NextResponse.json(
       {

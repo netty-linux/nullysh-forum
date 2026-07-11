@@ -40,9 +40,12 @@ interface NullyshKv {
 }
 
 interface CloudflareEnv {
-  /** Opcional: habilite R2 no dashboard e no wrangler.jsonc */
   VIDEOS_BUCKET?: VideosR2Bucket;
   NULLYSH_DATA: NullyshKv;
   ASSETS: Fetcher;
   WORKER_SELF_REFERENCE: Fetcher;
+  R2_ACCOUNT_ID?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
+  R2_BUCKET_NAME?: string;
 }

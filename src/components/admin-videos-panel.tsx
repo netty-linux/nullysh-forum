@@ -7,10 +7,12 @@ import {
   deleteVideo,
   fetchVideoConfig,
   fetchVideos,
-  uploadVideo,
+  // TODO: old telegram flow — uploadVideo ainda existe em @/lib/videos/client
+  // uploadVideo,
   videoStreamUrl,
   type VideoConfigResponse,
 } from "@/lib/videos/client";
+import { useVideoUpload } from "@/hooks/use-video-upload";
 import type { VideoPublic } from "@/lib/videos/types";
 import { cn, formatDate } from "@/lib/utils";
 import {
@@ -41,13 +43,14 @@ const CATEGORIES = [
 ];
 
 /**
- * Upload e gestão de vídeos via Telegram Bot API (storage).
+ * Upload e gestão de vídeos.
+ * Path padrão: R2 (presign → PUT → complete).
+ * Telegram/ffmpeg permanece no código legado (comentado) como vault opcional.
  */
 export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
   const [config, setConfig] = useState<VideoConfigResponse | null>(null);
   const [videos, setVideos] = useState<VideoPublic[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState("");
 
   const [title, setTitle] = useState("");
@@ -63,6 +66,13 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
   const thumbRef = useRef<HTMLInputElement>(null);
 
   const admin = { id: adminId, name: adminName, role: "admin" as const };
+  const {
+    upload: uploadToR2,
+    isUploading: uploading,
+    progress: uploadPct,
+    phase: uploadPhase,
+    error: uploadHookError,
+  } = useVideoUpload(admin);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -109,50 +119,43 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
       setError("Informe o título.");
       return;
     }
-    if (!config?.configured) {
-      setError(
-        "Telegram não configurado. Defina TELEGRAM_BOT_TOKEN e TELEGRAM_STORAGE_CHAT_ID no ambiente."
-      );
-      return;
-    }
-
-    setUploading(true);
-    const originalBytes = file.size;
-    let uploadFile = file;
-    let clientCompressed = false;
-    let durationSec = 0;
 
     try {
-      // Alvo: 48 MB com R2; ~18 MB se playback for só Telegram getFile
+      // ── Path padrão: R2 (presign → PUT → complete) ──────────────
+      setProgress("Iniciando upload R2…");
+      const result = await uploadToR2(file, {
+        title: title.trim(),
+        description: description.trim(),
+        vipOnly,
+        category,
+        duration: duration.trim() || undefined,
+      });
+      onToast(`Vídeo “${result.video.title}” publicado no R2.`);
+      resetForm();
+      setShowForm(false);
+      await reload();
+
+      /* TODO: old telegram flow — manter como vault/espelho opcional
+      if (!config?.configured) {
+        setError("Telegram não configurado…");
+        return;
+      }
+      const originalBytes = file.size;
+      let uploadFile = file;
       const targetBytes =
         config.compressTargetBytes ??
         (config.hasR2 ? 48 : 18) * 1024 * 1024;
-
       if (file.size > targetBytes) {
-        setProgress("Carregando FFmpeg no navegador…");
         const { compressVideoInBrowser } = await import(
           "@/lib/videos/compress-client"
         );
         const compressed = await compressVideoInBrowser(file, {
           targetBytes,
-          onProgress: (p) => {
-            const pct = p.ratio != null ? ` ${p.ratio}%` : "";
-            const step =
-              p.attempt && p.attempts
-                ? ` [${p.attempt}/${p.attempts}]`
-                : "";
-            setProgress(`${p.message}${step}${pct}`);
-          },
+          onProgress: (p) => setProgress(p.message),
         });
         uploadFile = compressed.file;
-        clientCompressed = compressed.compressed;
-        durationSec = compressed.durationSec;
-      } else {
-        clientCompressed = true;
       }
-
-      setProgress("Enviando para o Telegram + storage de playback…");
-      const result = await uploadVideo({
+      const tg = await uploadVideo({
         file: uploadFile,
         title: title.trim(),
         description: description.trim(),
@@ -163,37 +166,19 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
         admin,
         clientCompressed: true,
         originalBytes,
-        durationSec: durationSec || undefined,
       });
-      if (!result.ok) {
-        setError(result.error);
-        setProgress("");
-        return;
-      }
-      if (result.compressed && result.originalBytes && result.finalBytes) {
-        const o = (result.originalBytes / (1024 * 1024)).toFixed(1);
-        const f = (result.finalBytes / (1024 * 1024)).toFixed(1);
-        onToast(`Vídeo “${result.video.title}” publicado (${o} → ${f} MB).`);
-      } else {
-        onToast(`Vídeo “${result.video.title}” publicado.`);
-      }
-      resetForm();
-      setShowForm(false);
-      await reload();
+      */
+      void thumb; // thumb ainda no form; wire no complete R2 em sprint seguinte
     } catch (err) {
-      // Nunca engolir o motivo real (antes caía em "Falha no upload" genérico)
-      let msg = "Falha no upload";
+      let msg = uploadHookError || "Falha no upload";
       if (err instanceof Error) {
         msg = err.message || err.name || msg;
       } else if (typeof err === "string") {
         msg = err;
-      } else if (err && typeof err === "object" && "message" in err) {
-        msg = String((err as { message: unknown }).message);
       }
       console.error("[admin-videos] upload failed", err);
       setError(msg);
     } finally {
-      setUploading(false);
       setProgress("");
     }
   }
@@ -217,13 +202,13 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
       <div
         className={cn(
           "rounded-2xl border p-4",
-          config?.configured && config.botOk
+          config?.hasR2
             ? "border-emerald-200 bg-emerald-50/80 dark:border-emerald-900 dark:bg-emerald-950/30"
             : "border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/30"
         )}
       >
         <div className="flex items-start gap-3">
-          {config?.configured && config.botOk ? (
+          {config?.hasR2 ? (
             <CloudArrowUp
               size={22}
               weight="fill"
@@ -238,22 +223,16 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
           )}
           <div className="min-w-0">
             <p className="text-[14px] font-semibold text-[#1f1f1f] dark:text-zinc-100">
-              Storage Telegram
+              Storage R2 (playback)
             </p>
-            {config?.configured && config.botOk ? (
-              <p className="mt-0.5 text-[13px] text-neutral-600 dark:text-zinc-400">
-                Bot {config.botUsername || "conectado"} · ffmpeg.wasm mira{" "}
-                {(config.compressTargetMb ?? 18).toFixed(0)} MB · originais até{" "}
-                {config.maxOriginalMb ?? 500} MB · playback{" "}
-                {config.playbackStorage || "telegram"} · {config.count} no
-                catálogo
-              </p>
-            ) : (
-              <p className="mt-0.5 text-[13px] leading-relaxed text-neutral-600 dark:text-zinc-400">
-                {config?.error ||
-                  "Configure TELEGRAM_BOT_TOKEN e TELEGRAM_STORAGE_CHAT_ID (chat/canal privado onde o bot é admin)."}
-              </p>
-            )}
+            <p className="mt-0.5 text-[13px] text-neutral-600 dark:text-zinc-400">
+              {config?.hasR2
+                ? `R2 ativo · catálogo ${config.playbackStorage || "kv"} · ${config.count} vídeo(s)`
+                : "R2 ainda não disponível no Worker. Habilite R2 no dashboard Cloudflare, crie o bucket nullysh-videos e faça redeploy."}
+              {config?.configured && config.botOk
+                ? ` · Telegram vault: ${config.botUsername || "ok"} (legado)`
+                : ""}
+            </p>
           </div>
         </div>
       </div>
@@ -297,11 +276,8 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
             />
             {file && (
               <p className="mt-1 text-[12px] text-neutral-400">
-                {file.name} · {(file.size / (1024 * 1024)).toFixed(1)} MB
-                {file.size >
-                (config?.compressTargetBytes ?? 18 * 1024 * 1024)
-                  ? ` · será compactado no navegador (≤ ${(config?.compressTargetMb ?? 18).toFixed(0)} MB)`
-                  : " · já cabe no alvo de compactação"}
+                {file.name} · {(file.size / (1024 * 1024)).toFixed(1)} MB ·
+                upload direto R2 (sem ffmpeg no path padrão)
               </p>
             )}
           </div>
@@ -376,10 +352,11 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
               {error}
             </p>
           )}
-          {progress && (
+          {(progress || uploading) && (
             <p className="flex items-center gap-2 text-[13px] font-medium text-neutral-500">
               <SpinnerGap size={16} className="animate-spin" />
-              {progress}
+              {uploadPhase || progress}
+              {uploading ? ` · ${uploadPct}%` : ""}
             </p>
           )}
 
@@ -388,12 +365,12 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
               {uploading ? (
                 <>
                   <SpinnerGap size={16} className="animate-spin" />
-                  Enviando…
+                  Enviando {uploadPct}%…
                 </>
               ) : (
                 <>
                   <CloudArrowUp size={16} weight="bold" />
-                  Publicar no Telegram
+                  Publicar no R2
                 </>
               )}
             </Button>

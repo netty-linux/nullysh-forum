@@ -20,13 +20,16 @@ function parseCatalog(raw: string): StoredVideo[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (v): v is StoredVideo =>
-        !!v &&
-        typeof v === "object" &&
-        typeof (v as StoredVideo).id === "string" &&
-        typeof (v as StoredVideo).telegramFileId === "string"
-    );
+    return parsed.filter((v): v is StoredVideo => {
+      if (!v || typeof v !== "object") return false;
+      const row = v as StoredVideo;
+      if (typeof row.id !== "string") return false;
+      // Aceita Telegram vault e/ou R2 playback
+      const hasTg = typeof row.telegramFileId === "string";
+      const hasR2 =
+        typeof row.r2ObjectKey === "string" && row.r2ObjectKey.length > 0;
+      return hasTg || hasR2;
+    });
   } catch {
     return [];
   }
@@ -152,10 +155,11 @@ export async function addStoredVideo(
     vipOnly: input.vipOnly,
     views: input.views ?? 0,
     createdAt: input.createdAt || new Date().toISOString(),
-    telegramFileId: input.telegramFileId,
+    telegramFileId: input.telegramFileId ?? (input.r2ObjectKey ? "r2" : ""),
     telegramMessageId: input.telegramMessageId,
     telegramChatId: input.telegramChatId,
     telegramThumbFileId: input.telegramThumbFileId ?? null,
+    r2ObjectKey: input.r2ObjectKey ?? null,
     fileName: input.fileName,
     mimeType: input.mimeType,
     sizeBytes: input.sizeBytes,

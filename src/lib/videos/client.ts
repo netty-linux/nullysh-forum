@@ -24,6 +24,8 @@ export type VideoConfigResponse = {
   compressTargetBytes?: number;
   hasR2?: boolean;
   hasKv?: boolean;
+  hasR2S3Credentials?: boolean;
+  uploadPipeline?: string;
 };
 
 export function adminHeaders(admin: {

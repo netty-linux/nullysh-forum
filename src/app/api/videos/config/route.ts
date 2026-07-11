@@ -34,7 +34,13 @@ export async function GET() {
   const videos = await listPublicVideos();
   const r2 = !!(await getVideosBucket());
   const kv = !!(await getDataKv());
-  // Sem R2 o player depende do getFile (~20 MB) → mira 18 MB no client
+  const hasS3 =
+    !!(
+      process.env.R2_ACCOUNT_ID?.trim() &&
+      process.env.R2_ACCESS_KEY_ID?.trim() &&
+      process.env.R2_SECRET_ACCESS_KEY?.trim()
+    );
+  // Com R2: não força compressão 18 MB. Sem R2: legado Telegram getFile.
   const compressTargetBytes = r2
     ? COMPRESS_TARGET_BYTES
     : TELEGRAM_GETFILE_MAX_BYTES;
@@ -51,10 +57,18 @@ export async function GET() {
     compressTargetMb: compressTargetBytes / (1024 * 1024),
     compressTargetBytes,
     ffmpegAvailable: true,
-    autoCompress: true,
-    compressEngine: "ffmpeg.wasm",
-    playbackStorage: r2 ? "r2" : kv ? "telegram+kv" : "local-or-telegram",
+    autoCompress: !r2,
+    compressEngine: r2 ? "optional-ffmpeg.wasm" : "ffmpeg.wasm",
+    playbackStorage: r2
+      ? hasS3
+        ? "r2-presign"
+        : "r2-worker-put"
+      : kv
+        ? "telegram+kv"
+        : "local-or-telegram",
     hasR2: r2,
     hasKv: kv,
+    hasR2S3Credentials: hasS3,
+    uploadPipeline: r2 ? "r2" : "telegram-legacy",
   });
 }
