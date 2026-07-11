@@ -31,11 +31,14 @@ export function maxProfileLinks(isVip: boolean) {
   return isVip ? MAX_PROFILE_LINKS_VIP : MAX_PROFILE_LINKS_FREE;
 }
 
+export type TrailStepType = "video" | "material" | "practice" | "live";
+export type TrailLevel = "iniciante" | "intermediário" | "avançado";
+
 export interface TrailStep {
   id: string;
   title: string;
   description: string;
-  type: "video" | "material" | "practice" | "live";
+  type: TrailStepType;
   duration?: string;
 }
 
@@ -43,152 +46,23 @@ export interface LearningTrail {
   id: string;
   title: string;
   description: string;
-  level: "iniciante" | "intermediário" | "avançado";
+  level: TrailLevel;
   interestTags: string[];
   steps: TrailStep[];
+  /** true = só VIP acessa a trilha completa */
   vipOnly: boolean;
+  /** Admin/staff que publicou */
+  createdById?: string;
+  createdByName?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export const LEARNING_TRAILS: LearningTrail[] = [
-  {
-    id: "trail-ia-fundamentos",
-    title: "Fundamentos de IA na prática",
-    description:
-      "Do zero ao uso diário de modelos, prompts e fluxos com método Nullysh.",
-    level: "iniciante",
-    interestTags: ["IA", "Automação", "Produtividade"],
-    vipOnly: false,
-    steps: [
-      {
-        id: "s1",
-        title: "Mapa mental da IA em 2026",
-        description: "Visão geral do ecossistema e o que priorizar.",
-        type: "video",
-        duration: "12 min",
-      },
-      {
-        id: "s2",
-        title: "Prompt engineering enxuto",
-        description: "Templates reutilizáveis para copy e operação.",
-        type: "practice",
-        duration: "25 min",
-      },
-      {
-        id: "s3",
-        title: "Pack de prompts (Materials)",
-        description: "Baixe e adapte a biblioteca da comunidade.",
-        type: "material",
-      },
-      {
-        id: "s4",
-        title: "Primeiro agente no dia a dia",
-        description: "Monte um fluxo simples e meça resultado.",
-        type: "practice",
-        duration: "40 min",
-      },
-    ],
-  },
-  {
-    id: "trail-negocio-digital",
-    title: "Oferta e validação em 7 dias",
-    description:
-      "Trilha para validar demanda real sem gastar com anúncio no começo.",
-    level: "intermediário",
-    interestTags: ["Negócios Digitais", "Marketing", "Copy", "Vendas"],
-    vipOnly: true,
-    steps: [
-      {
-        id: "n1",
-        title: "Dor e avatar",
-        description: "Pesquisa de dor e entrevistas rápidas.",
-        type: "practice",
-        duration: "1h",
-      },
-      {
-        id: "n2",
-        title: "Landing minimalista",
-        description: "Estrutura white minimalist com CTA único.",
-        type: "video",
-        duration: "32 min",
-      },
-      {
-        id: "n3",
-        title: "Checklist de validação",
-        description: "Use o material da área de Materials.",
-        type: "material",
-      },
-      {
-        id: "n4",
-        title: "Live de pricing",
-        description: "Assista a gravação e defina o plano único.",
-        type: "live",
-        duration: "45 min",
-      },
-    ],
-  },
-  {
-    id: "trail-conteudo",
-    title: "Conteúdo que distribui e converte",
-    description:
-      "Para quem quer divulgar conteúdo (nicho, futebol, tech) com consistência.",
-    level: "iniciante",
-    interestTags: ["Conteúdo", "Marketing", "Comunidade"],
-    vipOnly: false,
-    steps: [
-      {
-        id: "c1",
-        title: "Posicionamento em uma frase",
-        description: "Defina o que você publica e para quem.",
-        type: "practice",
-        duration: "20 min",
-      },
-      {
-        id: "c2",
-        title: "Calendário semanal mínimo",
-        description: "3 formatos que cabem na rotina.",
-        type: "video",
-        duration: "18 min",
-      },
-      {
-        id: "c3",
-        title: "Distribuição e comunidade",
-        description: "Como usar o Forum para amplificar.",
-        type: "practice",
-        duration: "30 min",
-      },
-    ],
-  },
-  {
-    id: "trail-dev",
-    title: "Programação aplicada a produtos",
-    description: "Stack leve, ship rápido e integração com IAs.",
-    level: "intermediário",
-    interestTags: ["Programação", "IA", "Automação"],
-    vipOnly: true,
-    steps: [
-      {
-        id: "d1",
-        title: "Arquitetura enxuta",
-        description: "Next, stores e deploy mental model.",
-        type: "video",
-        duration: "28 min",
-      },
-      {
-        id: "d2",
-        title: "CRUD e auth local → real",
-        description: "Como evoluir o MVP sem reescrever tudo.",
-        type: "practice",
-        duration: "1h",
-      },
-      {
-        id: "d3",
-        title: "Ship checklist",
-        description: "Checklist de qualidade antes de publicar.",
-        type: "material",
-      },
-    ],
-  },
-];
+/**
+ * Seeds estáticos removidos — trilhas vêm do `useTrailStore`
+ * (criadas no Painel ADM). Mantido vazio por compat.
+ */
+export const LEARNING_TRAILS: LearningTrail[] = [];
 
 export interface ForumEvent {
   id: string;

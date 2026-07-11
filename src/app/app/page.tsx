@@ -18,12 +18,14 @@ import {
   type PlaceSuggestion,
 } from "@/lib/geocode";
 import { useForumStore } from "@/lib/forum-store";
+import { fetchTrendingGifs, searchGifs, type GifItem } from "@/lib/giphy";
 import { fileToObjectUrl, revokeObjectUrl } from "@/lib/image";
 import { maxPostChars } from "@/lib/post-limits";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { cn } from "@/lib/utils";
 import {
   Crop as CropIcon,
+  Gif,
   Image as ImageIcon,
   MagnifyingGlass,
   MapPin,
@@ -32,6 +34,7 @@ import {
   SpinnerGap,
   X,
 } from "@phosphor-icons/react";
+import { useSearchParams } from "next/navigation";
 import {
   FormEvent,
   useCallback,
@@ -54,6 +57,9 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 export default function FeedPage() {
   const { user, isVip } = useAuth();
+  const searchParams = useSearchParams();
+  const focusPostId = searchParams.get("post");
+  const focusCommentId = searchParams.get("comment");
   const posts = useForumStore((s) => s.posts);
   const createPost = useForumStore((s) => s.createPost);
   const communities = useCommunityStore((s) => s.communities);
@@ -64,6 +70,8 @@ export default function FeedPage() {
 
   const [content, setContent] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [gifUrl, setGifUrl] = useState<string | null>(null);
+  const [gifPreview, setGifPreview] = useState<string | null>(null);
   /** Original (blob) para reabrir o editor de proporção */
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
@@ -71,6 +79,10 @@ export default function FeedPage() {
   const [locationQuery, setLocationQuery] = useState("");
   const [showLocation, setShowLocation] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showGif, setShowGif] = useState(false);
+  const [gifQ, setGifQ] = useState("");
+  const [gifs, setGifs] = useState<GifItem[]>([]);
+  const [gifLoading, setGifLoading] = useState(false);
   const [placeResults, setPlaceResults] = useState<PlaceSuggestion[]>([]);
   const [placeLoading, setPlaceLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
@@ -84,6 +96,8 @@ export default function FeedPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const emojiPanelRef = useRef<HTMLDivElement>(null);
   const emojiBtnRef = useRef<HTMLButtonElement>(null);
+  const gifPanelRef = useRef<HTMLDivElement>(null);
+  const gifBtnRef = useRef<HTMLButtonElement>(null);
   const locationPanelRef = useRef<HTMLDivElement>(null);
   const searchAbort = useRef<AbortController | null>(null);
   const cropSourceRef = useRef<string | null>(null);
@@ -100,18 +114,96 @@ export default function FeedPage() {
     maxChars,
   });
 
-  // Ranking: qualidade (like vs dislike) × volume × freshness
+  const reposts = useForumStore((s) => s.reposts);
+
+  // Ranking: qualidade × freshness + reposts no feed
   // + esconde posts de quem bloqueou / foi bloqueado por mim
-  const visible = useMemo(() => {
+  type FeedEntry =
+    | { kind: "post"; post: (typeof posts)[0]; sortAt: string; key: string }
+    | {
+        kind: "repost";
+        post: (typeof posts)[0];
+        sortAt: string;
+        key: string;
+        repostMeta: { userId: string; userName: string; createdAt: string };
+      };
+
+  const feedItems = useMemo(() => {
     const filtered = user
       ? posts.filter(
           (p) =>
             p.authorId === user.id || !isEitherBlocked(user.id, p.authorId)
         )
       : posts;
-    return rankFeedPosts(filtered);
-    // blocks força recompute quando a lista muda
-  }, [posts, user, isEitherBlocked, blocks]);
+    const ranked = rankFeedPosts(filtered);
+    const byId = new Map(ranked.map((p) => [p.id, p]));
+
+    const entries: FeedEntry[] = ranked.map((p) => ({
+      kind: "post" as const,
+      post: p,
+      sortAt: p.createdAt,
+      key: `p-${p.id}`,
+    }));
+
+    for (const r of reposts) {
+      const original = byId.get(r.postId) || posts.find((p) => p.id === r.postId);
+      if (!original) continue;
+      if (
+        user &&
+        original.authorId !== user.id &&
+        isEitherBlocked(user.id, original.authorId)
+      ) {
+        continue;
+      }
+      if (user && isEitherBlocked(user.id, r.userId)) continue;
+      entries.push({
+        kind: "repost",
+        post: original,
+        sortAt: r.createdAt,
+        key: `r-${r.id}`,
+        repostMeta: {
+          userId: r.userId,
+          userName: r.userName,
+          createdAt: r.createdAt,
+        },
+      });
+    }
+
+    // Ordena por data (repost e post originais mesclados)
+    entries.sort(
+      (a, b) =>
+        new Date(b.sortAt).getTime() - new Date(a.sortAt).getTime()
+    );
+
+    // Garante que o post da notificação aparece no feed mesmo se
+    // o ranking o empurrasse para baixo / fora da lista filtrada
+    if (focusPostId) {
+      const has = entries.some((e) => e.post.id === focusPostId);
+      if (!has) {
+        const orphan = posts.find((p) => p.id === focusPostId);
+        if (orphan) {
+          entries.unshift({
+            kind: "post",
+            post: orphan,
+            sortAt: orphan.createdAt,
+            key: `focus-${orphan.id}`,
+          });
+        }
+      }
+    }
+
+    return entries;
+  }, [posts, reposts, user, isEitherBlocked, blocks, focusPostId]);
+
+  // Scroll até o post da notificação
+  useEffect(() => {
+    if (!focusPostId) return;
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`post-${focusPostId}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [focusPostId, feedItems]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -134,6 +226,15 @@ export default function FeedPage() {
         setShowEmoji(false);
       }
       if (
+        showGif &&
+        gifPanelRef.current &&
+        !gifPanelRef.current.contains(t) &&
+        gifBtnRef.current &&
+        !gifBtnRef.current.contains(t)
+      ) {
+        setShowGif(false);
+      }
+      if (
         showLocation &&
         locationPanelRef.current &&
         !locationPanelRef.current.contains(t)
@@ -144,7 +245,30 @@ export default function FeedPage() {
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, [showEmoji, showLocation]);
+  }, [showEmoji, showGif, showLocation]);
+
+  // Busca de GIFs no composer
+  useEffect(() => {
+    if (!showGif) return;
+    let cancelled = false;
+    setGifLoading(true);
+    const t = window.setTimeout(async () => {
+      try {
+        const list = gifQ.trim()
+          ? await searchGifs(gifQ, 24)
+          : await fetchTrendingGifs(24);
+        if (!cancelled) setGifs(list);
+      } catch {
+        if (!cancelled) setGifs([]);
+      } finally {
+        if (!cancelled) setGifLoading(false);
+      }
+    }, gifQ.trim() ? 350 : 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [showGif, gifQ]);
 
   // Busca de locais com debounce (Nominatim)
   useEffect(() => {
@@ -237,6 +361,8 @@ export default function FeedPage() {
     setCropSource(url);
     setCropOpen(true);
     setShowEmoji(false);
+    setShowGif(false);
+    clearGif();
   }
 
   function clearImage() {
@@ -248,6 +374,7 @@ export default function FeedPage() {
 
   function handleCropConfirm(dataUrl: string) {
     setImageUrl(dataUrl);
+    clearGif();
     setCropOpen(false);
     // Mantém cropSource para poder reabrir e reenquadrar
     if (fileRef.current) fileRef.current.value = "";
@@ -324,11 +451,29 @@ export default function FeedPage() {
     setPlaceError("");
   }
 
+  function clearGif() {
+    setGifUrl(null);
+    setGifPreview(null);
+  }
+
+  function pickGif(g: GifItem) {
+    // GIF e imagem se excluem (uma mídia principal por post)
+    setImageUrl(null);
+    releaseCropSource();
+    setCropOpen(false);
+    if (fileRef.current) fileRef.current.value = "";
+    setGifUrl(g.url);
+    setGifPreview(g.previewUrl || g.url);
+    setShowGif(false);
+    setShowEmoji(false);
+    setError("");
+  }
+
   function onCreate(e: FormEvent) {
     e.preventDefault();
     if (!user) return;
     const text = content.trim();
-    if (!text && !imageUrl) return;
+    if (!text && !imageUrl && !gifUrl) return;
 
     const rl = consumeRateLimit(user.id, "post", {
       isVip: !!isVip || user.role === "vip",
@@ -359,7 +504,8 @@ export default function FeedPage() {
       authorAvatar: user.avatar,
       authorAvatarUrl: user.avatarUrl,
       content: text || " ",
-      imageUrl,
+      imageUrl: gifUrl ? null : imageUrl,
+      gifUrl: gifUrl || null,
       location: location.trim() || null,
       type: "discussion",
       communityId: primary?.id,
@@ -369,17 +515,19 @@ export default function FeedPage() {
 
     setContent("");
     setImageUrl(null);
+    clearGif();
     releaseCropSource();
     setCropOpen(false);
     clearLocation();
     setShowEmoji(false);
+    setShowGif(false);
     setError("");
     if (fileRef.current) fileRef.current.value = "";
   }
 
   const canPost =
     !!user &&
-    (content.trim().length > 0 || !!imageUrl) &&
+    (content.trim().length > 0 || !!imageUrl || !!gifUrl) &&
     content.length <= maxChars;
 
   return (
@@ -486,6 +634,26 @@ export default function FeedPage() {
                     <X size={16} weight="bold" />
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Preview GIF — compacto + animado */}
+            {gifUrl && (
+              <div className="relative mt-2 inline-flex max-w-[min(100%,280px)]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={gifPreview || gifUrl}
+                  alt="GIF selecionado"
+                  className="max-h-52 max-w-full rounded-2xl object-cover ring-1 ring-black/5 dark:ring-white/10"
+                />
+                <button
+                  type="button"
+                  onClick={clearGif}
+                  className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur-sm transition hover:bg-black"
+                  aria-label="Remover GIF"
+                >
+                  <X size={16} weight="bold" />
+                </button>
               </div>
             )}
 
@@ -623,6 +791,7 @@ export default function FeedPage() {
                   type="button"
                   onClick={() => {
                     setShowEmoji(false);
+                    setShowGif(false);
                     fileRef.current?.click();
                   }}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-full text-sky-500 transition hover:bg-sky-500/10"
@@ -636,6 +805,7 @@ export default function FeedPage() {
                   ref={emojiBtnRef}
                   type="button"
                   onClick={() => {
+                    setShowGif(false);
                     setShowEmoji((v) => !v);
                   }}
                   className={cn(
@@ -652,9 +822,30 @@ export default function FeedPage() {
                 </button>
 
                 <button
+                  ref={gifBtnRef}
                   type="button"
                   onClick={() => {
                     setShowEmoji(false);
+                    setShowGif((v) => !v);
+                  }}
+                  className={cn(
+                    "inline-flex h-9 w-9 items-center justify-center rounded-full transition",
+                    showGif || gifUrl
+                      ? "bg-sky-500/10 text-sky-500"
+                      : "text-sky-500 hover:bg-sky-500/10"
+                  )}
+                  title="GIF"
+                  aria-label="Adicionar GIF"
+                  aria-expanded={showGif}
+                >
+                  <Gif size={20} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEmoji(false);
+                    setShowGif(false);
                     setShowLocation((v) => {
                       if (v && !location) {
                         setLocationQuery("");
@@ -718,16 +909,95 @@ export default function FeedPage() {
                   insertAtCursor(code);
                 }}
               />
+
+              {showGif && (
+                <div
+                  ref={gifPanelRef}
+                  className="absolute left-0 top-full z-40 mt-2 w-[min(100%,22rem)] overflow-hidden rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.28)] dark:border-zinc-700 dark:bg-[#141414]"
+                >
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="relative min-w-0 flex-1">
+                      <MagnifyingGlass
+                        size={14}
+                        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400"
+                      />
+                      <input
+                        value={gifQ}
+                        onChange={(e) => setGifQ(e.target.value)}
+                        placeholder="Buscar GIF…"
+                        className="h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 py-2 pl-8 pr-3 text-[13px] dark:border-zinc-700 dark:bg-zinc-900"
+                        autoFocus
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowGif(false)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 dark:hover:bg-zinc-800"
+                      aria-label="Fechar"
+                    >
+                      <X size={16} weight="bold" />
+                    </button>
+                  </div>
+                  {gifLoading ? (
+                    <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-neutral-400">
+                      <SpinnerGap size={16} className="animate-spin" />
+                      Buscando GIFs…
+                    </p>
+                  ) : (
+                    <div className="grid max-h-52 grid-cols-3 gap-1.5 overflow-y-auto thin-scroll sm:grid-cols-4">
+                      {gifs.map((g) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          title={g.title}
+                          onClick={() => pickGif(g)}
+                          className="relative aspect-square overflow-hidden rounded-lg bg-neutral-100 ring-1 ring-black/5 transition hover:ring-2 hover:ring-sky-400/50 dark:bg-zinc-800"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={g.previewUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </form>
 
       <div className="space-y-3">
-        {visible.map((post) => (
-          <PostCard key={post.id} post={post} />
-        ))}
-        {visible.length === 0 && (
+        {feedItems.map((item) => {
+          const isFocus = focusPostId === item.post.id;
+          const openComments = isFocus && !!focusCommentId;
+          if (item.kind === "repost") {
+            return (
+              <PostCard
+                key={item.key}
+                post={item.post}
+                repostMeta={item.repostMeta}
+                highlight={isFocus}
+                forceOpenComments={openComments}
+                focusCommentId={isFocus ? focusCommentId : null}
+              />
+            );
+          }
+          return (
+            <PostCard
+              key={item.key}
+              post={item.post}
+              highlight={isFocus}
+              forceOpenComments={openComments}
+              focusCommentId={isFocus ? focusCommentId : null}
+            />
+          );
+        })}
+        {feedItems.length === 0 && (
           <div className="rounded-2xl border-2 border-dashed border-neutral-300 bg-white p-12 text-center text-sm font-medium text-neutral-500 dark:border-zinc-700 dark:bg-[#141414]">
             Nenhum post ainda. Seja o primeiro a publicar.
           </div>

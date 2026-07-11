@@ -1,5 +1,7 @@
 "use client";
 
+import { AdminTrailsPanel } from "@/components/admin-trails-panel";
+import { AdminVideosPanel } from "@/components/admin-videos-panel";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,12 +9,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { VerifiedBadge } from "@/components/verified-badge";
 import { useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/lib/auth-store";
+import { useTrailStore } from "@/lib/trail-store";
 import { useVerificationStore } from "@/lib/verification-store";
 import type { VerificationRequest } from "@/lib/types";
 import { formatDate, formatRelative } from "@/lib/utils";
 import {
   CheckCircle,
   Clock,
+  FilmStrip,
+  Path,
   ShieldCheck,
   UsersThree,
   XCircle,
@@ -28,10 +33,14 @@ export default function AdminPanelPage() {
   const setVerified = useAuthStore((s) => s.setVerified);
   const requests = useVerificationStore((s) => s.requests);
   const reviewRequest = useVerificationStore((s) => s.reviewRequest);
+  const trailsCount = useTrailStore((s) => s.trails.length);
 
-  const [tab, setTab] = useState<"pending" | "history" | "users">("pending");
+  const [tab, setTab] = useState<
+    "pending" | "history" | "users" | "trails" | "videos"
+  >("pending");
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [toast, setToast] = useState("");
+  const [videosCount, setVideosCount] = useState(0);
 
   const isAdmin = user?.role === "admin";
 
@@ -40,6 +49,23 @@ export default function AdminPanelPage() {
       router.replace("/app");
     }
   }, [hydrated, user, isAdmin, router]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/videos/config", { cache: "no-store" });
+        const data = (await res.json()) as { count?: number };
+        if (!cancelled) setVideosCount(data.count ?? 0);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, tab, toast]);
 
   const pending = useMemo(
     () =>
@@ -117,16 +143,18 @@ export default function AdminPanelPage() {
           </h1>
         </div>
         <p className="mt-2 text-sm text-neutral-500 sm:text-base">
-          Gerencie verificações e membros da comunidade.
+          Verificações, membros, trilhas e vídeos (Telegram storage).
         </p>
       </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-3 gap-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {[
           { label: "Pendentes", value: pending.length, icon: Clock },
           { label: "Verificados", value: verifiedCount, icon: CheckCircle },
           { label: "Membros", value: users.length, icon: UsersThree },
+          { label: "Trilhas", value: trailsCount, icon: Path },
+          { label: "Vídeos", value: videosCount, icon: FilmStrip },
         ].map((s) => (
           <div
             key={s.label}
@@ -148,12 +176,14 @@ export default function AdminPanelPage() {
       )}
 
       {/* Tabs */}
-      <div className="mb-5 flex gap-1 rounded-xl bg-neutral-200/60 p-1">
+      <div className="mb-5 flex flex-wrap gap-1 rounded-xl bg-neutral-200/60 p-1">
         {(
           [
             ["pending", `Pendentes (${pending.length})`],
             ["history", "Histórico"],
             ["users", "Membros"],
+            ["trails", `Trilhas (${trailsCount})`],
+            ["videos", `Vídeos (${videosCount})`],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -162,8 +192,8 @@ export default function AdminPanelPage() {
             onClick={() => setTab(key)}
             className={
               tab === key
-                ? "chip flex-1 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#1f1f1f] shadow-sm sm:text-sm"
-                : "chip flex-1 rounded-lg px-3 py-2 text-xs font-medium text-neutral-500 hover:text-[#1f1f1f] sm:text-sm"
+                ? "chip min-w-[calc(50%-0.125rem)] flex-1 rounded-lg bg-white px-2 py-2 text-xs font-semibold text-[#1f1f1f] shadow-sm sm:min-w-0 sm:text-sm"
+                : "chip min-w-[calc(50%-0.125rem)] flex-1 rounded-lg px-2 py-2 text-xs font-medium text-neutral-500 hover:text-[#1f1f1f] sm:min-w-0 sm:text-sm"
             }
           >
             {label}
@@ -384,6 +414,28 @@ export default function AdminPanelPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {tab === "trails" && user && (
+        <AdminTrailsPanel
+          adminId={user.id}
+          adminName={user.name}
+          onToast={(msg) => {
+            setToast(msg);
+            setTimeout(() => setToast(""), 2800);
+          }}
+        />
+      )}
+
+      {tab === "videos" && user && (
+        <AdminVideosPanel
+          adminId={user.id}
+          adminName={user.name}
+          onToast={(msg) => {
+            setToast(msg);
+            setTimeout(() => setToast(""), 2800);
+          }}
+        />
       )}
     </div>
   );

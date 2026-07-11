@@ -186,12 +186,10 @@ export async function getCroppedDataUrl(
 
   setupHighQualityCtx(ctx);
 
-  // fundo opaco no JPEG (evita preto em áreas transparentes)
+  // fundo opaco — letterbox quando zoom out encaixa a foto inteira no frame
   const mime = options?.mime ?? preferredMime();
-  if (mime === "image/jpeg") {
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, outW, outH);
-  }
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, outW, outH);
 
   if (options?.circular) {
     ctx.beginPath();
@@ -200,17 +198,26 @@ export async function getCroppedDataUrl(
     ctx.clip();
   }
 
-  ctx.drawImage(
-    image,
-    pixelCrop.x,
-    pixelCrop.y,
-    pixelCrop.width,
-    pixelCrop.height,
-    0,
-    0,
-    outW,
-    outH
-  );
+  // Crop pode ultrapassar a imagem (zoom out / restrictPosition false)
+  const cropX = pixelCrop.x;
+  const cropY = pixelCrop.y;
+  const cropW = Math.max(1, pixelCrop.width);
+  const cropH = Math.max(1, pixelCrop.height);
+
+  const sx = Math.max(0, cropX);
+  const sy = Math.max(0, cropY);
+  const ex = Math.min(image.naturalWidth || image.width, cropX + cropW);
+  const ey = Math.min(image.naturalHeight || image.height, cropY + cropH);
+  const sw = ex - sx;
+  const sh = ey - sy;
+
+  if (sw > 0.5 && sh > 0.5) {
+    const dx = ((sx - cropX) / cropW) * outW;
+    const dy = ((sy - cropY) / cropH) * outH;
+    const dw = (sw / cropW) * outW;
+    const dh = (sh / cropH) * outH;
+    ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
+  }
 
   const quality = options?.quality ?? 0.92;
   return canvas.toDataURL(mime, quality);

@@ -13,7 +13,7 @@ import Cropper, { type Area } from "react-easy-crop";
 
 export type CropKind = "avatar" | "banner" | "post";
 
-export type PostAspectId = "16:9" | "1:1" | "4:5" | "3:4" | "4:3";
+export type PostAspectId = "16:9" | "1:1" | "4:5" | "3:4" | "9:16" | "4:3";
 
 type Props = {
   open: boolean;
@@ -64,6 +64,14 @@ const POST_ASPECTS: {
     aspect: 3 / 4,
     outputWidth: 1080,
     outputHeight: 1440,
+  },
+  {
+    id: "9:16",
+    label: "9:16",
+    hint: "Full · imagem vertical inteira",
+    aspect: 9 / 16,
+    outputWidth: 1080,
+    outputHeight: 1920,
   },
   {
     id: "4:3",
@@ -143,18 +151,31 @@ export function ImageCropEditor({
     [postAspectId]
   );
 
+  /** Zoom out liberado no post (0.3) para caber foto inteira no 9:16 */
+  const minZoom = kind === "post" ? 0.3 : 1;
+  const maxZoom = 3;
+
   const config = useMemo(() => {
     if (kind === "post") {
+      const isTall =
+        postAspect.id === "9:16" ||
+        postAspect.id === "3:4" ||
+        postAspect.id === "4:5";
       return {
         title: "Ajustar imagem do post",
-        hint: "Escolha a proporção e enquadre. Arraste e use o zoom.",
+        hint: "Escolha a proporção e enquadre. Use o zoom out para caber a foto inteira.",
         aspect: postAspect.aspect,
         cropShape: "rect" as const,
         outputWidth: postAspect.outputWidth,
         outputHeight: postAspect.outputHeight,
         circular: false,
         showGrid: true,
-        cropH: "h-[240px] sm:h-[300px]",
+        // Área mais alta para proporções verticais (9:16)
+        cropH: isTall
+          ? "h-[min(52dvh,420px)] sm:h-[min(56dvh,460px)]"
+          : "h-[240px] sm:h-[300px]",
+        // contain + zoom out facilita encaixar a imagem completa
+        objectFit: "contain" as const,
       };
     }
     const p = FIXED_PRESETS[kind];
@@ -171,10 +192,11 @@ export function ImageCropEditor({
         kind === "banner"
           ? "h-[220px] sm:h-[260px]"
           : "h-[280px] sm:h-[320px]",
+      objectFit: "horizontal-cover" as const,
     };
   }, [kind, postAspect]);
 
-  // Ao trocar proporção no post, recentraliza
+  // Ao trocar proporção no post, recentraliza e volta a um zoom “seguro”
   useEffect(() => {
     if (kind !== "post") return;
     setCrop({ x: 0, y: 0 });
@@ -297,13 +319,17 @@ export function ImageCropEditor({
             image={imageSrc}
             crop={crop}
             zoom={zoom}
+            minZoom={minZoom}
+            maxZoom={maxZoom}
             aspect={config.aspect}
             cropShape={config.cropShape}
             showGrid={config.showGrid}
             onCropChange={setCrop}
             onZoomChange={setZoom}
             onCropComplete={onCropComplete}
-            objectFit="horizontal-cover"
+            objectFit={config.objectFit}
+            // permite puxar a imagem com zoom out (encaixar foto inteira)
+            restrictPosition={kind !== "post"}
             classes={{
               containerClassName: "rounded-none",
               mediaClassName: "max-w-none",
@@ -321,8 +347,8 @@ export function ImageCropEditor({
             />
             <input
               type="range"
-              min={1}
-              max={3}
+              min={minZoom}
+              max={maxZoom}
               step={0.01}
               value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}
@@ -340,7 +366,7 @@ export function ImageCropEditor({
               ? "Prévia circular · o que está dentro do círculo será a foto"
               : kind === "banner"
                 ? "Prévia 3:1 · o que está na área clara será o banner"
-                : `Prévia ${postAspect.label} · enquadre como quiser e aplique`}
+                : `Prévia ${postAspect.label} · arraste o zoom para longe para caber a foto inteira`}
           </p>
         </div>
 

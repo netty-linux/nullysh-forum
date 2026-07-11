@@ -87,74 +87,7 @@ export const communities: Community[] = [
 /** Posts seed removidos — o feed começa limpo; só conteúdo real dos membros. */
 export const posts: Post[] = [];
 
-export const videos: Video[] = [
-  {
-    id: "v1",
-    title: "Fundamentos do Nullysh Method",
-    description: "Visão geral da metodologia e como usar o forum no dia a dia.",
-    duration: "18:42",
-    category: "Metodologia",
-    thumbnail: "01",
-    vipOnly: true,
-    views: 1240,
-    createdAt: "2026-06-20T10:00:00.000Z",
-  },
-  {
-    id: "v2",
-    title: "Criando landing pages de alta conversão",
-    description: "Grid suíço, tipografia limpa e CTAs pretos que convertem.",
-    duration: "32:15",
-    category: "Design",
-    thumbnail: "02",
-    vipOnly: true,
-    views: 980,
-    createdAt: "2026-06-28T10:00:00.000Z",
-  },
-  {
-    id: "v3",
-    title: "Automação com IAs: setup completo",
-    description: "Do zero ao fluxo diário com agentes e templates reutilizáveis.",
-    duration: "41:08",
-    category: "IA",
-    thumbnail: "03",
-    vipOnly: true,
-    views: 1560,
-    createdAt: "2026-07-02T10:00:00.000Z",
-  },
-  {
-    id: "v4",
-    title: "Tour rápido do Forum (gratuito)",
-    description: "Conheça as áreas principais antes de assinar o VIP.",
-    duration: "06:20",
-    category: "Introdução",
-    thumbnail: "04",
-    vipOnly: false,
-    views: 3420,
-    createdAt: "2026-06-15T10:00:00.000Z",
-  },
-  {
-    id: "v5",
-    title: "Ofertas e pricing para produtos digitais",
-    description: "Como estruturar um plano único sem confusão de opções.",
-    duration: "27:50",
-    category: "Negócios",
-    thumbnail: "05",
-    vipOnly: true,
-    views: 745,
-    createdAt: "2026-07-04T10:00:00.000Z",
-  },
-  {
-    id: "v6",
-    title: "Comunidade que retém: rituais semanais",
-    description: "Como manter engajamento com lives, challenges e salas.",
-    duration: "22:33",
-    category: "Comunidade",
-    thumbnail: "06",
-    vipOnly: true,
-    views: 612,
-    createdAt: "2026-07-07T10:00:00.000Z",
-  },
-];
+export const videos: Video[] = [];
 
 export const materials: Material[] = [
   {

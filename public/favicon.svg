@@ -1,6 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <!-- Fallback monochrome mark: fox+N simplified if JPG fails -->
-  <rect width="32" height="32" rx="7" fill="#ffffff"/>
-  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" stroke="#e5e5e5"/>
-  <path fill="#1f1f1f" d="M8 24V8h3.4l4.2 7.8L20 8h3.4v16h-3.1v-9.4L16.1 22h-1.4L10.9 14.6V24H8z"/>
+  <!-- Marca Nullysh com cantos arredondados -->
+  <defs>
+    <clipPath id="round">
+      <rect width="32" height="32" rx="8" ry="8"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#round)">
+    <rect width="32" height="32" fill="#0a0a0a"/>
+    <path
+      fill="#ffffff"
+      d="M9 24V8h3.1l4.35 8.9L20.9 8H24v16h-2.85v-9.7L16.7 22.3h-1.4L10.85 14.3V24H9z"
+    />
+  </g>
 </svg>

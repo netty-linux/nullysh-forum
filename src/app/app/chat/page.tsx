@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  ChatComposer,
+  type ChatSendPayload,
+} from "@/components/chat-composer";
+import { ChatMessageRow } from "@/components/chat-message-row";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { VerifiedBadge } from "@/components/verified-badge";
@@ -20,13 +25,11 @@ import { cn, formatRelative } from "@/lib/utils";
 import {
   ChatsCircle,
   Hash,
-  PaperPlaneTilt,
   UserCircle,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  FormEvent,
   Suspense,
   useEffect,
   useMemo,
@@ -42,7 +45,10 @@ function ChatPageInner() {
   const { user, isVip } = useAuth();
   const users = useAuthStore((s) => s.users);
   const messages = useForumStore((s) => s.messages);
+  const posts = useForumStore((s) => s.posts);
   const sendMessage = useForumStore((s) => s.sendMessage);
+  const deleteMessage = useForumStore((s) => s.deleteMessage);
+  const toggleMessageReaction = useForumStore((s) => s.toggleMessageReaction);
   const isEitherBlocked = useBlockStore((s) => s.isEitherBlocked);
   const blocks = useBlockStore((s) => s.blocks);
   const searchParams = useSearchParams();
@@ -52,9 +58,7 @@ function ChatPageInner() {
     kind: "channel",
     id: chatChannels[0].id,
   });
-  const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Abre DM quando vem de ?dm=userId (ex.: botão Conversar no match)
   // Depende de userId (primitivo), não do objeto user inteiro.
@@ -171,16 +175,8 @@ function ChatPageInner() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [channelMessages.length, channelId]);
 
-  useEffect(() => {
-    if (active.kind === "dm") {
-      // Foco no input ao abrir DM
-      window.setTimeout(() => inputRef.current?.focus(), 80);
-    }
-  }, [active]);
-
   function openChannel(id: string) {
     setActive({ kind: "channel", id });
-    setText("");
   }
 
   function openDm(peerId: string) {
@@ -191,7 +187,6 @@ function ChatPageInner() {
       peerId,
       channelId: dmChannelId(user.id, peerId),
     });
-    setText("");
   }
 
   const dmBlocked =
@@ -203,24 +198,34 @@ function ChatPageInner() {
   useEffect(() => {
     if (dmBlocked) {
       setActive({ kind: "channel", id: chatChannels[0].id });
-      setText("");
     }
   }, [dmBlocked]);
 
-  function onSend(e: FormEvent) {
-    e.preventDefault();
-    if (!user || locked || !text.trim()) return;
+  function onSend(payload: ChatSendPayload) {
+    if (!user || locked) return;
     if (active.kind === "dm" && isEitherBlocked(user.id, active.peerId)) {
       return;
     }
+    const hasMedia =
+      payload.mediaKind &&
+      payload.mediaKind !== "text" &&
+      (payload.mediaUrl || payload.mediaKind === "sticker");
+    if (!payload.content.trim() && !hasMedia && !payload.mediaUrl) return;
+
     sendMessage({
       channelId,
       authorId: user.id,
       authorName: user.name,
       authorAvatar: user.avatar,
-      content: text,
+      content: payload.content,
+      mediaKind: payload.mediaKind,
+      mediaUrl: payload.mediaUrl,
+      mediaMime: payload.mediaMime,
+      mediaDuration: payload.mediaDuration,
+      mediaThumbUrl: payload.mediaThumbUrl,
+      mediaWidth: payload.mediaWidth,
+      mediaHeight: payload.mediaHeight,
     });
-    setText("");
   }
 
   const headerTitle =
@@ -476,69 +481,31 @@ function ChatPageInner() {
                 )}
 
                 {channelMessages.map((m) => {
-                  const mine = user && m.authorId === user.id;
+                  const mine = !!(user && m.authorId === user.id);
+                  const canDelete =
+                    !!user &&
+                    (m.authorId === user.id || user.role === "admin");
                   return (
-                    <div
+                    <ChatMessageRow
                       key={m.id}
-                      className={cn(
-                        "flex gap-3",
-                        active.kind === "dm" && mine && "flex-row-reverse"
-                      )}
-                    >
-                      <Link
-                        href={`/app/u/${m.authorId}`}
-                        className="shrink-0"
-                      >
-                        <Avatar
-                          name={m.authorName}
-                          src={
-                            users.find((u) => u.id === m.authorId)?.avatarUrl
-                          }
-                          size="sm"
-                          frame={(() => {
-                            const u = users.find((x) => x.id === m.authorId);
-                            return u?.isVip ? u.avatarFrame : null;
-                          })()}
-                        />
-                      </Link>
-                      <div
-                        className={cn(
-                          "min-w-0",
-                          active.kind === "dm" && mine && "text-right"
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "flex flex-wrap items-baseline gap-2",
-                            active.kind === "dm" &&
-                              mine &&
-                              "justify-end"
-                          )}
-                        >
-                          <Link
-                            href={`/app/u/${m.authorId}`}
-                            className="inline-flex items-center gap-1 text-sm font-semibold text-[#1f1f1f] hover:underline dark:text-zinc-100"
-                          >
-                            {m.authorName}
-                            {users.find((u) => u.id === m.authorId)
-                              ?.isVerified && <VerifiedBadge size={13} />}
-                          </Link>
-                          <span className="text-[11px] text-neutral-400">
-                            {formatRelative(m.createdAt)}
-                          </span>
-                        </div>
-                        <p
-                          className={cn(
-                            "mt-0.5 text-sm leading-relaxed text-neutral-600 dark:text-zinc-400",
-                            active.kind === "dm" &&
-                              mine &&
-                              "inline-block rounded-2xl rounded-tr-sm bg-black px-3 py-2 text-left text-white dark:bg-white dark:text-black"
-                          )}
-                        >
-                          {m.content}
-                        </p>
-                      </div>
-                    </div>
+                      message={m}
+                      mine={mine}
+                      isDm={active.kind === "dm"}
+                      canDelete={canDelete}
+                      users={users}
+                      posts={posts}
+                      currentUserId={user?.id ?? null}
+                      onDelete={(id) => {
+                        if (!user) return;
+                        deleteMessage(id, user.id, {
+                          isAdmin: user.role === "admin",
+                        });
+                      }}
+                      onReact={(id, emoji) => {
+                        if (!user) return;
+                        toggleMessageReaction(id, user.id, emoji);
+                      }}
+                    />
                   );
                 })}
 
@@ -551,26 +518,11 @@ function ChatPageInner() {
                 <div ref={bottomRef} />
               </div>
 
-              <form
-                onSubmit={onSend}
-                className="flex items-center gap-2 border-t border-neutral-200/70 p-3 dark:border-zinc-800"
-              >
-                <input
-                  ref={inputRef}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder={placeholder}
-                  disabled={dmBlocked}
-                  className="h-11 flex-1 rounded-[10px] border border-neutral-200 bg-[var(--surface)] px-3.5 text-sm text-neutral-950 placeholder:text-neutral-400 transition-[border-color,background-color,box-shadow] hover:border-neutral-300 focus:border-neutral-950 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-neutral-950/8 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-500"
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={!text.trim() || dmBlocked}
-                >
-                  <PaperPlaneTilt size={18} weight="fill" />
-                </Button>
-              </form>
+              <ChatComposer
+                placeholder={placeholder}
+                disabled={dmBlocked || locked}
+                onSend={onSend}
+              />
             </>
           )}
         </div>

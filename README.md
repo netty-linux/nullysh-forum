@@ -94,7 +94,27 @@ Comunidades  ·  Vídeos  ·  Bate-papo  ·  Perfil  ·  Salvos
 | UI | Tailwind CSS 4 · Phosphor · Motion |
 | Estado | Zustand (persist) |
 | Backend | Supabase Auth · Profiles · Storage |
+| Vídeos | Telegram Bot API (storage) + proxy Next.js |
 | Design | Tokens em `globals.css` · Inter + Satoshi |
+
+---
+
+## Vídeos via Telegram (storage)
+
+O **Bot do Telegram** guarda o arquivo; o fórum guarda metadados + `file_id`.
+
+1. Admin sobe o vídeo no **Painel ADM → Vídeos**
+2. `POST /api/videos` envia ao chat de storage (`sendVideo`)
+3. Metadados em `data/videos.json`
+4. Membros assistem em `/app/videos` via `GET /api/videos/:id/stream` (token nunca no browser)
+
+### Setup
+1. Bot no [@BotFather](https://t.me/BotFather) → `TELEGRAM_BOT_TOKEN`
+2. Canal privado + bot como **admin**
+3. `chat_id` (canais costumam ser `-100…`) → `TELEGRAM_STORAGE_CHAT_ID`
+4. Cole no `.env.local` (veja `.env.example`) e reinicie o dev server
+
+Limite Bot API: **~50 MB**/upload. Em produção use também `ADMIN_API_SECRET`.
 
 ---
 
@@ -102,7 +122,8 @@ Comunidades  ·  Vídeos  ·  Bate-papo  ·  Perfil  ·  Salvos
 
 ```bash
 npm install
-cp .env.local.example .env.local   # se existir
+cp .env.example .env.local
+# preencha Supabase e/ou Telegram
 npm run dev
 ```
 

@@ -8,11 +8,26 @@ import {
   isGhostPost,
   isGhostUserId,
 } from "./ghost-data";
-import type { ChatMessage, Comment, Post } from "./types";
+import { useAuthStore } from "./auth-store";
+import { getDmPeerId, isDmChannel } from "./dm";
+import {
+  notifyComment,
+  notifyCommentLike,
+  notifyDm,
+  notifyLike,
+  notifyRepost,
+} from "./notification-store";
+import type {
+  ChatMediaKind,
+  ChatMessage,
+  Comment,
+  Post,
+  PostRepost,
+} from "./types";
 import { uid } from "./utils";
 
-/** v2: remove posts/comentários/chat seed (Marina, Nullysh demo, etc.) */
-const FORUM_STORAGE_VERSION = 2;
+/** v5: mídia no chat (áudio/imagem/vídeo/sticker/gif) */
+const FORUM_STORAGE_VERSION = 5;
 
 function normalizePost(p: Post): Post {
   const likedBy = (Array.isArray(p.likedBy) ? p.likedBy : []).filter(
@@ -35,10 +50,25 @@ function normalizePost(p: Post): Post {
   };
 }
 
+function normalizeComment(c: Comment): Comment {
+  const likedBy = (Array.isArray(c.likedBy) ? c.likedBy : []).filter(
+    (id) => !isGhostUserId(id)
+  );
+  return {
+    ...c,
+    likedBy,
+    parentId: c.parentId ?? null,
+    replyToName: c.replyToName ?? null,
+    replyToAuthorId: c.replyToAuthorId ?? null,
+    gifUrl: c.gifUrl ?? null,
+  };
+}
+
 interface ForumState {
   posts: Post[];
   comments: Comment[];
   messages: ChatMessage[];
+  reposts: PostRepost[];
   createPost: (data: {
     authorId: string;
     authorName: string;
@@ -47,6 +77,7 @@ interface ForumState {
     title?: string;
     content: string;
     imageUrl?: string | null;
+    gifUrl?: string | null;
     location?: string | null;
     communityId?: string;
     communityName?: string;
@@ -62,23 +93,78 @@ interface ForumState {
     userId: string,
     opts?: { isAdmin?: boolean }
   ) => { ok: true } | { ok: false; error: string };
+  /**
+   * Apaga comentário se:
+   * - for o autor do comentário, ou
+   * - for o dono do post (só nos próprios posts), ou
+   * - for admin
+   */
+  deleteComment: (
+    commentId: string,
+    userId: string,
+    opts?: { isAdmin?: boolean }
+  ) => { ok: true } | { ok: false; error: string };
   addComment: (data: {
     postId: string;
     authorId: string;
     authorName: string;
     authorAvatar: string;
     content: string;
+    /** id do comentário ao qual está respondendo (qualquer nível → normaliza p/ raiz) */
+    replyToId?: string | null;
+    /** GIF opcional no comentário */
+    gifUrl?: string | null;
   }) => Comment;
+  /** Curtir / descurtir comentário (qualquer usuário logado, incl. dono do post) */
+  toggleCommentLike: (
+    commentId: string,
+    userId: string,
+    actorName: string
+  ) => void;
+  toggleRepost: (
+    postId: string,
+    userId: string,
+    userName: string
+  ) => { ok: true; reposted: boolean } | { ok: false; error: string };
+  isReposted: (postId: string, userId: string) => boolean;
+  repostCount: (postId: string) => number;
+  getRepostsByUser: (userId: string) => PostRepost[];
   sendMessage: (data: {
     channelId: string;
     authorId: string;
     authorName: string;
     authorAvatar: string;
     content: string;
+    sharedPostId?: string | null;
+    mediaKind?: ChatMediaKind | null;
+    mediaUrl?: string | null;
+    mediaMime?: string | null;
+    mediaDuration?: number | null;
+    mediaThumbUrl?: string | null;
+    mediaWidth?: number | null;
+    mediaHeight?: number | null;
   }) => ChatMessage;
+  /**
+   * Apaga mensagem própria (ou admin).
+   */
+  deleteMessage: (
+    messageId: string,
+    userId: string,
+    opts?: { isAdmin?: boolean }
+  ) => { ok: true } | { ok: false; error: string };
+  /**
+   * Alterna reação do usuário em uma mensagem (emoji único por pessoa —
+   * clicar de novo no mesmo remove; trocar emoji substitui).
+   */
+  toggleMessageReaction: (
+    messageId: string,
+    userId: string,
+    emoji: string
+  ) => void;
   getCommentsForPost: (postId: string) => Comment[];
   getMessagesForChannel: (channelId: string) => ChatMessage[];
   getSavedPosts: (userId: string) => Post[];
+  getPostById: (postId: string) => Post | undefined;
 }
 
 export const useForumStore = create<ForumState>()(
@@ -88,6 +174,7 @@ export const useForumStore = create<ForumState>()(
       posts: [],
       comments: [],
       messages: [],
+      reposts: [],
 
       createPost: (data) => {
         const content = data.content.trim();
@@ -103,6 +190,7 @@ export const useForumStore = create<ForumState>()(
           title: data.title?.trim() || undefined,
           content,
           imageUrl: data.imageUrl ?? null,
+          gifUrl: data.gifUrl?.trim() || null,
           location: data.location?.trim() || null,
           type: data.type ?? "discussion",
           likes: 0,
@@ -120,6 +208,8 @@ export const useForumStore = create<ForumState>()(
       },
 
       toggleLike: (postId, userId) => {
+        const before = get().posts.find((p) => p.id === postId);
+        const wasLiked = !!before?.likedBy?.includes(userId);
         set((s) => ({
           posts: s.posts.map((raw) => {
             const p = normalizePost(raw);
@@ -145,6 +235,18 @@ export const useForumStore = create<ForumState>()(
             };
           }),
         }));
+        if (!wasLiked && before) {
+          const actor =
+            useAuthStore.getState().users.find((u) => u.id === userId)?.name ||
+            "Alguém";
+          notifyLike({
+            postAuthorId: before.authorId,
+            actorId: userId,
+            actorName: actor,
+            postId,
+            excerpt: before.content.slice(0, 48),
+          });
+        }
       },
 
       toggleDislike: (postId, userId) => {
@@ -210,6 +312,21 @@ export const useForumStore = create<ForumState>()(
       },
 
       addComment: (data) => {
+        let parentId: string | null = null;
+        let replyToName: string | null = null;
+        let replyToAuthorId: string | null = null;
+
+        if (data.replyToId) {
+          const target = get().comments.find((c) => c.id === data.replyToId);
+          if (target && target.postId === data.postId) {
+            // 1 nível: resposta a raiz ou a outra resposta → sob a raiz
+            parentId = target.parentId || target.id;
+            replyToName = target.authorName;
+            replyToAuthorId = target.authorId;
+          }
+        }
+
+        const gifUrl = data.gifUrl?.trim() || null;
         const comment: Comment = {
           id: uid("cm"),
           postId: data.postId,
@@ -218,28 +335,263 @@ export const useForumStore = create<ForumState>()(
           authorAvatar: data.authorAvatar,
           content: data.content.trim(),
           createdAt: new Date().toISOString(),
+          likedBy: [],
+          parentId,
+          replyToName,
+          replyToAuthorId,
+          gifUrl,
         };
+        const post = get().posts.find((p) => p.id === data.postId);
         set((s) => ({
           comments: [...s.comments, comment],
           posts: s.posts.map((p) =>
             p.id === data.postId ? { ...p, comments: p.comments + 1 } : p
           ),
         }));
+        if (post) {
+          const excerpt =
+            data.content.trim().slice(0, 48) ||
+            (gifUrl ? "enviou um GIF" : "");
+          // dono do post
+          if (post.authorId !== data.authorId) {
+            notifyComment({
+              postAuthorId: post.authorId,
+              actorId: data.authorId,
+              actorName: data.authorName,
+              postId: data.postId,
+              commentId: comment.id,
+              excerpt,
+              isReply: !!parentId && replyToAuthorId === post.authorId,
+            });
+          }
+          // quem foi respondido (se não for o dono — já notificado — nem o próprio autor)
+          if (
+            replyToAuthorId &&
+            replyToAuthorId !== data.authorId &&
+            replyToAuthorId !== post.authorId
+          ) {
+            notifyComment({
+              postAuthorId: replyToAuthorId,
+              actorId: data.authorId,
+              actorName: data.authorName,
+              postId: data.postId,
+              commentId: comment.id,
+              excerpt,
+              isReply: true,
+            });
+          }
+        }
         return comment;
       },
 
+      toggleCommentLike: (commentId, userId, actorName) => {
+        const before = get().comments.find((c) => c.id === commentId);
+        if (!before) return;
+        const wasLiked = (before.likedBy ?? []).includes(userId);
+
+        set((s) => ({
+          comments: s.comments.map((c) => {
+            if (c.id !== commentId) return c;
+            const likedBy = Array.isArray(c.likedBy) ? c.likedBy : [];
+            if (likedBy.includes(userId)) {
+              return {
+                ...c,
+                likedBy: likedBy.filter((id) => id !== userId),
+              };
+            }
+            return { ...c, likedBy: [...likedBy, userId] };
+          }),
+        }));
+
+        // Notifica o autor do comentário só ao curtir (não ao descurtir)
+        if (!wasLiked && before.authorId !== userId) {
+          notifyCommentLike({
+            commentAuthorId: before.authorId,
+            actorId: userId,
+            actorName,
+            postId: before.postId,
+            commentId: before.id,
+            excerpt: before.content.slice(0, 48),
+          });
+        }
+      },
+
+      deleteComment: (commentId, userId, opts) => {
+        const comment = get().comments.find((c) => c.id === commentId);
+        if (!comment) {
+          return { ok: false, error: "Comentário não encontrado." };
+        }
+        const post = get().posts.find((p) => p.id === comment.postId);
+        const isCommentAuthor = comment.authorId === userId;
+        const isPostOwner = !!post && post.authorId === userId;
+        const can =
+          isCommentAuthor || isPostOwner || !!opts?.isAdmin;
+        if (!can) {
+          return {
+            ok: false,
+            error:
+              "Você só pode apagar comentários nos seus posts ou os seus próprios.",
+          };
+        }
+        // apaga o comentário e respostas aninhadas sob ele
+        const toRemove = new Set<string>([commentId]);
+        for (const c of get().comments) {
+          if (c.parentId === commentId) toRemove.add(c.id);
+        }
+        const removed = toRemove.size;
+        set((s) => ({
+          comments: s.comments.filter((c) => !toRemove.has(c.id)),
+          posts: s.posts.map((p) =>
+            p.id === comment.postId
+              ? { ...p, comments: Math.max(0, p.comments - removed) }
+              : p
+          ),
+        }));
+        return { ok: true };
+      },
+
+      toggleRepost: (postId, userId, userName) => {
+        const post = get().posts.find((p) => p.id === postId);
+        if (!post) return { ok: false, error: "Post não encontrado." };
+        if (post.authorId === userId) {
+          return { ok: false, error: "Você não pode repostar o próprio post." };
+        }
+        const existing = get().reposts.find(
+          (r) => r.postId === postId && r.userId === userId
+        );
+        if (existing) {
+          set((s) => ({
+            reposts: s.reposts.filter((r) => r.id !== existing.id),
+          }));
+          return { ok: true, reposted: false };
+        }
+        const repost: PostRepost = {
+          id: uid("rp"),
+          userId,
+          userName,
+          postId,
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({ reposts: [repost, ...s.reposts] }));
+        notifyRepost({
+          postAuthorId: post.authorId,
+          actorId: userId,
+          actorName: userName,
+          postId,
+        });
+        return { ok: true, reposted: true };
+      },
+
+      isReposted: (postId, userId) =>
+        get().reposts.some((r) => r.postId === postId && r.userId === userId),
+
+      repostCount: (postId) =>
+        get().reposts.filter((r) => r.postId === postId).length,
+
+      getRepostsByUser: (userId) =>
+        get()
+          .reposts.filter((r) => r.userId === userId)
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          ),
+
       sendMessage: (data) => {
+        const kind = data.mediaKind || (data.sharedPostId ? "text" : "text");
         const message: ChatMessage = {
           id: uid("msg"),
           channelId: data.channelId,
           authorId: data.authorId,
           authorName: data.authorName,
           authorAvatar: data.authorAvatar,
-          content: data.content.trim(),
+          content: (data.content || "").trim(),
           createdAt: new Date().toISOString(),
+          sharedPostId: data.sharedPostId ?? null,
+          mediaKind: data.mediaKind ?? null,
+          mediaUrl: data.mediaUrl ?? null,
+          mediaMime: data.mediaMime ?? null,
+          mediaDuration: data.mediaDuration ?? null,
+          mediaThumbUrl: data.mediaThumbUrl ?? null,
+          mediaWidth: data.mediaWidth ?? null,
+          mediaHeight: data.mediaHeight ?? null,
         };
         set((s) => ({ messages: [...s.messages, message] }));
+        // DM: notifica o outro participante
+        if (isDmChannel(data.channelId)) {
+          const peer = getDmPeerId(data.channelId, data.authorId);
+          if (peer) {
+            const preview =
+              data.content.trim().slice(0, 60) ||
+              (data.sharedPostId
+                ? "encaminhou um post"
+                : kind === "image"
+                  ? "enviou uma foto"
+                  : kind === "video"
+                    ? "enviou um vídeo"
+                    : kind === "audio"
+                      ? "enviou um áudio"
+                      : kind === "sticker"
+                        ? "enviou uma figurinha"
+                        : kind === "gif"
+                          ? "enviou um GIF"
+                          : "");
+            notifyDm({
+              recipientId: peer,
+              actorId: data.authorId,
+              actorName: data.authorName,
+              preview,
+            });
+          }
+        }
         return message;
+      },
+
+      deleteMessage: (messageId, userId, opts) => {
+        const msg = get().messages.find((m) => m.id === messageId);
+        if (!msg) {
+          return { ok: false, error: "Mensagem não encontrada." };
+        }
+        const can = msg.authorId === userId || !!opts?.isAdmin;
+        if (!can) {
+          return {
+            ok: false,
+            error: "Você só pode apagar as suas próprias mensagens.",
+          };
+        }
+        set((s) => ({
+          messages: s.messages.filter((m) => m.id !== messageId),
+        }));
+        return { ok: true };
+      },
+
+      toggleMessageReaction: (messageId, userId, emoji) => {
+        if (!userId || !emoji) return;
+        set((s) => ({
+          messages: s.messages.map((m) => {
+            if (m.id !== messageId) return m;
+            const reactions: Record<string, string[]> = {
+              ...(m.reactions || {}),
+            };
+            // remove user de qualquer emoji
+            for (const key of Object.keys(reactions)) {
+              reactions[key] = (reactions[key] || []).filter(
+                (id) => id !== userId
+              );
+              if (reactions[key].length === 0) delete reactions[key];
+            }
+            // se clicou no mesmo que já tinha, só remove (toggle off)
+            const hadThis = (m.reactions?.[emoji] || []).includes(userId);
+            if (!hadThis) {
+              reactions[emoji] = [...(reactions[emoji] || []), userId];
+            }
+            return { ...m, reactions };
+          }),
+        }));
+      },
+
+      getPostById: (postId) => {
+        const p = get().posts.find((x) => x.id === postId);
+        return p ? normalizePost(p) : undefined;
       },
 
       getCommentsForPost: (postId) =>
@@ -274,6 +626,7 @@ export const useForumStore = create<ForumState>()(
         posts: s.posts,
         comments: s.comments,
         messages: s.messages,
+        reposts: s.reposts,
       }),
       migrate: (persisted) => {
         const p = (persisted || {}) as Partial<ForumState>;
@@ -281,16 +634,22 @@ export const useForumStore = create<ForumState>()(
           .filter((post) => !isGhostPost(post as Post))
           .map((post) => normalizePost(post as Post));
         const realPostIds = new Set(posts.map((x) => x.id));
-        const comments = (p.comments || []).filter((c) => {
-          if (isGhostComment(c as Comment)) return false;
-          // drop comentários órfãos de posts fantasma já apagados
-          const postId = (c as Comment).postId;
-          return !postId || realPostIds.has(postId) || !isGhostPost({ id: postId });
-        });
+        const comments = (p.comments || [])
+          .filter((c) => {
+            if (isGhostComment(c as Comment)) return false;
+            const postId = (c as Comment).postId;
+            return (
+              !postId || realPostIds.has(postId) || !isGhostPost({ id: postId })
+            );
+          })
+          .map((c) => normalizeComment(c as Comment));
         const messages = (p.messages || []).filter(
           (m) => !isGhostMessage(m as ChatMessage)
         );
-        return { ...p, posts, comments, messages } as never;
+        const reposts = (p.reposts || []).filter(
+          (r) => r && realPostIds.has(r.postId) && !isGhostUserId(r.userId)
+        );
+        return { ...p, posts, comments, messages, reposts } as never;
       },
       merge: (persisted, current) => {
         const p = persisted as Partial<ForumState> | undefined;
@@ -298,13 +657,18 @@ export const useForumStore = create<ForumState>()(
           .filter((post) => !isGhostPost(post as Post))
           .map((post) => normalizePost(post as Post));
         const realPostIds = new Set(posts.map((x) => x.id));
-        const comments = (p?.comments ?? current.comments).filter((c) => {
-          if (isGhostComment(c as Comment)) return false;
-          const postId = (c as Comment).postId;
-          return !postId || realPostIds.has(postId);
-        });
+        const comments = (p?.comments ?? current.comments)
+          .filter((c) => {
+            if (isGhostComment(c as Comment)) return false;
+            const postId = (c as Comment).postId;
+            return !postId || realPostIds.has(postId);
+          })
+          .map((c) => normalizeComment(c as Comment));
         const messages = (p?.messages ?? current.messages).filter(
           (m) => !isGhostMessage(m as ChatMessage)
+        );
+        const reposts = (p?.reposts ?? current.reposts ?? []).filter(
+          (r) => r && realPostIds.has(r.postId) && !isGhostUserId(r.userId)
         );
         return {
           ...current,
@@ -312,6 +676,7 @@ export const useForumStore = create<ForumState>()(
           posts,
           comments,
           messages,
+          reposts,
         };
       },
     }

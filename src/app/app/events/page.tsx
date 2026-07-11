@@ -14,7 +14,8 @@ import {
   UsersThree,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 const typeLabel = {
   live: "Live",
@@ -35,6 +36,8 @@ function formatWhen(iso: string) {
 
 export default function EventsPage() {
   const { user, isVip } = useAuth();
+  const searchParams = useSearchParams();
+  const focusId = searchParams.get("id");
   const rsvps = useProgressStore((s) => s.rsvps);
   const toggleRsvp = useProgressStore((s) => s.toggleRsvp);
   const [filter, setFilter] = useState<"all" | "mine" | "open">("all");
@@ -56,6 +59,18 @@ export default function EventsPage() {
     }
     return events;
   }, [filter, rsvps, user, isVip]);
+
+  // Deep-link da notificação: mostra o evento e rola até ele
+  useEffect(() => {
+    if (!focusId) return;
+    setFilter("all");
+    const t = window.setTimeout(() => {
+      document
+        .getElementById(`event-${focusId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 180);
+    return () => window.clearTimeout(t);
+  }, [focusId]);
 
   function onRsvp(eventId: string, locked: boolean) {
     if (!user) return;
@@ -114,6 +129,7 @@ export default function EventsPage() {
       <div className="space-y-3">
         {list.map((ev) => {
           const locked = ev.vipOnly && !isVip;
+          const focused = focusId === ev.id;
           const count = rsvps.filter((r) => r.eventId === ev.id).length;
           const going =
             !!user &&
@@ -122,7 +138,12 @@ export default function EventsPage() {
           return (
             <article
               key={ev.id}
-              className="overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:p-6"
+              id={`event-${ev.id}`}
+              className={
+                focused
+                  ? "scroll-mt-24 overflow-hidden rounded-2xl border-2 border-rose-400 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-2 ring-rose-300/50 sm:p-6"
+                  : "scroll-mt-24 overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:p-6"
+              }
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">

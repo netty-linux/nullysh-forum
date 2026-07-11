@@ -10,7 +10,7 @@ import {
   type FavoriteTrack,
 } from "@/lib/music";
 import { cn, normalizeUrl } from "@/lib/utils";
-import { Pause, Play, SpeakerHigh, SpeakerSlash } from "@phosphor-icons/react";
+import { Pause, Play } from "@phosphor-icons/react";
 import {
   useCallback,
   useEffect,
@@ -95,15 +95,9 @@ function loadYouTubeApi(): Promise<YTNamespace> {
   return ytApiPromise;
 }
 
-function formatTime(sec: number) {
-  if (!Number.isFinite(sec) || sec < 0) return "0:00";
-  const s = Math.floor(sec % 60);
-  const m = Math.floor(sec / 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
 /**
- * Linha compacta estilo Spotify + timeline sincronizada (YouTube IFrame API).
+ * Linha compacta estilo Spotify (capa + play/pause + título).
+ * Sem timeline nem knob de volume no perfil.
  */
 export function MusicTrackPlayer({
   track,
@@ -115,18 +109,8 @@ export function MusicTrackPlayer({
   defaultOpen?: boolean;
 }) {
   const [playing, setPlaying] = useState(defaultOpen);
-  const [progress, setProgress] = useState(0); // 0–1
-  const [current, setCurrent] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [ready, setReady] = useState(false);
-  /** 0–100, estilo YouTube API */
-  const [volume, setVolume] = useState(80);
-  const [muted, setMuted] = useState(false);
-  const volumeRef = useRef(80);
 
   const playerRef = useRef<YTPlayer | null>(null);
-  const pollRef = useRef<number | null>(null);
-  const seekingRef = useRef(false);
   const [hostKey, setHostKey] = useState(0);
   const reactId = useId().replace(/:/g, "");
   const hostDomId = `yt-host-${track.id}-${reactId}`;
@@ -144,45 +128,16 @@ export function MusicTrackPlayer({
     return buildEmbedUrl(track.platform, track.url);
   }, [track.embedUrl, track.platform, track.url]);
 
-  const stopPoll = useCallback(() => {
-    if (pollRef.current != null) {
-      window.clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
-
-  const startPoll = useCallback(() => {
-    stopPoll();
-    pollRef.current = window.setInterval(() => {
-      const p = playerRef.current;
-      if (!p || seekingRef.current) return;
-      try {
-        const t = p.getCurrentTime() || 0;
-        const d = p.getDuration() || 0;
-        setCurrent(t);
-        setDuration(d);
-        if (d > 0) setProgress(Math.min(1, Math.max(0, t / d)));
-      } catch {
-        /* player not ready */
-      }
-    }, 200);
-  }, [stopPoll]);
-
   const destroyPlayer = useCallback(() => {
-    stopPoll();
     try {
       playerRef.current?.destroy();
     } catch {
       /* ignore */
     }
     playerRef.current = null;
-    setReady(false);
-    setProgress(0);
-    setCurrent(0);
-    setDuration(0);
     // remonta o host (YT substitui o div por iframe)
     setHostKey((k) => k + 1);
-  }, [stopPoll]);
+  }, []);
 
   // YouTube: cria / destrói player
   useEffect(() => {
@@ -197,7 +152,6 @@ export function MusicTrackPlayer({
       } catch {
         /* ignore */
       }
-      stopPoll();
       return;
     }
 
@@ -209,7 +163,6 @@ export function MusicTrackPlayer({
       if (playerRef.current) {
         try {
           playerRef.current.playVideo();
-          startPoll();
           return;
         } catch {
           destroyPlayer();
@@ -237,32 +190,21 @@ export function MusicTrackPlayer({
         events: {
           onReady: (e: { target: YTPlayer }) => {
             if (cancelled) return;
-            setReady(true);
             try {
-              e.target.setVolume(volumeRef.current);
-              if (muted) e.target.mute();
-              else e.target.unMute();
+              e.target.setVolume(80);
+              e.target.unMute();
               e.target.playVideo();
-              const d = e.target.getDuration() || 0;
-              setDuration(d);
             } catch {
               /* ignore */
             }
-            startPoll();
           },
           onStateChange: (e: { data: number; target: YTPlayer }) => {
             if (cancelled) return;
             const S = YT.PlayerState;
             if (e.data === S.PLAYING) {
               setPlaying(true);
-              startPoll();
-            } else if (e.data === S.PAUSED) {
-              stopPoll();
             } else if (e.data === S.ENDED) {
-              stopPoll();
               setPlaying(false);
-              setProgress(0);
-              setCurrent(0);
               try {
                 e.target.seekTo(0, true);
               } catch {
@@ -277,15 +219,7 @@ export function MusicTrackPlayer({
     return () => {
       cancelled = true;
     };
-  }, [
-    playing,
-    track.platform,
-    videoId,
-    hostDomId,
-    startPoll,
-    stopPoll,
-    destroyPlayer,
-  ]);
+  }, [playing, track.platform, videoId, hostDomId, destroyPlayer]);
 
   // cleanup unmount
   useEffect(() => {
@@ -307,12 +241,11 @@ export function MusicTrackPlayer({
         } catch {
           /* ignore */
         }
-        stopPoll();
       }
     }
     window.addEventListener("nullysh:music-play", onOther);
     return () => window.removeEventListener("nullysh:music-play", onOther);
-  }, [playing, track.id, stopPoll]);
+  }, [playing, track.id]);
 
   const title =
     track.title?.trim() &&
@@ -330,7 +263,6 @@ export function MusicTrackPlayer({
         } catch {
           /* ignore */
         }
-        stopPoll();
         setPlaying(false);
       } else {
         setPlaying(true);
@@ -343,67 +275,6 @@ export function MusicTrackPlayer({
       return;
     }
     setPlaying((p) => !p);
-  }
-
-  function onSeek(e: { currentTarget: HTMLDivElement; clientX: number }) {
-    if (track.platform !== "youtube" || !playerRef.current || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = Math.min(
-      1,
-      Math.max(0, (e.clientX - rect.left) / rect.width)
-    );
-    const t = ratio * duration;
-    seekingRef.current = true;
-    setProgress(ratio);
-    setCurrent(t);
-    try {
-      playerRef.current.seekTo(t, true);
-      if (!playing) {
-        playerRef.current.playVideo();
-        setPlaying(true);
-      }
-    } catch {
-      /* ignore */
-    }
-    window.setTimeout(() => {
-      seekingRef.current = false;
-    }, 120);
-  }
-
-  function applyVolume(vol: number) {
-    const v = Math.min(100, Math.max(0, Math.round(vol)));
-    volumeRef.current = v;
-    setVolume(v);
-    try {
-      playerRef.current?.setVolume(v);
-      if (v === 0) {
-        playerRef.current?.mute();
-        setMuted(true);
-      } else if (muted) {
-        playerRef.current?.unMute();
-        setMuted(false);
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  function toggleMute() {
-    try {
-      if (muted || volume === 0) {
-        playerRef.current?.unMute();
-        const restore = volumeRef.current > 0 ? volumeRef.current : 80;
-        playerRef.current?.setVolume(restore);
-        setVolume(restore);
-        volumeRef.current = restore;
-        setMuted(false);
-      } else {
-        playerRef.current?.mute();
-        setMuted(true);
-      }
-    } catch {
-      setMuted((m) => !m);
-    }
   }
 
   const spotifySrc = useMemo(() => {
@@ -497,73 +368,7 @@ export function MusicTrackPlayer({
 
       </div>
 
-      {/* Timeline + volume (YouTube) */}
-      {track.platform === "youtube" && (playing || progress > 0) && (
-        <div className="border-t border-white/10 px-3 py-2">
-          <div
-            role="slider"
-            aria-valuemin={0}
-            aria-valuemax={Math.floor(duration) || 0}
-            aria-valuenow={Math.floor(current)}
-            aria-label="Posição da música"
-            tabIndex={0}
-            onClick={onSeek}
-            className="relative flex h-1.5 cursor-pointer items-center rounded-full bg-white/15"
-          >
-            <span
-              className="absolute inset-y-0 left-0 rounded-full bg-white transition-[width] duration-100 ease-linear"
-              style={{ width: `${progress * 100}%` }}
-            />
-            <span
-              className="absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-white shadow"
-              style={{ left: `calc(${progress * 100}% - 5px)` }}
-            />
-          </div>
-          <div className="mt-1.5 flex items-center gap-2">
-            <span className="w-8 shrink-0 text-[10px] tabular-nums text-white/40">
-              {formatTime(current)}
-            </span>
-
-            <div className="ml-auto flex min-w-0 items-center gap-1.5">
-              <button
-                type="button"
-                onClick={toggleMute}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:bg-white/10 hover:text-white"
-                aria-label={muted || volume === 0 ? "Ativar som" : "Mudo"}
-                title={muted || volume === 0 ? "Ativar som" : "Mudo"}
-              >
-                {muted || volume === 0 ? (
-                  <SpeakerSlash size={14} weight="fill" />
-                ) : (
-                  <SpeakerHigh size={14} weight="fill" />
-                )}
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
-                value={muted ? 0 : volume}
-                onChange={(e) => applyVolume(Number(e.target.value))}
-                aria-label="Volume"
-                className={cn(
-                  "h-1 w-16 cursor-pointer appearance-none rounded-full sm:w-20",
-                  "bg-white/15 accent-white",
-                  "[&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5",
-                  "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full",
-                  "[&::-webkit-slider-thumb]:bg-white"
-                )}
-              />
-            </div>
-
-            <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-white/40">
-              {ready || duration > 0 ? formatTime(duration) : "—:——"}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Spotify / SoundCloud: player oficial compacto (já traz timeline própria) */}
+      {/* Spotify / SoundCloud: player oficial compacto */}
       {spotifySrc && (
         <div className="border-t border-white/10 px-2 pb-2 pt-1.5">
           <iframe

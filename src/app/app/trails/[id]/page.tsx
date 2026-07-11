@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TagList } from "@/components/tag-chips";
 import { useAuth } from "@/hooks/use-auth";
-import { LEARNING_TRAILS } from "@/lib/catalog";
 import { useProgressStore } from "@/lib/progress-store";
+import { useTrailStore } from "@/lib/trail-store";
 import {
   ArrowLeft,
   CheckCircle,
@@ -25,7 +25,7 @@ const typeLabel = {
 export default function TrailDetailPage() {
   const params = useParams();
   const id = params.id as string;
-  const trail = LEARNING_TRAILS.find((t) => t.id === id);
+  const trail = useTrailStore((s) => s.trails.find((t) => t.id === id));
   const { isVip } = useAuth();
   const progress = useProgressStore((s) =>
     s.trails.find((t) => t.trailId === id)
@@ -61,10 +61,11 @@ export default function TrailDetailPage() {
   }
 
   const done = progress?.completedStepIds ?? [];
-  const pct = Math.round((done.length / trail.steps.length) * 100);
+  const total = trail.steps.length;
+  const pct = total ? Math.round((done.length / total) * 100) : 0;
 
   return (
-    <div className="app-page mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
+    <div className="app-page mx-auto min-w-0 max-w-2xl overflow-x-hidden px-4 py-8 sm:px-6 sm:py-10">
       <Link
         href="/app/trails"
         className="mb-6 inline-flex items-center gap-1.5 text-[13px] font-medium text-neutral-500 hover:text-[#1f1f1f]"
@@ -73,19 +74,19 @@ export default function TrailDetailPage() {
         Trilhas
       </Link>
 
-      <div className="mb-6 rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:p-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold tracking-tight text-[#1f1f1f] sm:text-2xl">
+      <div className="mb-6 min-w-0 overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:p-6">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h1 className="min-w-0 max-w-full break-words text-xl font-semibold tracking-tight text-[#1f1f1f] [overflow-wrap:anywhere] sm:text-2xl">
             {trail.title}
           </h1>
-          <Badge variant="outline" className="capitalize">
+          <Badge variant="outline" className="shrink-0 capitalize">
             {trail.level}
           </Badge>
         </div>
-        <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+        <p className="mt-2 max-w-full break-words text-sm leading-relaxed text-neutral-600 [overflow-wrap:anywhere]">
           {trail.description}
         </p>
-        <div className="mt-3">
+        <div className="mt-3 min-w-0">
           <TagList tags={trail.interestTags} />
         </div>
         <div className="mt-5">
@@ -104,13 +105,13 @@ export default function TrailDetailPage() {
         </div>
       </div>
 
-      <ol className="space-y-3">
+      <ol className="min-w-0 space-y-3">
         {trail.steps.map((step, i) => {
           const completed = done.includes(step.id);
           return (
             <li
               key={step.id}
-              className="flex gap-3 rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:p-5"
+              className="flex min-w-0 gap-3 overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:p-5"
             >
               <button
                 type="button"
@@ -126,7 +127,7 @@ export default function TrailDetailPage() {
                   <Circle size={24} className="text-neutral-300" />
                 )}
               </button>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[11px] font-semibold tabular-nums text-neutral-400">
                     {String(i + 1).padStart(2, "0")}
@@ -141,13 +142,13 @@ export default function TrailDetailPage() {
                 <h2
                   className={
                     completed
-                      ? "mt-1 text-sm font-semibold text-neutral-400 line-through"
-                      : "mt-1 text-sm font-semibold text-[#1f1f1f]"
+                      ? "mt-1 break-words text-sm font-semibold text-neutral-400 line-through [overflow-wrap:anywhere]"
+                      : "mt-1 break-words text-sm font-semibold text-[#1f1f1f] [overflow-wrap:anywhere]"
                   }
                 >
                   {step.title}
                 </h2>
-                <p className="mt-1 text-sm leading-relaxed text-neutral-600">
+                <p className="mt-1 max-w-full break-words text-sm leading-relaxed text-neutral-600 [overflow-wrap:anywhere]">
                   {step.description}
                 </p>
               </div>

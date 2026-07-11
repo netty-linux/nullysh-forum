@@ -10,12 +10,13 @@ export function Logo({
 }: {
   className?: string;
   href?: string;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   showWordmark?: boolean;
 }) {
   const sizes = {
-    sm: { mark: 28, text: "text-sm" },
-    md: { mark: 32, text: "text-[15px]" },
+    sm: { mark: 28, text: "text-sm", radius: "rounded-lg" },
+    md: { mark: 32, text: "text-[15px]", radius: "rounded-lg" },
+    lg: { mark: 44, text: "text-base", radius: "rounded-xl" },
   };
   const px = sizes[size].mark;
 
@@ -29,7 +30,8 @@ export function Logo({
     >
       <span
         className={cn(
-          "relative inline-flex shrink-0 overflow-hidden rounded-lg bg-white",
+          "relative inline-flex shrink-0 overflow-hidden bg-white",
+          sizes[size].radius,
           "ring-1 ring-black/5 shadow-[0_1px_2px_rgb(31_31_31/0.08)]",
           "transition-transform duration-200 group-active:scale-[0.97]"
         )}

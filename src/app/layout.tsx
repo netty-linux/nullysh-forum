@@ -29,10 +29,12 @@ export const metadata: Metadata = {
     "Comunidade VIP da Nullysh: vídeos, materiais, cursos, bate-papo e rede social para criadores e founders.",
   icons: {
     icon: [
-      { url: "/brand/logo.jpg", type: "image/jpeg", sizes: "any" },
-      { url: "/favicon.jpg", type: "image/jpeg" },
+      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
+      { url: "/favicon-48.png", type: "image/png", sizes: "48x48" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
     ],
-    apple: [{ url: "/brand/logo.jpg", type: "image/jpeg" }],
+    apple: [{ url: "/apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
+    shortcut: "/favicon.png",
   },
   openGraph: {
     title: "Nullysh Forum",

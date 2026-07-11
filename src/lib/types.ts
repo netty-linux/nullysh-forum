@@ -228,6 +228,8 @@ export interface Post {
   content: string;
   /** Imagem do post (data URL ou URL) */
   imageUrl?: string | null;
+  /** GIF do post (URL https Giphy) */
+  gifUrl?: string | null;
   /** Localização livre (ex.: São Paulo, BR) */
   location?: string | null;
   type: "discussion" | "news" | "tutorial" | "announcement";
@@ -250,6 +252,27 @@ export interface Comment {
   authorAvatar: string;
   content: string;
   createdAt: string;
+  /** ids de quem curtiu o comentário */
+  likedBy?: string[];
+  /**
+   * Comentário raiz: null.
+   * Resposta: id do comentário de topo da thread (1 nível de aninhamento).
+   */
+  parentId?: string | null;
+  /** Nome de quem está sendo respondido (exibição “Respondendo a X”) */
+  replyToName?: string | null;
+  replyToAuthorId?: string | null;
+  /** GIF no comentário (URL https Giphy) — opcional */
+  gifUrl?: string | null;
+}
+
+/** Repost (estilo X) — o post original aparece no feed do perfil de quem repostou */
+export interface PostRepost {
+  id: string;
+  userId: string;
+  userName: string;
+  postId: string;
+  createdAt: string;
 }
 
 export interface Video {
@@ -262,6 +285,11 @@ export interface Video {
   vipOnly: boolean;
   views: number;
   createdAt: string;
+  /** true quando o arquivo está no Telegram e tem stream proxy */
+  hasStream?: boolean;
+  mimeType?: string;
+  sizeBytes?: number;
+  hasThumb?: boolean;
 }
 
 export interface Material {
@@ -276,6 +304,15 @@ export interface Material {
   createdAt: string;
 }
 
+/** Tipo de payload de mídia no bate-papo */
+export type ChatMediaKind =
+  | "text"
+  | "image"
+  | "video"
+  | "audio"
+  | "sticker"
+  | "gif";
+
 export interface ChatMessage {
   id: string;
   channelId: string;
@@ -284,6 +321,29 @@ export interface ChatMessage {
   authorAvatar: string;
   content: string;
   createdAt: string;
+  /** Encaminhou um post do feed para o chat */
+  sharedPostId?: string | null;
+  /**
+   * Tipo da mensagem. Default implícito: text (ou shared_post se sharedPostId).
+   */
+  mediaKind?: ChatMediaKind | null;
+  /**
+   * URL da mídia: data URL, https (GIF Giphy) ou ref IndexedDB `idb:chat:…`
+   */
+  mediaUrl?: string | null;
+  mediaMime?: string | null;
+  /** Duração em segundos (áudio/vídeo) */
+  mediaDuration?: number | null;
+  /** Thumbnail opcional (vídeo) */
+  mediaThumbUrl?: string | null;
+  /** Largura/altura exibida (sticker/gif) */
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
+  /**
+   * Reações estilo Instagram: emoji → ids de quem reagiu
+   * ex.: { "❤️": ["u1","u2"], "😂": ["u3"] }
+   */
+  reactions?: Record<string, string[]>;
 }
 
 export interface ChatChannel {

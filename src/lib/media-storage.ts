@@ -37,6 +37,11 @@ export function mediaRef(userId: string, kind: "avatar" | "banner"): string {
   return `idb:${userId}:${kind}`;
 }
 
+/** Ref de mídia de mensagem do chat (áudio/imagem/vídeo) */
+export function chatMediaRef(messageKey: string, part: "main" | "thumb" = "main"): string {
+  return `idb:chat:${messageKey}:${part}`;
+}
+
 export async function mediaSet(key: string, value: string): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {

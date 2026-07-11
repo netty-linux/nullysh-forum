@@ -88,6 +88,8 @@ export default function PublicProfilePage() {
   // re-render quando blocks muda
   void blocks;
 
+  const allReposts = useForumStore((s) => s.reposts);
+
   const userPosts = useMemo(
     () =>
       posts
@@ -98,6 +100,46 @@ export default function PublicProfilePage() {
         ),
     [posts, id]
   );
+
+  /** Timeline: posts próprios + reposts deste perfil */
+  type ProfileFeedItem =
+    | { kind: "post"; post: (typeof posts)[0]; sortAt: string; key: string }
+    | {
+        kind: "repost";
+        post: (typeof posts)[0];
+        sortAt: string;
+        key: string;
+        repostMeta: { userId: string; userName: string; createdAt: string };
+      };
+
+  const timeline = useMemo(() => {
+    const items: ProfileFeedItem[] = userPosts.map((p) => ({
+      kind: "post" as const,
+      post: p,
+      sortAt: p.createdAt,
+      key: `p-${p.id}`,
+    }));
+    for (const r of allReposts.filter((x) => x.userId === id)) {
+      const original = posts.find((p) => p.id === r.postId);
+      if (!original) continue;
+      items.push({
+        kind: "repost",
+        post: original,
+        sortAt: r.createdAt,
+        key: `r-${r.id}`,
+        repostMeta: {
+          userId: r.userId,
+          userName: r.userName,
+          createdAt: r.createdAt,
+        },
+      });
+    }
+    items.sort(
+      (a, b) =>
+        new Date(b.sortAt).getTime() - new Date(a.sortAt).getTime()
+    );
+    return items;
+  }, [userPosts, allReposts, posts, id]);
 
   const equippedEmblem = useMemo(() => {
     if (!profile) return null;
@@ -548,7 +590,7 @@ export default function PublicProfilePage() {
       <div className="mt-5">
         {tab === "posts" && (
           <div className="space-y-3">
-            {userPosts.length === 0 ? (
+            {timeline.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-neutral-300 bg-white/80 px-6 py-14 text-center">
                 <p className="text-sm font-medium text-neutral-600">
                   Nenhuma publicação ainda
@@ -560,7 +602,17 @@ export default function PublicProfilePage() {
                 )}
               </div>
             ) : (
-              userPosts.map((post) => <PostCard key={post.id} post={post} />)
+              timeline.map((item) =>
+                item.kind === "repost" ? (
+                  <PostCard
+                    key={item.key}
+                    post={item.post}
+                    repostMeta={item.repostMeta}
+                  />
+                ) : (
+                  <PostCard key={item.key} post={item.post} />
+                )
+              )
             )}
           </div>
         )}

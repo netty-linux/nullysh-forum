@@ -16,7 +16,8 @@ import {
   SquaresFour,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 const typeIcon = {
   pdf: FilePdf,
@@ -36,6 +37,8 @@ const typeLabel = {
 
 export default function MaterialsPage() {
   const { isVip } = useAuth();
+  const searchParams = useSearchParams();
+  const focusId = searchParams.get("id");
   const [category, setCategory] = useState("Todos");
   const [toast, setToast] = useState("");
 
@@ -51,6 +54,19 @@ export default function MaterialsPage() {
         : materials.filter((m) => m.category === category),
     [category]
   );
+
+  // Deep-link da notificação: mostra o item e rola até ele
+  useEffect(() => {
+    if (!focusId) return;
+    const item = materials.find((m) => m.id === focusId);
+    if (item) setCategory("Todos");
+    const t = window.setTimeout(() => {
+      document
+        .getElementById(`material-${focusId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 180);
+    return () => window.clearTimeout(t);
+  }, [focusId]);
 
   function handleDownload(title: string, locked: boolean) {
     if (locked) return;
@@ -98,10 +114,16 @@ export default function MaterialsPage() {
         {list.map((m) => {
           const Icon = typeIcon[m.type];
           const locked = m.vipOnly && !isVip;
+          const focused = focusId === m.id;
           return (
             <div
               key={m.id}
-              className="card-interactive flex flex-col gap-4 rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:flex-row sm:items-center"
+              id={`material-${m.id}`}
+              className={
+                focused
+                  ? "card-interactive flex scroll-mt-24 flex-col gap-4 rounded-2xl border-2 border-rose-400 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-2 ring-rose-300/50 sm:flex-row sm:items-center"
+                  : "card-interactive flex scroll-mt-24 flex-col gap-4 rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:flex-row sm:items-center"
+              }
             >
               <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#1f1f1f] text-white">
                 <Icon size={20} weight="fill" />

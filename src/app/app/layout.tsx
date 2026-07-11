@@ -3,6 +3,7 @@
 import { AppFabs } from "@/components/app-fabs";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AuthGuard } from "@/components/auth-guard";
+import { NotificationsCenter } from "@/components/notifications-center";
 import { PageTransition } from "@/components/page-transition";
 import { List } from "@phosphor-icons/react";
 import { motion, useReducedMotion } from "motion/react";
@@ -31,7 +32,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="flex-1 text-sm font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
               Nullysh Forum
             </span>
+            {/* slot no mobile; o center fica num único mount abaixo */}
+            <div className="h-10 w-10" aria-hidden />
           </header>
+
+          {/* Uma única instância — canto superior direito (mobile + desktop).
+              Sem pointer-events-none no wrapper: o dropdown absoluto precisa
+              receber clique em toda a área (não só no botão 40×40). */}
+          <div className="fixed right-3 top-2.5 z-40 lg:right-5 lg:top-4">
+            <NotificationsCenter />
+          </div>
+
           <main className="flex min-h-0 flex-1 flex-col">
             <PageTransition>{children}</PageTransition>
           </main>
