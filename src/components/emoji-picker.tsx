@@ -61,6 +61,11 @@ type Props = {
   isAdmin?: boolean;
   panelRef?: RefObject<HTMLDivElement | null>;
   className?: string;
+  /**
+   * `dropdown` (padrão): absolute sob o botão.
+   * `inline`: no fluxo do layout (ex.: modal de postagem — evita recorte).
+   */
+  variant?: "dropdown" | "inline";
 };
 
 export function EmojiPicker({
@@ -74,6 +79,7 @@ export function EmojiPicker({
   isAdmin,
   panelRef,
   className,
+  variant = "dropdown",
 }: Props) {
   const emojis = useEmojiStore((s) => s.emojis);
   const createEmoji = useEmojiStore((s) => s.createEmoji);
@@ -176,7 +182,10 @@ export function EmojiPicker({
       role="dialog"
       aria-label="Seletor de emoji"
       className={cn(
-        "absolute left-0 top-full z-50 mt-2 w-[min(100vw-2rem,320px)] overflow-hidden rounded-2xl border border-neutral-200 bg-[#0f0f12] text-white shadow-[0_16px_48px_-12px_rgb(0_0_0/0.55)] dark:border-zinc-700",
+        "overflow-hidden rounded-2xl border border-neutral-200 bg-[#0f0f12] text-white shadow-[0_16px_48px_-12px_rgb(0_0_0/0.55)] dark:border-zinc-700",
+        variant === "inline"
+          ? "relative z-10 w-full"
+          : "absolute left-0 top-full z-50 mt-2 w-[min(100vw-2rem,320px)]",
         className
       )}
     >

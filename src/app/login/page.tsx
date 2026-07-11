@@ -54,7 +54,7 @@ export default function LoginPage() {
 
             <div className="p-6 sm:p-8">
               <p className="text-sm leading-relaxed text-neutral-600">
-                Acesse sua conta para o feed, comunidades e materiais.
+                Acesse sua conta para o feed, assuntos e materiais.
               </p>
 
               <form onSubmit={onSubmit} className="mt-6 space-y-4">

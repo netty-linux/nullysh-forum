@@ -62,7 +62,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/app/chat", label: "Bate-papo", icon: ChatsCircle },
       { href: "/app/profile", label: "Perfil", icon: UserCircle },
       { href: "/app/saved", label: "Salvos", icon: BookmarkSimple },
-      { href: "/app/communities", label: "Comunidades", icon: UsersThree },
+      { href: "/app/communities", label: "Assuntos", icon: UsersThree },
     ],
   },
   {

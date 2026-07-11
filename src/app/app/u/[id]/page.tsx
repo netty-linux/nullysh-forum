@@ -24,7 +24,6 @@ import {
   evaluateEmblems,
 } from "@/lib/emblems";
 import { useForumStore } from "@/lib/forum-store";
-import { isGifDataUrl } from "@/lib/image";
 import { useSocialStore } from "@/lib/social-store";
 import { displayHost, displayUsername, formatDate, normalizeUrl } from "@/lib/utils";
 import {
@@ -333,14 +332,6 @@ export default function PublicProfilePage() {
           ) : (
             <div className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-600 to-neutral-400" />
           )}
-          {profile.bannerUrl &&
-            isGifDataUrl(profile.bannerUrl) &&
-            profile.isVip && (
-              <span className="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white backdrop-blur-sm">
-                <CrownSimple size={10} weight="fill" className="text-amber-300" />
-                GIF
-              </span>
-            )}
         </div>
 
         {/* Body: avatar absoluto + espaço reservado */}

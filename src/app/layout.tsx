@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Nullysh Forum",
     description:
-      "Espaço colaborativo VIP: tutoriais, IAs, ferramentas, comunidades e networking.",
+      "Espaço colaborativo VIP: tutoriais, IAs, ferramentas, assuntos e networking.",
     type: "website",
     locale: "pt_BR",
   },

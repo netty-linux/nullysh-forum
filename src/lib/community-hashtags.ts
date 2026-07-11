@@ -96,7 +96,7 @@ export function validatePostHashtags(
       }
       return {
         ok: false,
-        error: `Você não pode usar #${community.hashtag} nesta comunidade.`,
+        error: `Você não pode usar #${community.hashtag} neste assunto.`,
       };
     }
     matched.push(community);
@@ -105,7 +105,7 @@ export function validatePostHashtags(
   return { ok: true, matched };
 }
 
-/** Comunidades cujas hashtags aparecem no conteúdo do post */
+/** Assuntos cujas hashtags aparecem no conteúdo do post */
 export function communitiesForPost(
   content: string,
   communities: Community[]

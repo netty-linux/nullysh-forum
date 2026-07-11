@@ -14,7 +14,7 @@ export const VIP_PLAN = {
   period: "mês",
   features: [
     "Acesso a todos os vídeos e tutoriais",
-    "Comunidades exclusivas Nullysh",
+    "Assuntos exclusivos Nullysh",
     "Materiais, templates e checklists",
     "Cursos e metodologias",
     "Bate-papo VIP em tempo real",
@@ -89,72 +89,8 @@ export const posts: Post[] = [];
 
 export const videos: Video[] = [];
 
-export const materials: Material[] = [
-  {
-    id: "m1",
-    title: "Checklist de validação de oferta",
-    description: "Passo a passo de 7 dias para testar demanda real.",
-    type: "checklist",
-    category: "Negócios",
-    size: "240 KB",
-    vipOnly: true,
-    downloads: 412,
-    createdAt: "2026-06-18T10:00:00.000Z",
-  },
-  {
-    id: "m2",
-    title: "Pack de prompts para copy",
-    description: "Biblioteca de prompts para headlines, VSL e emails.",
-    type: "template",
-    category: "IA",
-    size: "1.2 MB",
-    vipOnly: true,
-    downloads: 890,
-    createdAt: "2026-06-25T10:00:00.000Z",
-  },
-  {
-    id: "m3",
-    title: "Template Figma - Landing Minimal",
-    description: "Layout white minimalist com grid editorial pronto.",
-    type: "template",
-    category: "Design",
-    size: "8.4 MB",
-    vipOnly: true,
-    downloads: 567,
-    createdAt: "2026-07-01T10:00:00.000Z",
-  },
-  {
-    id: "m4",
-    title: "Guia gratuito: primeiros passos",
-    description: "Como navegar no forum e tirar o máximo do plano free.",
-    type: "pdf",
-    category: "Introdução",
-    size: "680 KB",
-    vipOnly: false,
-    downloads: 2104,
-    createdAt: "2026-06-10T10:00:00.000Z",
-  },
-  {
-    id: "m5",
-    title: "Curso: Nullysh Ops",
-    description: "Sistema de operação semanal para criadores e founders.",
-    type: "course",
-    category: "Metodologia",
-    vipOnly: true,
-    downloads: 334,
-    createdAt: "2026-07-03T10:00:00.000Z",
-  },
-  {
-    id: "m6",
-    title: "Diretório de ferramentas",
-    description: "Lista curada de IAs, analytics e builders recomendados.",
-    type: "link",
-    category: "Ferramentas",
-    vipOnly: true,
-    downloads: 721,
-    createdAt: "2026-07-06T10:00:00.000Z",
-  },
-];
+/** @deprecated Use `useMaterialStore` — catálogo vazio; admin cria via Painel ADM. */
+export const materials: Material[] = [];
 
 export const chatChannels: ChatChannel[] = [
   {

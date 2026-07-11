@@ -2,15 +2,18 @@
 
 import type {
   LearningTrail,
+  TrailAttachment,
   TrailLevel,
+  TrailLink,
   TrailStep,
   TrailStepType,
 } from "./catalog";
+import { isEmptyTrailHtml, sanitizeTrailHtml, stripHtml } from "./trail-html";
 import { uid } from "./utils";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 3;
 
 /** IDs das trilhas seed antigas — purgar do localStorage */
 const LEGACY_TRAIL_IDS = new Set([
@@ -20,21 +23,69 @@ const LEGACY_TRAIL_IDS = new Set([
   "trail-dev",
 ]);
 
+export type CreateTrailStepInput = {
+  /** Preserva id ao editar (progresso dos membros) */
+  id?: string;
+  title: string;
+  description: string;
+  type: TrailStepType;
+  duration?: string;
+  videoId?: string | null;
+  videoTitle?: string | null;
+  links?: TrailLink[];
+  attachments?: TrailAttachment[];
+};
+
 export type CreateTrailInput = {
   title: string;
   description: string;
   level: TrailLevel;
   vipOnly: boolean;
   interestTags: string[];
-  steps: Array<{
-    title: string;
-    description: string;
-    type: TrailStepType;
-    duration?: string;
-  }>;
+  steps: CreateTrailStepInput[];
+  links?: TrailLink[];
+  attachments?: TrailAttachment[];
   createdById: string;
   createdByName: string;
 };
+
+function normalizeLinks(raw: unknown): TrailLink[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const l = item as Partial<TrailLink>;
+      const label = (l.label || "").trim();
+      const url = (l.url || "").trim();
+      if (!label || !url) return null;
+      return {
+        id: l.id || uid("tlink"),
+        label: label.slice(0, 80),
+        url: url.slice(0, 500),
+      };
+    })
+    .filter((x): x is TrailLink => !!x)
+    .slice(0, 12);
+}
+
+function normalizeAttachments(raw: unknown): TrailAttachment[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const a = item as Partial<TrailAttachment>;
+      if (!a.id || !a.name || !a.storageKey) return null;
+      return {
+        id: a.id,
+        name: String(a.name).slice(0, 120),
+        size: typeof a.size === "number" ? a.size : 0,
+        mimeType: a.mimeType || "application/octet-stream",
+        storageKey: a.storageKey,
+      };
+    })
+    .filter((x): x is TrailAttachment => !!x)
+    .slice(0, 12);
+}
 
 function normalizeStep(
   raw: Partial<TrailStep> & { title?: string },
@@ -55,10 +106,16 @@ function normalizeStep(
     description: (raw.description || "").trim(),
     type,
     duration: raw.duration?.trim() || undefined,
+    videoId: raw.videoId?.trim() || null,
+    videoTitle: raw.videoTitle?.trim() || null,
+    links: normalizeLinks(raw.links),
+    attachments: normalizeAttachments(raw.attachments),
   };
 }
 
-function normalizeTrail(raw: Partial<LearningTrail> & { id: string }): LearningTrail | null {
+function normalizeTrail(
+  raw: Partial<LearningTrail> & { id: string }
+): LearningTrail | null {
   if (!raw.id || LEGACY_TRAIL_IDS.has(raw.id)) return null;
   const title = (raw.title || "").trim();
   if (!title) return null;
@@ -69,16 +126,19 @@ function normalizeTrail(raw: Partial<LearningTrail> & { id: string }): LearningT
   const steps = (raw.steps || [])
     .map((s, i) => normalizeStep(s, i))
     .filter((s): s is TrailStep => !!s);
+  const description = sanitizeTrailHtml(raw.description || "");
   return {
     id: raw.id,
     title,
-    description: (raw.description || "").trim(),
+    description,
     level,
     interestTags: Array.isArray(raw.interestTags)
       ? raw.interestTags.filter((t) => typeof t === "string" && t.trim())
       : [],
     steps,
     vipOnly: !!raw.vipOnly,
+    links: normalizeLinks(raw.links),
+    attachments: normalizeAttachments(raw.attachments),
     createdById: raw.createdById,
     createdByName: raw.createdByName,
     createdAt: raw.createdAt,
@@ -100,18 +160,16 @@ interface TrailState {
 }
 
 function validateInput(
-  input: Pick<
-    CreateTrailInput,
-    "title" | "description" | "steps"
-  >
+  input: Pick<CreateTrailInput, "title" | "description" | "steps">
 ): string | null {
   const title = input.title.trim();
   if (title.length < 3) return "Título com no mínimo 3 caracteres.";
   if (title.length > 80) return "Título com no máximo 80 caracteres.";
-  const description = input.description.trim();
-  if (description.length < 8) return "Descrição com no mínimo 8 caracteres.";
-  if (description.length > 400)
-    return "Descrição com no máximo 400 caracteres.";
+  const plain = stripHtml(input.description);
+  if (isEmptyTrailHtml(input.description) || plain.length < 8) {
+    return "Descrição com no mínimo 8 caracteres.";
+  }
+  if (plain.length > 8000) return "Descrição muito longa.";
   if (!input.steps.length) return "Adicione pelo menos 1 etapa.";
   for (let i = 0; i < input.steps.length; i++) {
     if (!input.steps[i].title.trim()) {
@@ -119,6 +177,34 @@ function validateInput(
     }
   }
   return null;
+}
+
+function mapSteps(
+  inputSteps: CreateTrailStepInput[],
+  existing?: TrailStep[]
+): TrailStep[] {
+  const existingById = new Map((existing || []).map((s) => [s.id, s]));
+  return inputSteps
+    .map((s, i) => {
+      const keepId =
+        (s.id && existingById.has(s.id) ? s.id : undefined) ||
+        existing?.[i]?.id;
+      return normalizeStep(
+        {
+          id: keepId,
+          title: s.title,
+          description: s.description,
+          type: s.type,
+          duration: s.duration,
+          videoId: s.videoId,
+          videoTitle: s.videoTitle,
+          links: s.links,
+          attachments: s.attachments,
+        },
+        i
+      );
+    })
+    .filter((s): s is TrailStep => !!s);
 }
 
 export const useTrailStore = create<TrailState>()(
@@ -131,24 +217,12 @@ export const useTrailStore = create<TrailState>()(
         if (err) return { ok: false, error: err };
 
         const now = new Date().toISOString();
-        const steps: TrailStep[] = input.steps
-          .map((s, i) =>
-            normalizeStep(
-              {
-                title: s.title,
-                description: s.description,
-                type: s.type,
-                duration: s.duration,
-              },
-              i
-            )
-          )
-          .filter((s): s is TrailStep => !!s);
+        const steps = mapSteps(input.steps);
 
         const trail: LearningTrail = {
           id: uid("trail"),
           title: input.title.trim(),
-          description: input.description.trim(),
+          description: sanitizeTrailHtml(input.description),
           level: input.level,
           interestTags: input.interestTags
             .map((t) => t.trim())
@@ -156,6 +230,8 @@ export const useTrailStore = create<TrailState>()(
             .slice(0, 8),
           steps,
           vipOnly: !!input.vipOnly,
+          links: normalizeLinks(input.links),
+          attachments: normalizeAttachments(input.attachments),
           createdById: input.createdById,
           createdByName: input.createdByName,
           createdAt: now,
@@ -172,25 +248,12 @@ export const useTrailStore = create<TrailState>()(
         const err = validateInput(input);
         if (err) return { ok: false, error: err };
 
-        const steps: TrailStep[] = input.steps
-          .map((s, i) =>
-            normalizeStep(
-              {
-                id: existing.steps[i]?.id,
-                title: s.title,
-                description: s.description,
-                type: s.type,
-                duration: s.duration,
-              },
-              i
-            )
-          )
-          .filter((s): s is TrailStep => !!s);
+        const steps = mapSteps(input.steps, existing.steps);
 
         const trail: LearningTrail = {
           ...existing,
           title: input.title.trim(),
-          description: input.description.trim(),
+          description: sanitizeTrailHtml(input.description),
           level: input.level,
           interestTags: input.interestTags
             .map((t) => t.trim())
@@ -198,6 +261,8 @@ export const useTrailStore = create<TrailState>()(
             .slice(0, 8),
           steps,
           vipOnly: !!input.vipOnly,
+          links: normalizeLinks(input.links),
+          attachments: normalizeAttachments(input.attachments),
           updatedAt: new Date().toISOString(),
         };
 

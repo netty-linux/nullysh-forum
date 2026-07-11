@@ -1,5 +1,7 @@
 "use client";
 
+import { AdminEventsPanel } from "@/components/admin-events-panel";
+import { AdminMaterialsPanel } from "@/components/admin-materials-panel";
 import { AdminTrailsPanel } from "@/components/admin-trails-panel";
 import { AdminVideosPanel } from "@/components/admin-videos-panel";
 import { Avatar } from "@/components/ui/avatar";
@@ -9,11 +11,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { VerifiedBadge } from "@/components/verified-badge";
 import { useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/lib/auth-store";
+import { useEventStore } from "@/lib/event-store";
+import { useMaterialStore } from "@/lib/material-store";
 import { useTrailStore } from "@/lib/trail-store";
 import { useVerificationStore } from "@/lib/verification-store";
 import type { VerificationRequest } from "@/lib/types";
 import { formatDate, formatRelative } from "@/lib/utils";
 import {
+  Books,
+  CalendarBlank,
   CheckCircle,
   Clock,
   FilmStrip,
@@ -34,9 +40,17 @@ export default function AdminPanelPage() {
   const requests = useVerificationStore((s) => s.requests);
   const reviewRequest = useVerificationStore((s) => s.reviewRequest);
   const trailsCount = useTrailStore((s) => s.trails.length);
+  const materialsCount = useMaterialStore((s) => s.materials.length);
+  const eventsCount = useEventStore((s) => s.events.length);
 
   const [tab, setTab] = useState<
-    "pending" | "history" | "users" | "trails" | "videos"
+    | "pending"
+    | "history"
+    | "users"
+    | "trails"
+    | "videos"
+    | "materials"
+    | "events"
   >("pending");
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [toast, setToast] = useState("");
@@ -143,17 +157,19 @@ export default function AdminPanelPage() {
           </h1>
         </div>
         <p className="mt-2 text-sm text-neutral-500 sm:text-base">
-          Verificações, membros, trilhas e vídeos (Telegram storage).
+          Verificações, membros, trilhas, eventos, materiais e vídeos.
         </p>
       </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         {[
           { label: "Pendentes", value: pending.length, icon: Clock },
           { label: "Verificados", value: verifiedCount, icon: CheckCircle },
           { label: "Membros", value: users.length, icon: UsersThree },
           { label: "Trilhas", value: trailsCount, icon: Path },
+          { label: "Eventos", value: eventsCount, icon: CalendarBlank },
+          { label: "Materiais", value: materialsCount, icon: Books },
           { label: "Vídeos", value: videosCount, icon: FilmStrip },
         ].map((s) => (
           <div
@@ -175,30 +191,34 @@ export default function AdminPanelPage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="mb-5 flex flex-wrap gap-1 rounded-xl bg-neutral-200/60 p-1">
-        {(
-          [
-            ["pending", `Pendentes (${pending.length})`],
-            ["history", "Histórico"],
-            ["users", "Membros"],
-            ["trails", `Trilhas (${trailsCount})`],
-            ["videos", `Vídeos (${videosCount})`],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={
-              tab === key
-                ? "chip min-w-[calc(50%-0.125rem)] flex-1 rounded-lg bg-white px-2 py-2 text-xs font-semibold text-[#1f1f1f] shadow-sm sm:min-w-0 sm:text-sm"
-                : "chip min-w-[calc(50%-0.125rem)] flex-1 rounded-lg px-2 py-2 text-xs font-medium text-neutral-500 hover:text-[#1f1f1f] sm:min-w-0 sm:text-sm"
-            }
-          >
-            {label}
-          </button>
-        ))}
+      {/* Tabs — uma linha só (scroll horizontal se faltar espaço) */}
+      <div className="mb-5 overflow-x-auto thin-scroll rounded-xl bg-neutral-200/60 p-1">
+        <div className="flex min-w-min flex-nowrap gap-1">
+          {(
+            [
+              ["pending", `Pendentes (${pending.length})`],
+              ["history", "Histórico"],
+              ["users", "Membros"],
+              ["trails", `Trilhas (${trailsCount})`],
+              ["events", `Eventos (${eventsCount})`],
+              ["materials", `Materiais (${materialsCount})`],
+              ["videos", `Vídeos (${videosCount})`],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={
+                tab === key
+                  ? "chip shrink-0 whitespace-nowrap rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#1f1f1f] shadow-sm sm:text-sm"
+                  : "chip shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium text-neutral-500 hover:text-[#1f1f1f] sm:text-sm"
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "pending" && (
@@ -418,6 +438,28 @@ export default function AdminPanelPage() {
 
       {tab === "trails" && user && (
         <AdminTrailsPanel
+          adminId={user.id}
+          adminName={user.name}
+          onToast={(msg) => {
+            setToast(msg);
+            setTimeout(() => setToast(""), 2800);
+          }}
+        />
+      )}
+
+      {tab === "events" && user && (
+        <AdminEventsPanel
+          adminId={user.id}
+          adminName={user.name}
+          onToast={(msg) => {
+            setToast(msg);
+            setTimeout(() => setToast(""), 2800);
+          }}
+        />
+      )}
+
+      {tab === "materials" && user && (
+        <AdminMaterialsPanel
           adminId={user.id}
           adminName={user.name}
           onToast={(msg) => {

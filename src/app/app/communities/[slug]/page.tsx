@@ -44,7 +44,7 @@ export default function CommunityDetailPage() {
   if (!community) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <p className="text-sm text-neutral-500">Comunidade não encontrada.</p>
+        <p className="text-sm text-neutral-500">Assunto não encontrado.</p>
         <Link href="/app/communities" className="mt-4 inline-block">
           <Button variant="outline">Voltar</Button>
         </Link>
@@ -67,11 +67,11 @@ export default function CommunityDetailPage() {
           className="mb-6 inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-950"
         >
           <ArrowLeft size={16} />
-          Comunidades
+          Assuntos
         </Link>
         <VipGate
           title={`${community.name} é VIP`}
-          description={`Esta comunidade é exclusiva VIP. Só membros VIP marcam #${community.hashtag} e leem os posts.`}
+          description={`Este assunto é exclusivo VIP. Só membros VIP marcam #${community.hashtag} e leem os posts.`}
         />
       </div>
     );
@@ -84,7 +84,7 @@ export default function CommunityDetailPage() {
         className="mb-6 inline-flex items-center gap-1.5 text-[13px] text-neutral-500 transition-colors hover:text-neutral-950"
       >
         <ArrowLeft size={15} />
-        Comunidades
+        Assuntos
       </Link>
 
       <div className="surface-card-quiet mb-7 p-6">

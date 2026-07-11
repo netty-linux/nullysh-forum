@@ -15,12 +15,14 @@ import {
 import { validatePostHashtags } from "@/lib/community-hashtags";
 import { useCommunityStore } from "@/lib/community-store";
 import { useForumStore } from "@/lib/forum-store";
+import { fetchTrendingGifs, searchGifs, type GifItem } from "@/lib/giphy";
 import { fileToObjectUrl, revokeObjectUrl } from "@/lib/image";
 import { maxPostChars } from "@/lib/post-limits";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { cn } from "@/lib/utils";
 import {
   Crop as CropIcon,
+  Gif,
   Image as ImageIcon,
   MagnifyingGlass,
   MapPin,
@@ -69,12 +71,18 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
 
   const [content, setContent] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [gifUrl, setGifUrl] = useState<string | null>(null);
+  const [gifPreview, setGifPreview] = useState<string | null>(null);
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
   const [location, setLocation] = useState("");
   const [locationQuery, setLocationQuery] = useState("");
   const [showLocation, setShowLocation] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showGif, setShowGif] = useState(false);
+  const [gifQ, setGifQ] = useState("");
+  const [gifs, setGifs] = useState<GifItem[]>([]);
+  const [gifLoading, setGifLoading] = useState(false);
   const [placeResults, setPlaceResults] = useState<PlaceSuggestion[]>([]);
   const [placeLoading, setPlaceLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
@@ -89,6 +97,8 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const emojiPanelRef = useRef<HTMLDivElement>(null);
   const emojiBtnRef = useRef<HTMLButtonElement>(null);
+  const gifPanelRef = useRef<HTMLDivElement>(null);
+  const gifBtnRef = useRef<HTMLButtonElement>(null);
   const cropSourceRef = useRef<string | null>(null);
   const searchAbort = useRef<AbortController | null>(null);
 
@@ -107,6 +117,8 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
   const reset = useCallback(() => {
     setContent("");
     setImageUrl(null);
+    setGifUrl(null);
+    setGifPreview(null);
     revokeObjectUrl(cropSourceRef.current);
     cropSourceRef.current = null;
     setCropSource(null);
@@ -115,6 +127,9 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     setLocationQuery("");
     setShowLocation(false);
     setShowEmoji(false);
+    setShowGif(false);
+    setGifQ("");
+    setGifs([]);
     setPlaceResults([]);
     setPlaceError("");
     setError("");
@@ -193,6 +208,29 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     };
   }, [locationQuery, showLocation, open]);
 
+  // Busca / trending de GIFs
+  useEffect(() => {
+    if (!showGif || !open) return;
+    let cancelled = false;
+    setGifLoading(true);
+    const t = window.setTimeout(async () => {
+      try {
+        const list = gifQ.trim()
+          ? await searchGifs(gifQ, 24)
+          : await fetchTrendingGifs(24);
+        if (!cancelled) setGifs(list);
+      } catch {
+        if (!cancelled) setGifs([]);
+      } finally {
+        if (!cancelled) setGifLoading(false);
+      }
+    }, gifQ.trim() ? 350 : 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [showGif, gifQ, open]);
+
   const insertAtCursor = useCallback(
     (chunk: string) => {
       const el = textareaRef.current;
@@ -226,6 +264,24 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     setCropSource(null);
   }
 
+  function clearGif() {
+    setGifUrl(null);
+    setGifPreview(null);
+  }
+
+  function pickGif(g: GifItem) {
+    // GIF e imagem se excluem (uma mídia principal por post)
+    setImageUrl(null);
+    releaseCropSource();
+    setCropOpen(false);
+    if (fileRef.current) fileRef.current.value = "";
+    setGifUrl(g.url);
+    setGifPreview(g.previewUrl || g.url);
+    setShowGif(false);
+    setShowEmoji(false);
+    setError("");
+  }
+
   function onPickImage(file: File | null) {
     if (!file) return;
     setError("");
@@ -237,12 +293,14 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
       setError("A imagem deve ter no máximo 4 MB.");
       return;
     }
+    clearGif();
     releaseCropSource();
     const url = fileToObjectUrl(file);
     cropSourceRef.current = url;
     setCropSource(url);
     setCropOpen(true);
     setShowEmoji(false);
+    setShowGif(false);
   }
 
   function clearImage() {
@@ -312,7 +370,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     e.preventDefault();
     if (!user || publishing) return;
     const text = content.trim();
-    if (!text && !imageUrl) return;
+    if (!text && !imageUrl && !gifUrl) return;
     if (content.length > maxChars) {
       setError(
         vipPlan
@@ -341,7 +399,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     }
 
     const matched = tagCheck.matched;
-    // Primeira comunidade marcada; se alguma for VIP, o post herda vipOnly no detalhe
+    // Primeiro assunto marcado; se algum for VIP, o post herda vipOnly no detalhe
     const primary = matched[0];
     const anyVipOnly = matched.some(
       (c) => c.access === "vip" || c.vipOnly
@@ -355,7 +413,8 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
         authorAvatar: user.avatar,
         authorAvatarUrl: user.avatarUrl,
         content: text || " ",
-        imageUrl,
+        imageUrl: gifUrl ? null : imageUrl,
+        gifUrl: gifUrl || null,
         location: location.trim() || null,
         type: "discussion",
         communityId: primary?.id,
@@ -373,7 +432,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
 
   const canPost =
     !!user &&
-    (content.trim().length > 0 || !!imageUrl) &&
+    (content.trim().length > 0 || !!imageUrl || !!gifUrl) &&
     content.length <= maxChars &&
     !publishing;
 
@@ -514,7 +573,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                     </div>
                   </div>
 
-                  {imageUrl && (
+                  {imageUrl && !gifUrl && (
                     <div
                       className={cn(
                         "relative mt-3 overflow-hidden rounded-2xl",
@@ -553,6 +612,108 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                           <X size={16} weight="bold" />
                         </button>
                       </div>
+                    </div>
+                  )}
+
+                  {gifUrl && (
+                    <div className="relative mt-3 inline-flex max-w-[min(100%,280px)]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={gifPreview || gifUrl}
+                        alt="GIF selecionado"
+                        className="max-h-52 max-w-full rounded-2xl object-cover ring-1 ring-black/5 dark:ring-white/10"
+                      />
+                      <button
+                        type="button"
+                        onClick={clearGif}
+                        className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur-sm transition hover:bg-black"
+                        aria-label="Remover GIF"
+                      >
+                        <X size={16} weight="bold" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Painéis no fluxo do body (para baixo) — evita recorte do overflow do modal */}
+                  {showEmoji && (
+                    <div className="mt-3">
+                      <EmojiPicker
+                        open={showEmoji}
+                        onClose={() => setShowEmoji(false)}
+                        onPickUnicode={(emoji) => {
+                          insertAtCursor(emoji);
+                        }}
+                        onPickCustom={(shortcode) => {
+                          insertAtCursor(shortcode);
+                        }}
+                        isVip={!!isVip}
+                        userId={user?.id}
+                        userName={user?.name}
+                        isAdmin={user?.role === "admin"}
+                        panelRef={emojiPanelRef}
+                        variant="inline"
+                      />
+                    </div>
+                  )}
+
+                  {showGif && (
+                    <div
+                      ref={gifPanelRef}
+                      className="mt-3 overflow-hidden rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_8px_24px_-12px_rgb(0_0_0/0.2)] dark:border-zinc-700 dark:bg-zinc-900"
+                    >
+                      <div className="mb-2 flex items-center gap-2">
+                        <div className="relative min-w-0 flex-1">
+                          <MagnifyingGlass
+                            size={14}
+                            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400"
+                          />
+                          <input
+                            value={gifQ}
+                            onChange={(e) => setGifQ(e.target.value)}
+                            placeholder="Buscar GIF…"
+                            className="h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 py-2 pl-8 pr-3 text-[13px] dark:border-zinc-700 dark:bg-zinc-800"
+                            autoFocus
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowGif(false)}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 dark:hover:bg-zinc-800"
+                          aria-label="Fechar GIFs"
+                        >
+                          <X size={16} weight="bold" />
+                        </button>
+                      </div>
+                      {gifLoading ? (
+                        <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-neutral-400">
+                          <SpinnerGap size={16} className="animate-spin" />
+                          Buscando GIFs…
+                        </p>
+                      ) : gifs.length === 0 ? (
+                        <p className="py-6 text-center text-[12px] text-neutral-400">
+                          Nenhum GIF encontrado. Tente outro termo.
+                        </p>
+                      ) : (
+                        <div className="grid max-h-52 grid-cols-3 gap-1.5 overflow-y-auto thin-scroll sm:grid-cols-4">
+                          {gifs.map((g) => (
+                            <button
+                              key={g.id}
+                              type="button"
+                              title={g.title}
+                              onClick={() => pickGif(g)}
+                              className="relative aspect-square overflow-hidden rounded-lg bg-neutral-100 ring-1 ring-black/5 transition hover:ring-2 hover:ring-sky-400/50 dark:bg-zinc-800"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={g.previewUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -697,6 +858,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                         type="button"
                         onClick={() => {
                           setShowEmoji(false);
+                          setShowGif(false);
                           fileRef.current?.click();
                         }}
                         className="inline-flex h-10 w-10 items-center justify-center rounded-full text-sky-500 transition hover:bg-sky-500/10"
@@ -708,7 +870,10 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                       <button
                         ref={emojiBtnRef}
                         type="button"
-                        onClick={() => setShowEmoji((v) => !v)}
+                        onClick={() => {
+                          setShowGif(false);
+                          setShowEmoji((v) => !v);
+                        }}
                         className={cn(
                           "inline-flex h-10 w-10 items-center justify-center rounded-full transition",
                           showEmoji
@@ -722,9 +887,29 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                         <Smiley size={22} />
                       </button>
                       <button
+                        ref={gifBtnRef}
                         type="button"
                         onClick={() => {
                           setShowEmoji(false);
+                          setShowGif((v) => !v);
+                        }}
+                        className={cn(
+                          "inline-flex h-10 w-10 items-center justify-center rounded-full transition",
+                          showGif || gifUrl
+                            ? "bg-sky-500/10 text-sky-500"
+                            : "text-sky-500 hover:bg-sky-500/10"
+                        )}
+                        title="GIF"
+                        aria-label="Adicionar GIF"
+                        aria-expanded={showGif}
+                      >
+                        <Gif size={22} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEmoji(false);
+                          setShowGif(false);
                           setShowLocation((v) => !v);
                         }}
                         className={cn(
@@ -739,28 +924,6 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                         <MapPin size={22} />
                       </button>
 
-                      {showEmoji && (
-                        <div
-                          ref={emojiPanelRef}
-                          className="absolute bottom-full left-0 z-20 mb-2"
-                        >
-                          <EmojiPicker
-                            open={showEmoji}
-                            onClose={() => setShowEmoji(false)}
-                            onPickUnicode={(emoji) => {
-                              insertAtCursor(emoji);
-                            }}
-                            onPickCustom={(shortcode) => {
-                              insertAtCursor(shortcode);
-                            }}
-                            isVip={!!isVip}
-                            userId={user?.id}
-                            userName={user?.name}
-                            isAdmin={user?.role === "admin"}
-                            panelRef={emojiPanelRef}
-                          />
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex items-center gap-3">

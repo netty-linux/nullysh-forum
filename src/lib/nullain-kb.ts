@@ -56,7 +56,7 @@ Conectar pessoas, compartilhar conhecimento e acelerar resultados com:
 • feed social e discussões  
 • trilhas de aprendizado  
 • match de mentorias  
-• eventos, comunidades, vídeos e materiais  
+• eventos, assuntos, vídeos e materiais  
 • bate-papo e DMs  
 
 É um hub de networking + conteúdo prático, com área free e benefícios extras no **Plano VIP**.`,
@@ -119,7 +119,7 @@ O que importa no dia a dia: o fórum está **vivo** — com feed, materiais em d
 2. **Trilhas** — siga trilhas e marque passos concluídos  
 3. **Mentorias** — complete interesses/objetivos no perfil e veja matches; use **Conversar** para abrir DM  
 4. **Eventos** — confira a agenda e faça RSVP  
-5. **Comunidades** — entre em salas temáticas (algumas VIP)  
+5. **Assuntos** — entre em salas temáticas (algumas VIP)  
 6. **Vídeos & Materiais** — consuma conteúdo; VIP libera o catálogo premium  
 7. **Bate-papo** — salas públicas + **Diretas** (DM)  
 8. **Perfil** — banner, avatar, bio, links, mentoria e verificação  
@@ -140,7 +140,7 @@ Dica: quanto mais completo o **perfil**, melhor o match de mentorias.`,
     answer: `O **Plano VIP** (no protótipo: **R$ 47/mês**, pagamento simulado) libera:
 
 • vídeos e materiais exclusivos  
-• comunidades e salas de chat VIP  
+• assuntos e salas de chat VIP  
 • mais links no perfil (free: 1 · VIP: 6)  
 • drops de materiais **a cada 6 horas** (free: a cada **24 horas**)  
 • acesso completo à rede e networking premium  
@@ -250,10 +250,10 @@ Abra **Trilhas** na sidebar, escolha uma trilha e avance no seu ritmo. Seu progr
 Pode filtrar e fazer **RSVP** nos que quiser participar. É ótimo para networking em tempo real com o ecossistema Nullysh.`,
   },
   {
-    keys: ["comunidade", "comunidades", "slug"],
-    answer: `**Comunidades** são grupos temáticos (Geral, IAs, Negócios, Design…).
+    keys: ["assunto", "assuntos", "comunidade", "comunidades", "slug"],
+    answer: `**Assuntos** são grupos temáticos (Geral, IAs, Negócios, Design…).
 
-Algumas são **VIP-only**. Entre pela sidebar **Comunidades**, explore posts da sala e participe das discussões do tema.`,
+Algumas são **VIP-only**. Entre pela sidebar **Assuntos**, explore posts da sala e participe das discussões do tema.`,
   },
   {
     keys: ["video", "vídeo", "videos", "vídeos", "aula"],
@@ -275,7 +275,7 @@ const FALLBACK = `Ainda estou aprendendo sobre isso, mas posso te guiar no essen
 
 • **Propósito** — comunidade VIP de conteúdo, mentoria e networking  
 • **Dono** — **Netty**  
-• **Como usar** — sidebar: Feed, Trilhas, Mentorias, Eventos, Comunidades, Vídeos, Materiais, Bate-papo, Perfil  
+• **Como usar** — sidebar: Feed, Trilhas, Mentorias, Eventos, Assuntos, Vídeos, Materiais, Bate-papo, Perfil  
 
 Tente perguntar de outro jeito, ou use um atalho rápido. Exemplos:  
 “Quem é o Netty?”, “Como usar o fórum?”, “O que tem no VIP?”`;

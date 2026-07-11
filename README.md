@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>A rede social da comunidade Nullysh.</strong><br />
-  Feed, perfis, comunidades por hashtag, VIP e conteúdo exclusivo — em um só lugar.
+  Feed, perfis, assuntos por hashtag, VIP e conteúdo exclusivo — em um só lugar.
 </p>
 
 <p align="center">
@@ -34,19 +34,19 @@ Publique pensamentos, imagens e localização. Curta, salve, comente e interaja 
 ### Perfis com identidade
 Nome público (`@username`), bio, banner (incl. GIF para VIP), links, interesses, objetivos, emblemas e molduras. O e-mail fica privado; o @ é o que o mundo vê.
 
-### Comunidades por hashtag
-Cada comunidade tem uma palavra-chave. Marque a tag no post e ele sincroniza automaticamente:
+### Assuntos por hashtag
+Cada assunto tem uma palavra-chave. Marque a tag no post e ele sincroniza automaticamente:
 
-| Comunidade | Tag | Quem marca | Quem lê |
+| Assunto | Tag | Quem marca | Quem lê |
 |------------|-----|------------|---------|
 | Anúncios Oficiais | `#staff` | Admin | Todos |
 | Geral | `#geral` | Todos | Todos |
 | Lounge VIP | `#vips` | VIP | VIP |
 
-VIPs podem **criar** novas comunidades e definir se free ou só VIP leem os posts. Ao digitar `#`, o autocomplete sugere as tags disponíveis.
+VIPs podem **criar** novos assuntos e definir se free ou só VIP leem os posts. Ao digitar `#`, o autocomplete sugere as tags disponíveis.
 
 ### VIP
-Acesso a lounge exclusivo, criação de comunidades, molduras de avatar, banners animados, músicas no perfil e mais. Free usa o núcleo; VIP desbloqueia a camada premium.
+Acesso a lounge exclusivo, criação de assuntos, molduras de avatar, banners animados, músicas no perfil e mais. Free usa o núcleo; VIP desbloqueia a camada premium.
 
 ### Social
 Seguir, lista de seguidores/seguindo, bloquear, stories, bate-papo e perfis públicos. Controles claros, sem confusão.
@@ -55,7 +55,7 @@ Seguir, lista de seguidores/seguindo, bloquear, stories, bate-papo e perfis púb
 Trilhas, mentorias, eventos, vídeos e materiais — o lado de aprendizado e operação da comunidade, ao lado da rede social.
 
 ### Staff & verificação
-Comunidades oficiais do staff, painel admin e selo de perfil verificado para reduzir fakes e manter a base confiável.
+Assuntos oficiais do staff, painel admin e selo de perfil verificado para reduzir fakes e manter a base confiável.
 
 ---
 
@@ -63,7 +63,7 @@ Comunidades oficiais do staff, painel admin e selo de perfil verificado para red
 
 ```
 Feed  ·  Trilhas  ·  Materiais  ·  Mentorias  ·  Eventos
-Comunidades  ·  Vídeos  ·  Bate-papo  ·  Perfil  ·  Salvos
+Assuntos  ·  Vídeos  ·  Bate-papo  ·  Perfil  ·  Salvos
 ```
 
 - **Light / Dark** com superfícies em camadas  
@@ -78,8 +78,8 @@ Comunidades  ·  Vídeos  ·  Bate-papo  ·  Perfil  ·  Salvos
 | | Free | VIP |
 |---|:---:|:---:|
 | Feed & perfis | ✓ | ✓ |
-| Comunidades abertas (`#geral`) | ✓ | ✓ |
-| Criar comunidades | | ✓ |
+| Assuntos abertos (`#geral`) | ✓ | ✓ |
+| Criar assuntos | | ✓ |
 | Marcar / ler Lounge VIP (`#vips`) | | ✓ |
 | Molduras, GIF banner, músicas | | ✓ |
 | Conteúdo premium (vídeos, materiais) | | ✓ |

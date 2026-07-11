@@ -35,7 +35,7 @@ export const COMMUNITY_ICONS = [
 export type CommunityIconName = (typeof COMMUNITY_ICONS)[number];
 
 /**
- * Comunidades oficiais do staff Nullysh.
+ * Assuntos oficiais do staff Nullysh.
  *
  * #staff  — só admin posta · free/VIP leem
  * #geral  — todos marcam e leem
@@ -103,7 +103,7 @@ export const STAFF_COMMUNITIES: Community[] = [
 
 const LEGACY_SEED_IDS = new Set(["c1", "c2", "c3", "c4", "c5"]);
 
-/** Hashtags reservadas das comunidades staff (não reutilizar) */
+/** Hashtags reservadas dos assuntos staff (não reutilizar) */
 export const RESERVED_HASHTAGS = new Set(
   STAFF_COMMUNITIES.map((c) => c.hashtag)
 );
@@ -116,12 +116,12 @@ function slugify(name: string): string {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
-      .slice(0, 48) || "comunidade"
+      .slice(0, 48) || "assunto"
   );
 }
 
 function defaultHashtagFromName(name: string): string {
-  return normalizeHashtag(name.replace(/\s+/g, "_")).slice(0, 24) || "comunidade";
+  return normalizeHashtag(name.replace(/\s+/g, "_")).slice(0, 24) || "assunto";
 }
 
 function normalizeCommunity(
@@ -214,7 +214,7 @@ export const useCommunityStore = create<CommunityState>()(
         if (!input.isVip) {
           return {
             ok: false,
-            error: "Apenas membros VIP podem criar comunidades.",
+            error: "Apenas membros VIP podem criar assuntos.",
           };
         }
         const name = input.name.trim();
@@ -248,7 +248,7 @@ export const useCommunityStore = create<CommunityState>()(
         if (RESERVED_HASHTAGS.has(hashtag)) {
           return {
             ok: false,
-            error: `#${hashtag} é reservada às comunidades oficiais do staff.`,
+            error: `#${hashtag} é reservada aos assuntos oficiais do staff.`,
           };
         }
 
@@ -256,7 +256,7 @@ export const useCommunityStore = create<CommunityState>()(
         if (existing.some((c) => normalizeHashtag(c.hashtag) === hashtag)) {
           return {
             ok: false,
-            error: `A hashtag #${hashtag} já está em uso por outra comunidade.`,
+            error: `A hashtag #${hashtag} já está em uso por outro assunto.`,
           };
         }
 

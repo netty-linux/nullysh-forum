@@ -1,8 +1,8 @@
 "use client";
 
 import { useAuth } from "@/hooks/use-auth";
-import { FORUM_EVENTS } from "@/lib/catalog";
-import { materials } from "@/lib/mock-data";
+import { useEventStore } from "@/lib/event-store";
+import { useMaterialStore } from "@/lib/material-store";
 import {
   type AppNotification,
   type NotificationType,
@@ -79,6 +79,8 @@ export function NotificationsCenter() {
   const markMaterialSeen = useNotificationStore((s) => s.markMaterialSeen);
   const markVideoSeen = useNotificationStore((s) => s.markVideoSeen);
   const markEventStartSeen = useNotificationStore((s) => s.markEventStartSeen);
+  const materials = useMaterialStore((s) => s.materials);
+  const events = useEventStore((s) => s.events);
   const rsvps = useProgressStore((s) => s.rsvps);
 
   const [open, setOpen] = useState(false);
@@ -203,6 +205,7 @@ export function NotificationsCenter() {
     };
   }, [
     user,
+    materials,
     catalogSeen.catalogBooted,
     catalogSeen.materials,
     catalogSeen.videos,
@@ -220,7 +223,7 @@ export function NotificationsCenter() {
       const now = Date.now();
       const myRsvps = rsvps.filter((r) => r.userId === user.id);
       for (const r of myRsvps) {
-        const ev = FORUM_EVENTS.find((e) => e.id === r.eventId);
+        const ev = events.find((e) => e.id === r.eventId);
         if (!ev) continue;
         if (catalogSeen.eventStarts.includes(ev.id)) continue;
         const start = new Date(ev.startsAt).getTime();
@@ -239,7 +242,7 @@ export function NotificationsCenter() {
     checkEvents();
     const id = window.setInterval(checkEvents, 30_000);
     return () => window.clearInterval(id);
-  }, [user, rsvps, catalogSeen.eventStarts, markEventStartSeen]);
+  }, [user, events, rsvps, catalogSeen.eventStarts, markEventStartSeen]);
 
   if (!user) return null;
 

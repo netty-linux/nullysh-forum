@@ -72,10 +72,10 @@ export default function CommunitiesPage() {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-[1.75rem] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-50 sm:text-[2rem]">
-            Comunidades
+            Assuntos
           </h1>
           <p className="mt-1.5 max-w-[42ch] text-[14px] leading-relaxed text-neutral-500">
-            Posts com a #hashtag da comunidade sincronizam automaticamente.
+            Posts com a #hashtag do assunto sincronizam automaticamente.
           </p>
         </div>
 
@@ -86,7 +86,7 @@ export default function CommunitiesPage() {
             className="shrink-0 rounded-full"
           >
             <Plus size={16} weight="bold" />
-            Criar comunidade
+            Criar assunto
           </Button>
         ) : (
           <Link href="/pricing">
@@ -96,7 +96,7 @@ export default function CommunitiesPage() {
               className="shrink-0 rounded-full"
             >
               <CrownSimple size={15} weight="fill" className="text-amber-500" />
-              VIP cria comunidades
+              VIP cria assuntos
             </Button>
           </Link>
         )}
@@ -105,17 +105,17 @@ export default function CommunitiesPage() {
       {communities.length === 0 ? (
         <EmptyState
           icon={<UsersThree size={28} weight="duotone" />}
-          title="Nenhuma comunidade ainda"
+          title="Nenhum assunto ainda"
           description={
             isVip
-              ? "Seja o primeiro VIP a criar um espaço para a comunidade."
-              : "Em breve o staff publicará espaços oficiais. VIP pode criar os seus."
+              ? "Seja o primeiro VIP a criar um assunto para a comunidade."
+              : "Em breve o staff publicará assuntos oficiais. VIP pode criar os seus."
           }
           action={
             isVip ? (
               <Button type="button" onClick={() => setCreateOpen(true)}>
                 <Plus size={16} weight="bold" />
-                Criar comunidade
+                Criar assunto
               </Button>
             ) : (
               <Link href="/pricing">

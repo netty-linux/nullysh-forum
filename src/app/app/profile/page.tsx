@@ -84,7 +84,6 @@ import {
   Plus,
   SealCheck,
   Smiley,
-  Trash,
   UserCircle,
   X,
 } from "@phosphor-icons/react";
@@ -95,7 +94,6 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 export default function ProfilePage() {
   const { user } = useAuth();
   const updateProfile = useAuthStore((s) => s.updateProfile);
-  const deleteAccount = useAuthStore((s) => s.deleteAccount);
   const logout = useAuthStore((s) => s.logout);
   const posts = useForumStore((s) => s.posts);
   const follows = useSocialStore((s) => s.follows);
@@ -554,22 +552,6 @@ export default function ProfilePage() {
     }
   }
 
-  function onDelete() {
-    if (
-      !confirm(
-        "Tem certeza que deseja excluir sua conta? Esta ação não pode ser desfeita no MVP."
-      )
-    ) {
-      return;
-    }
-    const result = deleteAccount();
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    router.push("/");
-  }
-
   const hasUnsavedChanges = useMemo(() => {
     if (!user) return false;
     if (changePassword && password.length > 0) return true;
@@ -668,12 +650,6 @@ export default function ProfilePage() {
               </span>
             </div>
           )}
-          {bannerUrl && isGifDataUrl(bannerUrl) && (
-            <span className="absolute left-3 top-3 z-20 inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white backdrop-blur-sm">
-              <CrownSimple size={10} weight="fill" className="text-amber-300" />
-              GIF · VIP
-            </span>
-          )}
           <button
             type="button"
             onClick={() => bannerInputRef.current?.click()}
@@ -686,11 +662,6 @@ export default function ProfilePage() {
           >
             <ImageIcon size={14} weight="bold" />
             Banner
-            {user.isVip && (
-              <span className="rounded bg-white/15 px-1 text-[9px] font-bold uppercase tracking-wide text-amber-200">
-                GIF
-              </span>
-            )}
           </button>
           <input
             ref={bannerInputRef}
@@ -1463,22 +1434,6 @@ export default function ProfilePage() {
           </Button>
         </div>
       </form>
-
-      <div className="mt-6 rounded-2xl border border-red-200 bg-red-50/40 p-6">
-        <h2 className="text-[13px] font-semibold text-red-800">Zona de perigo</h2>
-        <p className="mt-1 text-sm leading-relaxed text-red-700/80">
-          Exclui permanentemente sua conta deste navegador (CRUD delete).
-        </p>
-        <Button
-          type="button"
-          variant="danger"
-          className="mt-4"
-          onClick={onDelete}
-        >
-          <Trash size={16} weight="bold" />
-          Excluir conta
-        </Button>
-      </div>
 
       {/* Menu compacto no topo — discreto, segue o scroll até salvar */}
       {showStickySave && (

@@ -69,7 +69,6 @@ function VideosPageInner() {
   const [category, setCategory] = useState("Todos");
   const [videos, setVideos] = useState<VideoPublic[]>([]);
   const [loading, setLoading] = useState(true);
-  const [telegramOk, setTelegramOk] = useState(false);
   const [playing, setPlaying] = useState<VideoPublic | null>(null);
 
   useEffect(() => {
@@ -80,7 +79,6 @@ function VideosPageInner() {
         const res = await fetchVideos();
         if (cancelled) return;
         setVideos(res.videos || []);
-        setTelegramOk(!!res.telegramConfigured);
       } catch {
         if (!cancelled) setVideos([]);
       } finally {
@@ -138,11 +136,6 @@ function VideosPageInner() {
         </h1>
         <p className="mt-2 text-base text-neutral-600 dark:text-zinc-400">
           Tutoriais, aulas e tours da metodologia Nullysh.
-          {telegramOk && (
-            <span className="mt-1 block text-[13px] text-neutral-400">
-              Streaming via storage Telegram (proxy seguro).
-            </span>
-          )}
         </p>
       </div>
 

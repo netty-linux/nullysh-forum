@@ -20,7 +20,7 @@ const features = [
   },
   {
     icon: UsersThree,
-    title: "Comunidades",
+    title: "Assuntos",
     body: "Salas temáticas para networking e troca real.",
   },
   {
@@ -52,7 +52,7 @@ export default function HomePage() {
               O forum VIP para quem constrói com método
             </h1>
             <p className="mt-6 max-w-lg text-base leading-relaxed text-neutral-600 sm:text-lg">
-              Vídeos, materiais, IAs, comunidades e networking em um espaço
+              Vídeos, materiais, IAs, assuntos e networking em um espaço
               limpo, colaborativo e focado em execução.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -153,16 +153,16 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Comunidades */}
+      {/* Assuntos */}
       <section
-        id="comunidades"
+        id="assuntos"
         className="scroll-mt-20 border-b-2 border-black bg-white"
       >
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">
-                Comunidades
+                Assuntos
               </p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-black sm:text-4xl">
                 Salas dentro do forum
@@ -193,7 +193,7 @@ export default function HomePage() {
                   {c.description}
                 </p>
                 <p className="mt-4 border-t border-neutral-200 pt-3 text-xs font-medium text-neutral-500">
-                  {c.source === "staff" ? "Oficial · Staff" : "Comunidade"}
+                  {c.source === "staff" ? "Oficial · Staff" : "Assunto"}
                   {c.vipOnly ? " · VIP" : ""}
                 </p>
               </div>

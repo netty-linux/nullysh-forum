@@ -34,23 +34,55 @@ export function maxProfileLinks(isVip: boolean) {
 export type TrailStepType = "video" | "material" | "practice" | "live";
 export type TrailLevel = "iniciante" | "intermediário" | "avançado";
 
+/** Link personalizado na trilha ou etapa */
+export interface TrailLink {
+  id: string;
+  label: string;
+  url: string;
+}
+
+/**
+ * Anexo (arquivo). Conteúdo pesado fica em IndexedDB (`storageKey`);
+ * metadata fica no store persistido.
+ */
+export interface TrailAttachment {
+  id: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  /** Ref IndexedDB `idb:trail-attach:…` ou data URL pequena */
+  storageKey: string;
+}
+
 export interface TrailStep {
   id: string;
   title: string;
   description: string;
   type: TrailStepType;
   duration?: string;
+  /** Vídeo da página /app/videos (deep-link) */
+  videoId?: string | null;
+  videoTitle?: string | null;
+  links?: TrailLink[];
+  attachments?: TrailAttachment[];
 }
 
 export interface LearningTrail {
   id: string;
   title: string;
+  /**
+   * Descrição em HTML (editor rico estilo Substack).
+   * Versões antigas podem ser texto puro.
+   */
   description: string;
   level: TrailLevel;
   interestTags: string[];
   steps: TrailStep[];
   /** true = só VIP acessa a trilha completa */
   vipOnly: boolean;
+  /** Recursos da trilha (além das etapas) */
+  links?: TrailLink[];
+  attachments?: TrailAttachment[];
   /** Admin/staff que publicou */
   createdById?: string;
   createdByName?: string;
@@ -64,82 +96,29 @@ export interface LearningTrail {
  */
 export const LEARNING_TRAILS: LearningTrail[] = [];
 
+export type ForumEventType = "live" | "workshop" | "networking" | "ama";
+
 export interface ForumEvent {
   id: string;
   title: string;
   description: string;
-  type: "live" | "workshop" | "networking" | "ama";
+  type: ForumEventType;
   startsAt: string;
   durationMin: number;
   hostName: string;
   interestTags: string[];
   vipOnly: boolean;
   capacity: number;
+  createdById?: string;
+  createdByName?: string;
+  createdAt?: string;
 }
 
-export const FORUM_EVENTS: ForumEvent[] = [
-  {
-    id: "ev1",
-    title: "Live: Funis enxutos com um plano VIP",
-    description:
-      "Como estruturar oferta única, CTA e handoff sem confusão de tiers.",
-    type: "live",
-    startsAt: "2026-07-18T20:00:00.000Z",
-    durationMin: 60,
-    hostName: "Nullysh",
-    interestTags: ["Negócios Digitais", "Marketing", "Vendas"],
-    vipOnly: true,
-    capacity: 120,
-  },
-  {
-    id: "ev2",
-    title: "Workshop: agentes de IA no fluxo semanal",
-    description: "Monte um agente que pesquisa, resume e entrega brief.",
-    type: "workshop",
-    startsAt: "2026-07-22T19:00:00.000Z",
-    durationMin: 90,
-    hostName: "Nullysh · IA",
-    interestTags: ["IA", "Automação", "Produtividade"],
-    vipOnly: true,
-    capacity: 40,
-  },
-  {
-    id: "ev3",
-    title: "Networking aberto: mostre o que está construindo",
-    description: "Sala aberta para pitch de 2 min e feedback da galera.",
-    type: "networking",
-    startsAt: "2026-07-15T21:00:00.000Z",
-    durationMin: 75,
-    hostName: "Comunidade",
-    interestTags: ["Comunidade", "Negócios digitais", "Conteúdo"],
-    vipOnly: false,
-    capacity: 200,
-  },
-  {
-    id: "ev4",
-    title: "AMA: conteúdo e mídia",
-    description: "Perguntas e respostas sobre nicho, formato e monetização.",
-    type: "ama",
-    startsAt: "2026-07-25T18:30:00.000Z",
-    durationMin: 45,
-    hostName: "Nullysh · Conteúdo",
-    interestTags: ["Conteúdo", "Marketing", "Comunidade"],
-    vipOnly: false,
-    capacity: 80,
-  },
-  {
-    id: "ev5",
-    title: "Office hours de programação",
-    description: "Tire dúvidas de stack, arquitetura e ship de MVPs.",
-    type: "workshop",
-    startsAt: "2026-07-28T20:00:00.000Z",
-    durationMin: 60,
-    hostName: "Nullysh · Tech",
-    interestTags: ["Programação", "IA", "Automação"],
-    vipOnly: true,
-    capacity: 30,
-  },
-];
+/**
+ * Seeds estáticos removidos — eventos vêm do `useEventStore`
+ * (criados no Painel ADM). Mantido vazio por compat.
+ */
+export const FORUM_EVENTS: ForumEvent[] = [];
 
 export function interestOverlap(a: string[], b: string[]): string[] {
   const setB = new Set(b.map((x) => x.toLowerCase()));

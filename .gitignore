@@ -45,3 +45,12 @@ data/videos.json
 
 # Arquivos de vídeo locais (playback)
 data/media/
+
+# Local agent / IDE / tooling noise
+.playwright-mcp/
+.vscode/
+__pycache__/
+*.pyc
+
+# Scratch / one-off test scripts
+scripts/test-giphy*.mjs

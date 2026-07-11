@@ -21,7 +21,7 @@ function selectIsLoggedIn(s: { currentUserId: string | null }): boolean {
 export function VipGate({
   children,
   title = "Conteúdo exclusivo VIP",
-  description = "Assine o Plano VIP para liberar este conteúdo, comunidades e materiais.",
+  description = "Assine o Plano VIP para liberar este conteúdo, assuntos e materiais.",
   blur = true,
 }: {
   children?: React.ReactNode;

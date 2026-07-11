@@ -292,16 +292,27 @@ export interface Video {
   hasThumb?: boolean;
 }
 
+export type MaterialType =
+  | "pdf"
+  | "template"
+  | "checklist"
+  | "link"
+  | "course";
+
 export interface Material {
   id: string;
   title: string;
   description: string;
-  type: "pdf" | "template" | "checklist" | "link" | "course";
+  type: MaterialType;
   category: string;
   size?: string;
+  /** URL de download / link externo (opcional) */
+  url?: string | null;
   vipOnly: boolean;
   downloads: number;
   createdAt: string;
+  createdById?: string;
+  createdByName?: string;
 }
 
 /** Tipo de payload de mídia no bate-papo */

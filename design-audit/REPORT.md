@@ -47,7 +47,7 @@
 - **Salvos:** `EmptyState` padronizado.
 
 ### Pages touched (visual)
-Feed, Populares, Salvos, Trilhas, Mentorias, Eventos, Comunidades, Vídeos, Materiais, Chat, Perfil, Admin, Login — herdando tokens + headings display.
+Feed, Populares, Salvos, Trilhas, Mentorias, Eventos, Assuntos, Vídeos, Materiais, Chat, Perfil, Admin, Login — herdando tokens + headings display.
 
 ---
 

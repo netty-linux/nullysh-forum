@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { TagList } from "@/components/tag-chips";
 import { useAuth } from "@/hooks/use-auth";
 import { useProgressStore } from "@/lib/progress-store";
+import { stripHtml } from "@/lib/trail-html";
 import { useTrailStore } from "@/lib/trail-store";
 import {
   BookOpenText,
@@ -113,8 +114,8 @@ export default function TrailsPage() {
                       {trail.level}
                     </Badge>
                   </div>
-                  <p className="mt-1.5 max-w-full break-words text-sm leading-relaxed text-neutral-600 [overflow-wrap:anywhere]">
-                    {trail.description}
+                  <p className="mt-1.5 line-clamp-3 max-w-full break-words text-sm leading-relaxed text-neutral-600 [overflow-wrap:anywhere]">
+                    {stripHtml(trail.description)}
                   </p>
                   {trail.interestTags.length > 0 && (
                     <div className="mt-3 min-w-0">

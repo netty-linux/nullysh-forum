@@ -2,6 +2,7 @@
 
 import { normalizeUrl } from "@/lib/utils";
 import {
+  DiscordLogo,
   FacebookLogo,
   GithubLogo,
   InstagramLogo,
@@ -19,6 +20,7 @@ type SocialKind =
   | "youtube"
   | "x"
   | "github"
+  | "discord"
   | "generic";
 
 function detectSocial(url: string): SocialKind {
@@ -74,6 +76,15 @@ function detectSocial(url: string): SocialKind {
     ) {
       return "github";
     }
+    if (
+      host === "discord.com" ||
+      host.endsWith(".discord.com") ||
+      host === "discord.gg" ||
+      host === "discordapp.com" ||
+      host.endsWith(".discordapp.com")
+    ) {
+      return "discord";
+    }
   } catch {
     /* ignore */
   }
@@ -112,6 +123,11 @@ const MAP: Record<
   github: {
     Icon: GithubLogo,
     className: "text-[#24292F]",
+    weight: "fill",
+  },
+  discord: {
+    Icon: DiscordLogo,
+    className: "text-[#5865F2]",
     weight: "fill",
   },
   generic: {

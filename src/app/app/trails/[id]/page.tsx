@@ -1,19 +1,31 @@
 "use client";
 
+import { TrailRichHtml } from "@/components/trail-rich-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TagList } from "@/components/tag-chips";
 import { useAuth } from "@/hooks/use-auth";
+import type { TrailAttachment, TrailLink } from "@/lib/catalog";
 import { useProgressStore } from "@/lib/progress-store";
+import {
+  formatFileSize,
+  loadTrailAttachmentDataUrl,
+} from "@/lib/trail-attachments";
+import { sanitizeTrailHtml } from "@/lib/trail-html";
 import { useTrailStore } from "@/lib/trail-store";
 import {
   ArrowLeft,
   CheckCircle,
   Circle,
+  DownloadSimple,
+  FilmStrip,
+  Link as LinkIcon,
   Lock,
+  Paperclip,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useCallback } from "react";
 
 const typeLabel = {
   video: "Vídeo",
@@ -31,6 +43,28 @@ export default function TrailDetailPage() {
     s.trails.find((t) => t.trailId === id)
   );
   const toggleTrailStep = useProgressStore((s) => s.toggleTrailStep);
+
+  const downloadAttachment = useCallback(async (a: TrailAttachment) => {
+    try {
+      const dataUrl = await loadTrailAttachmentDataUrl(a.storageKey);
+      if (!dataUrl) {
+        window.alert("Arquivo não encontrado neste dispositivo.");
+        return;
+      }
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url;
+      el.download = a.name || "anexo";
+      document.body.appendChild(el);
+      el.click();
+      el.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      window.alert("Não foi possível baixar o arquivo.");
+    }
+  }, []);
 
   if (!trail) {
     return (
@@ -63,6 +97,9 @@ export default function TrailDetailPage() {
   const done = progress?.completedStepIds ?? [];
   const total = trail.steps.length;
   const pct = total ? Math.round((done.length / total) * 100) : 0;
+  const safeHtml = sanitizeTrailHtml(trail.description);
+  const trailLinks = trail.links || [];
+  const trailAttachments = trail.attachments || [];
 
   return (
     <div className="app-page mx-auto min-w-0 max-w-2xl overflow-x-hidden px-4 py-8 sm:px-6 sm:py-10">
@@ -83,12 +120,27 @@ export default function TrailDetailPage() {
             {trail.level}
           </Badge>
         </div>
-        <p className="mt-2 max-w-full break-words text-sm leading-relaxed text-neutral-600 [overflow-wrap:anywhere]">
-          {trail.description}
-        </p>
+        <div className="mt-3">
+          <TrailRichHtml html={safeHtml} />
+        </div>
         <div className="mt-3 min-w-0">
           <TagList tags={trail.interestTags} />
         </div>
+
+        {(trailLinks.length > 0 || trailAttachments.length > 0) && (
+          <div className="mt-5 space-y-3 border-t border-neutral-100 pt-4">
+            {trailLinks.length > 0 && (
+              <ResourceLinks list={trailLinks} />
+            )}
+            {trailAttachments.length > 0 && (
+              <ResourceAttachments
+                list={trailAttachments}
+                onDownload={downloadAttachment}
+              />
+            )}
+          </div>
+        )}
+
         <div className="mt-5">
           <div className="mb-1.5 flex justify-between text-[11px] font-medium text-neutral-400">
             <span>
@@ -108,6 +160,8 @@ export default function TrailDetailPage() {
       <ol className="min-w-0 space-y-3">
         {trail.steps.map((step, i) => {
           const completed = done.includes(step.id);
+          const stepLinks = step.links || [];
+          const stepAttachments = step.attachments || [];
           return (
             <li
               key={step.id}
@@ -122,7 +176,11 @@ export default function TrailDetailPage() {
                 }
               >
                 {completed ? (
-                  <CheckCircle size={24} weight="fill" className="text-emerald-600" />
+                  <CheckCircle
+                    size={24}
+                    weight="fill"
+                    className="text-emerald-600"
+                  />
                 ) : (
                   <Circle size={24} className="text-neutral-300" />
                 )}
@@ -148,9 +206,38 @@ export default function TrailDetailPage() {
                 >
                   {step.title}
                 </h2>
-                <p className="mt-1 max-w-full break-words text-sm leading-relaxed text-neutral-600 [overflow-wrap:anywhere]">
-                  {step.description}
-                </p>
+                {step.description ? (
+                  <p className="mt-1 max-w-full break-words text-sm leading-relaxed text-neutral-600 [overflow-wrap:anywhere]">
+                    {step.description}
+                  </p>
+                ) : null}
+
+                {step.videoId ? (
+                  <Link
+                    href={`/app/videos?id=${encodeURIComponent(step.videoId)}`}
+                    className="mt-3 inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-[13px] font-semibold text-[#1f1f1f] transition hover:border-[#1f1f1f] hover:bg-white"
+                  >
+                    <FilmStrip size={16} weight="fill" className="text-sky-600" />
+                    <span className="min-w-0 truncate">
+                      {step.videoTitle || "Assistir vídeo"}
+                    </span>
+                  </Link>
+                ) : null}
+
+                {(stepLinks.length > 0 || stepAttachments.length > 0) && (
+                  <div className="mt-3 space-y-2">
+                    {stepLinks.length > 0 && (
+                      <ResourceLinks list={stepLinks} compact />
+                    )}
+                    {stepAttachments.length > 0 && (
+                      <ResourceAttachments
+                        list={stepAttachments}
+                        onDownload={downloadAttachment}
+                        compact
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             </li>
           );
@@ -158,4 +245,86 @@ export default function TrailDetailPage() {
       </ol>
     </div>
   );
+}
+
+function ResourceLinks({
+  list,
+  compact,
+}: {
+  list: TrailLink[];
+  compact?: boolean;
+}) {
+  return (
+    <div>
+      <p
+        className={cnLabel(compact)}
+      >
+        <LinkIcon size={12} weight="bold" />
+        Links
+      </p>
+      <ul className="mt-1.5 flex flex-wrap gap-2">
+        {list.map((l) => (
+          <li key={l.id}>
+            <a
+              href={l.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-sky-700 transition hover:border-sky-300 hover:bg-sky-50"
+            >
+              <LinkIcon size={12} weight="bold" />
+              {l.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ResourceAttachments({
+  list,
+  onDownload,
+  compact,
+}: {
+  list: TrailAttachment[];
+  onDownload: (a: TrailAttachment) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div>
+      <p className={cnLabel(compact)}>
+        <Paperclip size={12} weight="bold" />
+        Anexos
+      </p>
+      <ul className="mt-1.5 space-y-1.5">
+        {list.map((a) => (
+          <li key={a.id}>
+            <button
+              type="button"
+              onClick={() => onDownload(a)}
+              className="flex w-full items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-[12px] transition hover:border-[#1f1f1f] hover:bg-white"
+            >
+              <span className="min-w-0 truncate font-medium text-[#1f1f1f]">
+                {a.name}
+                <span className="ml-1.5 font-normal text-neutral-400">
+                  {formatFileSize(a.size)}
+                </span>
+              </span>
+              <DownloadSimple
+                size={16}
+                weight="bold"
+                className="shrink-0 text-neutral-500"
+              />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function cnLabel(compact?: boolean) {
+  return compact
+    ? "flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400"
+    : "flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-400";
 }

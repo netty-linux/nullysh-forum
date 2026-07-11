@@ -27,7 +27,7 @@
 - Mesma base de post card; empty state de Salvos já desenhado (bom).
 - Populares: headings e chips com `text-xs` / bold 700.
 
-### Trilhas / Mentorias / Eventos / Comunidades / Vídeos / Materiais
+### Trilhas / Mentorias / Eventos / Assuntos / Vídeos / Materiais
 - Cards de catálogo: `card-interactive` com translateY hover.
 - Títulos sem `line-clamp`; weights 700 em labels.
 - Empty states parciais ou só texto.

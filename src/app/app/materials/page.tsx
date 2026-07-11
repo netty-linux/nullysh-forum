@@ -1,12 +1,14 @@
 "use client";
 
+import { EmptyState } from "@/components/empty-state";
 import { MaterialDropTimer } from "@/components/material-drop-timer";
 import { Button } from "@/components/ui/button";
 import { VipBadge } from "@/components/vip-gate";
 import { useAuth } from "@/hooks/use-auth";
-import { materials } from "@/lib/mock-data";
+import { useMaterialStore } from "@/lib/material-store";
 import { formatDate } from "@/lib/utils";
 import {
+  Books,
   DownloadSimple,
   FilePdf,
   FileText,
@@ -36,23 +38,25 @@ const typeLabel = {
 } as const;
 
 export default function MaterialsPage() {
-  const { isVip } = useAuth();
+  const { isVip, user } = useAuth();
   const searchParams = useSearchParams();
   const focusId = searchParams.get("id");
+  const materials = useMaterialStore((s) => s.materials);
+  const recordDownload = useMaterialStore((s) => s.recordDownload);
   const [category, setCategory] = useState("Todos");
   const [toast, setToast] = useState("");
 
   const categories = useMemo(() => {
     const set = new Set(materials.map((m) => m.category));
     return ["Todos", ...Array.from(set)];
-  }, []);
+  }, [materials]);
 
   const list = useMemo(
     () =>
       category === "Todos"
         ? materials
         : materials.filter((m) => m.category === category),
-    [category]
+    [category, materials]
   );
 
   // Deep-link da notificação: mostra o item e rola até ele
@@ -66,11 +70,29 @@ export default function MaterialsPage() {
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 180);
     return () => window.clearTimeout(t);
-  }, [focusId]);
+  }, [focusId, materials]);
 
-  function handleDownload(title: string, locked: boolean) {
+  // Se a categoria sumiu (material removido), volta para Todos
+  useEffect(() => {
+    if (category !== "Todos" && !categories.includes(category)) {
+      setCategory("Todos");
+    }
+  }, [category, categories]);
+
+  function handleDownload(
+    id: string,
+    title: string,
+    locked: boolean,
+    url?: string | null
+  ) {
     if (locked) return;
-    setToast(`Download simulado: ${title}`);
+    recordDownload(id);
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      setToast(`Abrindo: ${title}`);
+    } else {
+      setToast(`Download registrado: ${title}`);
+    }
     setTimeout(() => setToast(""), 2200);
   }
 
@@ -87,22 +109,24 @@ export default function MaterialsPage() {
 
       <MaterialDropTimer className="mb-6" />
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        {categories.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setCategory(c)}
-            className={
-              category === c
-                ? "chip rounded-full bg-[#1f1f1f] px-3 py-1.5 text-xs font-medium text-white shadow-sm"
-                : "chip rounded-full bg-white px-3 py-1.5 text-xs font-medium text-neutral-500 ring-1 ring-neutral-200 hover:text-[#1f1f1f]"
-            }
-          >
-            {c}
-          </button>
-        ))}
-      </div>
+      {materials.length > 0 && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {categories.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCategory(c)}
+              className={
+                category === c
+                  ? "chip rounded-full bg-[#1f1f1f] px-3 py-1.5 text-xs font-medium text-white shadow-sm"
+                  : "chip rounded-full bg-white px-3 py-1.5 text-xs font-medium text-neutral-500 ring-1 ring-neutral-200 hover:text-[#1f1f1f]"
+              }
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
 
       {toast && (
         <div className="mb-4 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 shadow-sm">
@@ -110,63 +134,86 @@ export default function MaterialsPage() {
         </div>
       )}
 
-      <div className="space-y-3">
-        {list.map((m) => {
-          const Icon = typeIcon[m.type];
-          const locked = m.vipOnly && !isVip;
-          const focused = focusId === m.id;
-          return (
-            <div
-              key={m.id}
-              id={`material-${m.id}`}
-              className={
-                focused
-                  ? "card-interactive flex scroll-mt-24 flex-col gap-4 rounded-2xl border-2 border-rose-400 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-2 ring-rose-300/50 sm:flex-row sm:items-center"
-                  : "card-interactive flex scroll-mt-24 flex-col gap-4 rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:flex-row sm:items-center"
-              }
-            >
-              <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#1f1f1f] text-white">
-                <Icon size={20} weight="fill" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-sm font-semibold text-black">{m.title}</h2>
-                  <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase text-neutral-600">
-                    {typeLabel[m.type]}
-                  </span>
-                  {m.vipOnly && <VipBadge />}
+      {list.length === 0 ? (
+        <EmptyState
+          icon={<Books size={28} weight="duotone" />}
+          title="Nenhum material ainda"
+          description={
+            user?.role === "admin"
+              ? "Crie materiais oficiais no Painel ADM → aba Materiais."
+              : "Em breve o staff publicará templates, checklists e guias aqui."
+          }
+          action={
+            user?.role === "admin" ? (
+              <Link href="/app/admin">
+                <Button size="sm">Abrir Painel ADM</Button>
+              </Link>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div className="space-y-3">
+          {list.map((m) => {
+            const Icon = typeIcon[m.type];
+            const locked = m.vipOnly && !isVip;
+            const focused = focusId === m.id;
+            return (
+              <div
+                key={m.id}
+                id={`material-${m.id}`}
+                className={
+                  focused
+                    ? "card-interactive flex scroll-mt-24 flex-col gap-4 rounded-2xl border-2 border-rose-400 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-2 ring-rose-300/50 sm:flex-row sm:items-center"
+                    : "card-interactive flex scroll-mt-24 flex-col gap-4 rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:flex-row sm:items-center"
+                }
+              >
+                <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#1f1f1f] text-white">
+                  <Icon size={20} weight="fill" />
                 </div>
-                <p className="mt-1 text-sm leading-relaxed text-neutral-600">
-                  {m.description}
-                </p>
-                <p className="mt-2 text-[11px] font-medium tabular-nums text-neutral-500">
-                  {m.category}
-                  {m.size ? ` · ${m.size}` : ""} ·{" "}
-                  {m.downloads.toLocaleString("pt-BR")} downloads ·{" "}
-                  {formatDate(m.createdAt)}
-                </p>
-              </div>
-              {locked ? (
-                <Link href="/pricing">
-                  <Button variant="outline" className="w-full sm:w-auto">
-                    <Lock size={14} weight="bold" />
-                    VIP
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-sm font-semibold text-black">
+                      {m.title}
+                    </h2>
+                    <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase text-neutral-600">
+                      {typeLabel[m.type]}
+                    </span>
+                    {m.vipOnly && <VipBadge />}
+                  </div>
+                  <p className="mt-1 text-sm leading-relaxed text-neutral-600">
+                    {m.description}
+                  </p>
+                  <p className="mt-2 text-[11px] font-medium tabular-nums text-neutral-500">
+                    {m.category}
+                    {m.size ? ` · ${m.size}` : ""} ·{" "}
+                    {m.downloads.toLocaleString("pt-BR")} downloads ·{" "}
+                    {formatDate(m.createdAt)}
+                  </p>
+                </div>
+                {locked ? (
+                  <Link href="/pricing">
+                    <Button variant="outline" className="w-full sm:w-auto">
+                      <Lock size={14} weight="bold" />
+                      VIP
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() =>
+                      handleDownload(m.id, m.title, locked, m.url)
+                    }
+                  >
+                    <DownloadSimple size={16} weight="bold" />
+                    {m.type === "link" || m.url ? "Abrir" : "Baixar"}
                   </Button>
-                </Link>
-              ) : (
-                <Button
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={() => handleDownload(m.title, locked)}
-                >
-                  <DownloadSimple size={16} weight="bold" />
-                  Baixar
-                </Button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

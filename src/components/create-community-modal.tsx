@@ -55,7 +55,7 @@ type Props = {
 };
 
 /**
- * Modal VIP para criar comunidade — mesmo idioma visual do FollowListModal.
+ * Modal VIP para criar assunto — mesmo idioma visual do FollowListModal.
  */
 export function CreateCommunityModal({
   open,
@@ -192,10 +192,10 @@ export function CreateCommunityModal({
                   id="create-community-title"
                   className="mt-0.5 text-base font-bold tracking-tight text-[#1f1f1f] dark:text-zinc-50"
                 >
-                  Nova comunidade
+                  Novo assunto
                 </h2>
                 <p className="mt-1 max-w-[36ch] text-[13px] leading-relaxed text-neutral-500">
-                  Posts com a #hashtag da comunidade aparecem aqui.
+                  Posts com a #hashtag do assunto aparecem aqui.
                 </p>
               </div>
               <button
@@ -246,7 +246,7 @@ export function CreateCommunityModal({
                     <span className="font-semibold text-[#1f1f1f] dark:text-zinc-200">
                       #{hashtag}
                     </span>{" "}
-                    entram nesta comunidade.
+                    entram neste assunto.
                   </p>
                 ) : null}
 
@@ -369,7 +369,7 @@ export function CreateCommunityModal({
                   loading={loading}
                   className="w-full rounded-full sm:w-auto sm:min-w-[9rem]"
                 >
-                  Criar comunidade
+                  Criar assunto
                 </Button>
               </div>
             </form>
