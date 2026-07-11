@@ -181,7 +181,17 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
       setShowForm(false);
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha no upload");
+      // Nunca engolir o motivo real (antes caía em "Falha no upload" genérico)
+      let msg = "Falha no upload";
+      if (err instanceof Error) {
+        msg = err.message || err.name || msg;
+      } else if (typeof err === "string") {
+        msg = err;
+      } else if (err && typeof err === "object" && "message" in err) {
+        msg = String((err as { message: unknown }).message);
+      }
+      console.error("[admin-videos] upload failed", err);
+      setError(msg);
     } finally {
       setUploading(false);
       setProgress("");

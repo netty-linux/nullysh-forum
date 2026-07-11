@@ -1,6 +1,9 @@
 /**
  * Compactação de vídeo no browser via ffmpeg.wasm.
  * Roda no PC do admin — não usa CPU do Worker Cloudflare.
+ *
+ * Importante: carregar core + worker via blob: URL (CDN),
+ * senão o bundler do Next quebra o worker em produção.
  */
 
 import { FFmpeg } from "@ffmpeg/ffmpeg";
@@ -32,8 +35,33 @@ export type ClientCompressResult = {
 let ffmpegSingleton: FFmpeg | null = null;
 let loadPromise: Promise<FFmpeg> | null = null;
 
+const FFMPEG_PKG = "0.12.15";
 const CORE_VERSION = "0.12.10";
+const FFMPEG_BASE = `https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@${FFMPEG_PKG}/dist/esm`;
 const CORE_BASE = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
+
+function formatError(e: unknown): string {
+  if (e instanceof Error) {
+    const msg = e.message || e.name || "Erro desconhecido";
+    // Erros comuns do worker/CDN
+    if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+      return `${msg} — verifique a rede/adblock (CDN do FFmpeg: jsDelivr).`;
+    }
+    if (/sharedarraybuffer|cross-origin|securityerror/i.test(msg)) {
+      return `${msg} — recarregue a página e tente de novo.`;
+    }
+    if (/memory|out of memory|oom|allocation/i.test(msg)) {
+      return "Memória insuficiente no navegador para compactar este vídeo. Feche abas ou use um arquivo menor (~50–80 MB).";
+    }
+    return msg;
+  }
+  if (typeof e === "string") return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return "Falha na compactação (erro desconhecido)";
+  }
+}
 
 async function getFfmpeg(
   onProgress?: (p: ClientCompressProgress) => void
@@ -44,22 +72,32 @@ async function getFfmpeg(
   loadPromise = (async () => {
     onProgress?.({
       phase: "loading",
-      message: "Baixando motor FFmpeg (1ª vez pode levar ~30s)…",
+      message: "Baixando motor FFmpeg no navegador (1ª vez ~20–40s)…",
     });
     const ffmpeg = new FFmpeg();
     ffmpeg.on("log", () => {
-      /* silencioso — logs poluem UI */
+      /* silencioso */
     });
-    await ffmpeg.load({
-      coreURL: await toBlobURL(
-        `${CORE_BASE}/ffmpeg-core.js`,
-        "text/javascript"
-      ),
-      wasmURL: await toBlobURL(
-        `${CORE_BASE}/ffmpeg-core.wasm`,
-        "application/wasm"
-      ),
-    });
+
+    try {
+      // classWorkerURL é obrigatório em Next/produção (worker do pacote não resolve)
+      const [coreURL, wasmURL, classWorkerURL] = await Promise.all([
+        toBlobURL(`${CORE_BASE}/ffmpeg-core.js`, "text/javascript"),
+        toBlobURL(`${CORE_BASE}/ffmpeg-core.wasm`, "application/wasm"),
+        toBlobURL(`${FFMPEG_BASE}/worker.js`, "text/javascript"),
+      ]);
+
+      await ffmpeg.load({
+        coreURL,
+        wasmURL,
+        classWorkerURL,
+      });
+    } catch (e) {
+      throw new Error(
+        `Não foi possível carregar o FFmpeg no navegador: ${formatError(e)}`
+      );
+    }
+
     ffmpegSingleton = ffmpeg;
     return ffmpeg;
   })();
@@ -68,7 +106,7 @@ async function getFfmpeg(
     return await loadPromise;
   } catch (e) {
     loadPromise = null;
-    throw e;
+    throw e instanceof Error ? e : new Error(formatError(e));
   }
 }
 
@@ -96,7 +134,6 @@ function probeDurationFromFile(file: File): Promise<number> {
 }
 
 function toMp4File(data: Uint8Array, name: string): File {
-  // Cópia do buffer para evitar SharedArrayBuffer / offset issues
   const copy = new Uint8Array(data.byteLength);
   copy.set(data);
   return new File([copy], name, { type: "video/mp4" });
@@ -118,12 +155,24 @@ export async function compressVideoInBrowser(
   const onProgress = opts?.onProgress;
   const originalBytes = input.size;
   const targetBytes = opts?.targetBytes ?? COMPRESS_TARGET_BYTES;
-  const hardMax = Math.min(TELEGRAM_MAX_BYTES, Math.max(targetBytes, TELEGRAM_GETFILE_MAX_BYTES));
+  const hardMax = Math.min(
+    TELEGRAM_MAX_BYTES,
+    Math.max(targetBytes, TELEGRAM_GETFILE_MAX_BYTES)
+  );
 
   if (originalBytes > MAX_ORIGINAL_BYTES) {
     throw new Error(
       `Arquivo maior que ${MAX_ORIGINAL_BYTES / (1024 * 1024)} MB. Envie um arquivo menor.`
     );
+  }
+
+  // Aviso prático: 127 MB+ em WASM estoura RAM fácil
+  if (originalBytes > 150 * 1024 * 1024) {
+    onProgress?.({
+      phase: "loading",
+      message:
+        "Arquivo bem grande — a compactação pode demorar e usar muita RAM…",
+    });
   }
 
   if (originalBytes <= targetBytes) {
@@ -142,11 +191,18 @@ export async function compressVideoInBrowser(
     };
   }
 
-  const ffmpeg = await getFfmpeg(onProgress);
+  let ffmpeg: FFmpeg;
+  try {
+    ffmpeg = await getFfmpeg(onProgress);
+  } catch (e) {
+    throw new Error(formatError(e));
+  }
+
   if (opts?.signal?.aborted) throw new Error("Compactação cancelada");
 
   const stem = stemFromName(input.name);
-  const inName = `in-${Date.now()}.${(input.name.split(".").pop() || "mp4").toLowerCase()}`;
+  const ext = (input.name.split(".").pop() || "mp4").toLowerCase();
+  const inName = `in-${Date.now()}.${ext}`;
   const outName = `${stem}-tg.mp4`;
 
   onProgress?.({
@@ -155,7 +211,19 @@ export async function compressVideoInBrowser(
   });
 
   const durationSec = await probeDurationFromFile(input);
-  await ffmpeg.writeFile(inName, await fetchFile(input));
+
+  onProgress?.({
+    phase: "probing",
+    message: "Carregando arquivo na memória do FFmpeg…",
+  });
+
+  try {
+    await ffmpeg.writeFile(inName, await fetchFile(input));
+  } catch (e) {
+    throw new Error(
+      `Falha ao carregar o vídeo no FFmpeg (${(originalBytes / (1024 * 1024)).toFixed(0)} MB). ${formatError(e)}. Tente um arquivo menor.`
+    );
+  }
 
   const targetBitsPerSec =
     durationSec > 1
@@ -171,7 +239,6 @@ export async function compressVideoInBrowser(
     { crf: 32, scale: "scale='min(960,iw)':-2" },
     { crf: 34, scale: "scale='min(854,iw)':-2" },
     { crf: 36, scale: "scale='min(640,iw)':-2" },
-    // Passos extras se o alvo for o getFile (~18 MB)
     { crf: 38, scale: "scale='min(640,iw)':-2" },
     { crf: 40, scale: "scale='min(480,iw)':-2" },
   ];
@@ -215,7 +282,7 @@ export async function compressVideoInBrowser(
         "-c:v",
         "libx264",
         "-preset",
-        "ultrafast", // wasm: prioriza tempo; quality vem do CRF/bitrate
+        "ultrafast",
         "-pix_fmt",
         "yuv420p",
         "-c:a",
@@ -239,13 +306,23 @@ export async function compressVideoInBrowser(
       args.push(outName);
 
       try {
-        await ffmpeg.exec(args);
+        const code = await ffmpeg.exec(args);
+        if (code !== 0) {
+          lastErr = `ffmpeg exit ${code}`;
+          continue;
+        }
       } catch (e) {
-        lastErr = e instanceof Error ? e.message : "ffmpeg falhou";
+        lastErr = formatError(e);
         continue;
       }
 
-      const data = await ffmpeg.readFile(outName);
+      let data: Uint8Array | string;
+      try {
+        data = await ffmpeg.readFile(outName);
+      } catch (e) {
+        lastErr = formatError(e);
+        continue;
+      }
       if (typeof data === "string") {
         lastErr = "saída inesperada";
         continue;
@@ -301,6 +378,6 @@ export async function compressVideoInBrowser(
   }
 
   throw new Error(
-    `Não foi possível compactar abaixo de ${(targetBytes / (1024 * 1024)).toFixed(0)} MB (${lastErr}). Tente um trecho menor.`
+    `Não foi possível compactar abaixo de ${(targetBytes / (1024 * 1024)).toFixed(0)} MB (${lastErr}). Tente um trecho mais curto ou resolução menor.`
   );
 }

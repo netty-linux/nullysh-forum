@@ -92,21 +92,43 @@ export async function uploadVideo(opts: {
     form.append("durationSec", String(opts.durationSec));
   }
 
-  const res = await fetch("/api/videos", {
-    method: "POST",
-    headers: adminHeaders(opts.admin),
-    body: form,
-  });
-  const data = (await res.json()) as {
-    ok: boolean;
+  let res: Response;
+  try {
+    res = await fetch("/api/videos", {
+      method: "POST",
+      headers: adminHeaders(opts.admin),
+      body: form,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      error: `Rede falhou ao enviar o vídeo: ${msg}. Tente de novo (arquivo final deve ter ≤ 50 MB).`,
+    };
+  }
+
+  const raw = await res.text();
+  let data: {
+    ok?: boolean;
     video?: VideoPublic;
     error?: string;
     compressed?: boolean;
     originalBytes?: number;
     finalBytes?: number;
   };
+  try {
+    data = JSON.parse(raw) as typeof data;
+  } catch {
+    return {
+      ok: false,
+      error: `Servidor respondeu HTTP ${res.status} (não-JSON): ${raw.slice(0, 180) || res.statusText}`,
+    };
+  }
   if (!data.ok || !data.video) {
-    return { ok: false, error: data.error || `HTTP ${res.status}` };
+    return {
+      ok: false,
+      error: data.error || `HTTP ${res.status} ao publicar vídeo`,
+    };
   }
   return {
     ok: true,
