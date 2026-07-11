@@ -1,15 +1,20 @@
 import { isTelegramConfigured, telegramGetMe } from "@/lib/telegram/bot";
 import { listPublicVideos } from "@/lib/videos/catalog";
 import {
-  hasFfmpeg,
-  MAX_UPLOAD_BYTES,
+  getDataKv,
+  getVideosBucket,
+} from "@/lib/videos/cloud-bindings";
+import {
+  COMPRESS_TARGET_BYTES,
+  MAX_ORIGINAL_BYTES,
+  TELEGRAM_GETFILE_MAX_BYTES,
   TELEGRAM_MAX_BYTES,
-} from "@/lib/videos/compress";
+} from "@/lib/videos/limits";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-/** Status da integração Telegram (sem expor o token). */
+/** Status da integração Telegram + compressão client-side (sem expor o token). */
 export async function GET() {
   const configured = isTelegramConfigured();
   let botUsername: string | null = null;
@@ -27,7 +32,12 @@ export async function GET() {
   }
 
   const videos = await listPublicVideos();
-  const ffmpeg = await hasFfmpeg();
+  const r2 = !!(await getVideosBucket());
+  const kv = !!(await getDataKv());
+  // Sem R2 o player depende do getFile (~20 MB) → mira 18 MB no client
+  const compressTargetBytes = r2
+    ? COMPRESS_TARGET_BYTES
+    : TELEGRAM_GETFILE_MAX_BYTES;
 
   return NextResponse.json({
     ok: true,
@@ -36,11 +46,15 @@ export async function GET() {
     botUsername,
     error,
     count: videos.length,
-    /** Limite do Telegram após compactar */
     maxUploadMb: TELEGRAM_MAX_BYTES / (1024 * 1024),
-    /** Original aceito no formulário (compacta no server) */
-    maxOriginalMb: MAX_UPLOAD_BYTES / (1024 * 1024),
-    ffmpegAvailable: ffmpeg,
-    autoCompress: ffmpeg,
+    maxOriginalMb: MAX_ORIGINAL_BYTES / (1024 * 1024),
+    compressTargetMb: compressTargetBytes / (1024 * 1024),
+    compressTargetBytes,
+    ffmpegAvailable: true,
+    autoCompress: true,
+    compressEngine: "ffmpeg.wasm",
+    playbackStorage: r2 ? "r2" : kv ? "telegram+kv" : "local-or-telegram",
+    hasR2: r2,
+    hasKv: kv,
   });
 }

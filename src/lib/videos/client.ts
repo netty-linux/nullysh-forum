@@ -18,6 +18,12 @@ export type VideoConfigResponse = {
   maxOriginalMb?: number;
   ffmpegAvailable?: boolean;
   autoCompress?: boolean;
+  compressEngine?: string;
+  playbackStorage?: string;
+  compressTargetMb?: number;
+  compressTargetBytes?: number;
+  hasR2?: boolean;
+  hasKv?: boolean;
 };
 
 export function adminHeaders(admin: {
@@ -56,6 +62,10 @@ export async function uploadVideo(opts: {
   duration?: string;
   thumb?: File | null;
   admin: { id: string; name: string; role?: string };
+  /** true se o file já passou pelo ffmpeg.wasm no browser */
+  clientCompressed?: boolean;
+  originalBytes?: number;
+  durationSec?: number;
 }): Promise<
   | {
       ok: true;
@@ -74,6 +84,13 @@ export async function uploadVideo(opts: {
   form.append("vipOnly", opts.vipOnly ? "true" : "false");
   if (opts.duration) form.append("duration", opts.duration);
   if (opts.thumb) form.append("thumb", opts.thumb);
+  if (opts.clientCompressed) form.append("clientCompressed", "true");
+  if (opts.originalBytes != null) {
+    form.append("originalBytes", String(opts.originalBytes));
+  }
+  if (opts.durationSec != null && opts.durationSec > 0) {
+    form.append("durationSec", String(opts.durationSec));
+  }
 
   const res = await fetch("/api/videos", {
     method: "POST",

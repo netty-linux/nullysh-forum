@@ -51,8 +51,12 @@ export async function assertVideoAdmin(
     /* ignore */
   }
 
-  // Desenvolvimento local (store de auth no browser)
-  if (process.env.NODE_ENV === "development") {
+  // Dev local OU preview cloud com mock auth (ALLOW_HEADER_ADMIN=1)
+  const allowHeaderAdmin =
+    process.env.NODE_ENV === "development" ||
+    process.env.ALLOW_HEADER_ADMIN === "1" ||
+    process.env.ALLOW_HEADER_ADMIN === "true";
+  if (allowHeaderAdmin) {
     const role = req.headers.get("x-admin-role")?.trim();
     const adminId = req.headers.get("x-admin-id")?.trim();
     if (role === "admin" && adminId) {

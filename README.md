@@ -94,8 +94,42 @@ Assuntos  ·  Vídeos  ·  Bate-papo  ·  Perfil  ·  Salvos
 | UI | Tailwind CSS 4 · Phosphor · Motion |
 | Estado | Zustand (persist) |
 | Backend | Supabase Auth · Profiles · Storage |
-| Vídeos | Telegram Bot API (storage) + proxy Next.js |
+| Vídeos | Telegram Bot API (storage) + ffmpeg.wasm + KV/R2 |
+| Host | Cloudflare Workers (OpenNext) — free |
 | Design | Tokens em `globals.css` · Inter + Satoshi |
+
+---
+
+## Preview na cloud (Cloudflare Workers)
+
+**URL:** https://nullysh-forum.ngdigitalsuporte.workers.dev
+
+Fluxo de desenvolvimento recomendado (sem `next dev` comendo RAM o dia todo):
+
+1. Edite o código localmente
+2. `git push` → ou `npm run deploy:wsl` (build no Linux/WSL)
+3. Valide na URL do Worker
+
+> OpenNext **não é estável no Windows**. Use `npm run deploy:wsl` ou o workflow GitHub Actions (`.github/workflows/deploy-cloudflare.yml`).
+
+### Secrets do Worker
+Já configuráveis com `wrangler secret put`:
+
+| Secret | Uso |
+|--------|-----|
+| `TELEGRAM_BOT_TOKEN` | Bot storage de vídeos |
+| `TELEGRAM_STORAGE_CHAT_ID` | Chat/canal do bot |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase |
+| `ALLOW_HEADER_ADMIN=1` | Admin mock no preview (headers) |
+| `ADMIN_API_SECRET` | (opcional) auth rígida de mutações |
+
+### Storage free hoje
+- **Catálogo de vídeos:** Workers KV (`NULLYSH_DATA`)
+- **Arquivo:** Telegram (`file_id`)
+- **Compactação:** **ffmpeg.wasm no browser** do admin (não no Worker)
+- **Alvo sem R2:** ~18 MB (limite prático do `getFile` do Telegram para o player)
+- **Com R2** (ative no dashboard e descomente no `wrangler.jsonc`): playback até ~48 MB
 
 ---
 
@@ -104,8 +138,8 @@ Assuntos  ·  Vídeos  ·  Bate-papo  ·  Perfil  ·  Salvos
 O **Bot do Telegram** guarda o arquivo; o fórum guarda metadados + `file_id`.
 
 1. Admin sobe o vídeo no **Painel ADM → Vídeos**
-2. `POST /api/videos` envia ao chat de storage (`sendVideo`)
-3. Metadados em `data/videos.json`
+2. Se grande → **ffmpeg.wasm compacta no navegador**
+3. `POST /api/videos` envia ao chat de storage (`sendVideo`) + grava catálogo (KV/R2/FS)
 4. Membros assistem em `/app/videos` via `GET /api/videos/:id/stream` (token nunca no browser)
 
 ### Setup
@@ -132,6 +166,12 @@ Abra [http://localhost:3000](http://localhost:3000).
 Com Supabase configurado (`NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`), auth e mídia usam o projeto remoto. Sem a key, o app opera em modo local.
 
 Migrations SQL: pasta `supabase/migrations/`.
+
+Deploy cloud (Windows + WSL):
+
+```bash
+npm run deploy:wsl
+```
 
 ---
 

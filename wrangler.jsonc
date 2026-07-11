@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nullysh-forum",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-05-05",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "nullysh-forum"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "NULLYSH_DATA",
+      "id": "9982b19bc1634effa79a756043be2c4f"
+    }
+  ],
+  // R2 opcional — habilite no dashboard e descomente:
+  // "r2_buckets": [
+  //   {
+  //     "binding": "VIDEOS_BUCKET",
+  //     "bucket_name": "nullysh-forum-videos"
+  //   }
+  // ],
+  "observability": {
+    "enabled": true
+  }
+}

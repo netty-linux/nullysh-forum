@@ -111,22 +111,49 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
     }
     if (!config?.configured) {
       setError(
-        "Telegram não configurado. Adicione TELEGRAM_BOT_TOKEN e TELEGRAM_STORAGE_CHAT_ID no .env.local"
+        "Telegram não configurado. Defina TELEGRAM_BOT_TOKEN e TELEGRAM_STORAGE_CHAT_ID no ambiente."
       );
       return;
     }
 
     setUploading(true);
-    const needsCompress =
-      file.size > 48 * 1024 * 1024 && !!config?.autoCompress;
-    setProgress(
-      needsCompress
-        ? "Compactando com FFmpeg (pode levar alguns minutos)…"
-        : "Enviando para o Telegram…"
-    );
+    const originalBytes = file.size;
+    let uploadFile = file;
+    let clientCompressed = false;
+    let durationSec = 0;
+
     try {
+      // Alvo: 48 MB com R2; ~18 MB se playback for só Telegram getFile
+      const targetBytes =
+        config.compressTargetBytes ??
+        (config.hasR2 ? 48 : 18) * 1024 * 1024;
+
+      if (file.size > targetBytes) {
+        setProgress("Carregando FFmpeg no navegador…");
+        const { compressVideoInBrowser } = await import(
+          "@/lib/videos/compress-client"
+        );
+        const compressed = await compressVideoInBrowser(file, {
+          targetBytes,
+          onProgress: (p) => {
+            const pct = p.ratio != null ? ` ${p.ratio}%` : "";
+            const step =
+              p.attempt && p.attempts
+                ? ` [${p.attempt}/${p.attempts}]`
+                : "";
+            setProgress(`${p.message}${step}${pct}`);
+          },
+        });
+        uploadFile = compressed.file;
+        clientCompressed = compressed.compressed;
+        durationSec = compressed.durationSec;
+      } else {
+        clientCompressed = true;
+      }
+
+      setProgress("Enviando para o Telegram + storage de playback…");
       const result = await uploadVideo({
-        file,
+        file: uploadFile,
         title: title.trim(),
         description: description.trim(),
         category,
@@ -134,6 +161,9 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
         duration: duration.trim() || undefined,
         thumb,
         admin,
+        clientCompressed: true,
+        originalBytes,
+        durationSec: durationSec || undefined,
       });
       if (!result.ok) {
         setError(result.error);
@@ -202,17 +232,16 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
             </p>
             {config?.configured && config.botOk ? (
               <p className="mt-0.5 text-[13px] text-neutral-600 dark:text-zinc-400">
-                Bot {config.botUsername || "conectado"} · Telegram{" "}
-                {config.maxUploadMb} MB
-                {config.autoCompress
-                  ? ` · auto-compacta originais até ${config.maxOriginalMb ?? 500} MB`
-                  : " · instale FFmpeg no PATH p/ compactar arquivos grandes"}{" "}
-                · {config.count} no catálogo
+                Bot {config.botUsername || "conectado"} · ffmpeg.wasm mira{" "}
+                {(config.compressTargetMb ?? 18).toFixed(0)} MB · originais até{" "}
+                {config.maxOriginalMb ?? 500} MB · playback{" "}
+                {config.playbackStorage || "telegram"} · {config.count} no
+                catálogo
               </p>
             ) : (
               <p className="mt-0.5 text-[13px] leading-relaxed text-neutral-600 dark:text-zinc-400">
                 {config?.error ||
-                  "Configure no .env.local: TELEGRAM_BOT_TOKEN e TELEGRAM_STORAGE_CHAT_ID (chat/canal privado onde o bot é admin)."}
+                  "Configure TELEGRAM_BOT_TOKEN e TELEGRAM_STORAGE_CHAT_ID (chat/canal privado onde o bot é admin)."}
               </p>
             )}
           </div>
@@ -259,11 +288,10 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
             {file && (
               <p className="mt-1 text-[12px] text-neutral-400">
                 {file.name} · {(file.size / (1024 * 1024)).toFixed(1)} MB
-                {file.size > 48 * 1024 * 1024 && config?.autoCompress
-                  ? " · será compactado automaticamente (≤ 48 MB p/ o Telegram)"
-                  : file.size > 50 * 1024 * 1024 && !config?.autoCompress
-                    ? " · acima de 50 MB: precisa de FFmpeg no servidor"
-                    : ""}
+                {file.size >
+                (config?.compressTargetBytes ?? 18 * 1024 * 1024)
+                  ? ` · será compactado no navegador (≤ ${(config?.compressTargetMb ?? 18).toFixed(0)} MB)`
+                  : " · já cabe no alvo de compactação"}
               </p>
             )}
           </div>

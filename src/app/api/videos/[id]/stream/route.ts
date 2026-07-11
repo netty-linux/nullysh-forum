@@ -3,7 +3,8 @@ import {
   incrementViews,
 } from "@/lib/videos/catalog";
 import {
-  getVideoFileStat,
+  getVideoBlobSource,
+  openR2VideoStream,
   openVideoReadStream,
 } from "@/lib/videos/media-files";
 import {
@@ -25,9 +26,7 @@ function nodeToWebStream(nodeStream: Readable): ReadableStream {
 
 /**
  * Stream do vídeo para o player HTML5.
- * Preferência: cópia local (data/media/videos) — contorna o limite de
- * download de 20 MB do getFile da Bot API.
- * Fallback: Telegram getFile (só funciona se o arquivo ≤ ~20 MB).
+ * Ordem: R2 (cloud) → FS local (dev) → Telegram getFile (≤ ~20 MB).
  */
 export async function GET(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -41,12 +40,48 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   }
 
   const rangeHeader = req.headers.get("range");
+  const mime = video.mimeType || "video/mp4";
 
-  // ── 1) Disco local (principal) ─────────────────────────────────
-  const local = await getVideoFileStat(id);
-  if (local) {
+  // ── 1) R2 / FS ────────────────────────────────────────────────
+  const blob = await getVideoBlobSource(id);
+  if (blob?.kind === "r2") {
     try {
-      return streamLocal(local.path, local.size, video.mimeType || "video/mp4", rangeHeader, id);
+      const ranged = await openR2VideoStream(blob.key, rangeHeader);
+      if (ranged) {
+        if (ranged.status === 416) {
+          const headers = new Headers();
+          headers.set("Content-Range", ranged.contentRange || `bytes */${blob.size}`);
+          return new NextResponse(null, { status: 416, headers });
+        }
+        if (!rangeHeader || rangeHeader === "bytes=0-" || ranged.status === 200) {
+          if (!rangeHeader || rangeHeader === "bytes=0-") {
+            void incrementViews(id);
+          }
+        } else if (ranged.contentRange?.startsWith("bytes 0-")) {
+          void incrementViews(id);
+        }
+
+        const headers = new Headers();
+        headers.set("Content-Type", mime);
+        headers.set("Accept-Ranges", "bytes");
+        headers.set("Cache-Control", "private, max-age=3600");
+        headers.set("Content-Length", String(ranged.contentLength));
+        if (ranged.contentRange) {
+          headers.set("Content-Range", ranged.contentRange);
+        }
+        return new NextResponse(ranged.body, {
+          status: ranged.status,
+          headers,
+        });
+      }
+    } catch (e) {
+      console.error("[stream] R2 failed", e);
+    }
+  }
+
+  if (blob?.kind === "fs") {
+    try {
+      return streamLocal(blob.path, blob.size, mime, rangeHeader, id);
     } catch (e) {
       console.error("[stream] local failed", e);
     }
@@ -58,7 +93,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       {
         ok: false,
         error:
-          "Arquivo local ausente e Telegram não configurado. Reenvie o vídeo pelo Painel ADM.",
+          "Arquivo de playback ausente e Telegram não configurado. Reenvie o vídeo pelo Painel ADM.",
       },
       { status: 503 }
     );
@@ -71,7 +106,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         {
           ok: false,
           error:
-            "Telegram não liberou o download (limite ~20 MB do getFile). Reenvie o vídeo — a nova versão grava cópia local para o player.",
+            "Telegram não liberou o download (limite ~20 MB do getFile). Reenvie o vídeo — a nova versão grava cópia em R2/local para o player.",
         },
         { status: 502 }
       );
@@ -102,9 +137,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const headers = new Headers();
     headers.set(
       "Content-Type",
-      video.mimeType ||
-        upstream.headers.get("content-type") ||
-        "video/mp4"
+      mime || upstream.headers.get("content-type") || "video/mp4"
     );
     headers.set("Accept-Ranges", "bytes");
     headers.set("Cache-Control", "private, max-age=3600");
@@ -120,13 +153,12 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   } catch (e) {
     console.error("[api/videos stream]", e);
     const msg = e instanceof Error ? e.message : "Falha no stream";
-    // Mensagem amigável para "file is too big"
     if (/too big/i.test(msg)) {
       return NextResponse.json(
         {
           ok: false,
           error:
-            "Este vídeo foi enviado só ao Telegram e passa do limite de download (20 MB). Abra o Painel ADM e publique de novo — o sistema grava cópia local para reprodução.",
+            "Este vídeo só está no Telegram e passa do limite de download (20 MB). Publique de novo — o sistema grava cópia R2/local para reprodução.",
         },
         { status: 502 }
       );
@@ -147,7 +179,6 @@ function streamLocal(
   headers.set("Accept-Ranges", "bytes");
   headers.set("Cache-Control", "private, max-age=3600");
 
-  // Sem Range → arquivo inteiro
   if (!rangeHeader) {
     void incrementViews(videoId);
     headers.set("Content-Length", String(size));
@@ -158,7 +189,6 @@ function streamLocal(
     });
   }
 
-  // Range: bytes=start-end
   const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
   if (!m) {
     headers.set("Content-Length", String(size));
@@ -173,7 +203,6 @@ function streamLocal(
   let end = m[2] === "" ? size - 1 : parseInt(m[2], 10);
 
   if (Number.isNaN(start) || Number.isNaN(end) || start < 0 || end >= size) {
-    // range inválido
     headers.set("Content-Range", `bytes */${size}`);
     return new NextResponse(null, { status: 416, headers });
   }
@@ -183,7 +212,6 @@ function streamLocal(
     return new NextResponse(null, { status: 416, headers });
   }
 
-  // Cap chunk size a ~2MB para o player não travar em arquivos grandes
   const maxChunk = 2 * 1024 * 1024;
   if (end - start + 1 > maxChunk) {
     end = start + maxChunk - 1;

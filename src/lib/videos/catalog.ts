@@ -1,6 +1,12 @@
 import { promises as fs } from "fs";
 import path from "path";
 import type { StoredVideo, VideoPublic } from "@/lib/videos/types";
+import {
+  CATALOG_KV_KEY,
+  CATALOG_OBJECT_KEY,
+  getDataKv,
+  getVideosBucket,
+} from "@/lib/videos/cloud-bindings";
 import { uid } from "@/lib/utils";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -10,10 +16,8 @@ async function ensureDir() {
   await fs.mkdir(DATA_DIR, { recursive: true });
 }
 
-export async function readVideoCatalog(): Promise<StoredVideo[]> {
+function parseCatalog(raw: string): StoredVideo[] {
   try {
-    await ensureDir();
-    const raw = await fs.readFile(CATALOG_PATH, "utf8");
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
@@ -23,19 +27,76 @@ export async function readVideoCatalog(): Promise<StoredVideo[]> {
         typeof (v as StoredVideo).id === "string" &&
         typeof (v as StoredVideo).telegramFileId === "string"
     );
-  } catch (e) {
-    const err = e as NodeJS.ErrnoException;
-    if (err?.code === "ENOENT") return [];
-    console.error("[videos] read catalog", e);
+  } catch {
     return [];
   }
 }
 
+/**
+ * Ordem de leitura: R2 → KV → FS local
+ */
+export async function readVideoCatalog(): Promise<StoredVideo[]> {
+  const bucket = await getVideosBucket();
+  if (bucket) {
+    try {
+      const obj = await bucket.get(CATALOG_OBJECT_KEY);
+      if (obj) return parseCatalog(await obj.text());
+    } catch (e) {
+      console.error("[videos] read catalog R2", e);
+    }
+  }
+
+  const kv = await getDataKv();
+  if (kv) {
+    try {
+      const raw = await kv.get(CATALOG_KV_KEY);
+      if (raw) return parseCatalog(raw);
+      return [];
+    } catch (e) {
+      console.error("[videos] read catalog KV", e);
+      return [];
+    }
+  }
+
+  try {
+    await ensureDir();
+    const raw = await fs.readFile(CATALOG_PATH, "utf8");
+    return parseCatalog(raw);
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException;
+    if (err?.code === "ENOENT") return [];
+    console.error("[videos] read catalog FS", e);
+    return [];
+  }
+}
+
+/**
+ * Ordem de escrita: R2 (se houver) + KV (se houver) + FS (dev)
+ */
 export async function writeVideoCatalog(videos: StoredVideo[]): Promise<void> {
-  await ensureDir();
-  const tmp = `${CATALOG_PATH}.${process.pid}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(videos, null, 2), "utf8");
-  await fs.rename(tmp, CATALOG_PATH);
+  const json = JSON.stringify(videos, null, 2);
+  let persisted = false;
+
+  const bucket = await getVideosBucket();
+  if (bucket) {
+    await bucket.put(CATALOG_OBJECT_KEY, json, {
+      httpMetadata: { contentType: "application/json" },
+    });
+    persisted = true;
+  }
+
+  const kv = await getDataKv();
+  if (kv) {
+    await kv.put(CATALOG_KV_KEY, json);
+    persisted = true;
+  }
+
+  if (!persisted) {
+    await ensureDir();
+    const tmp = `${CATALOG_PATH}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, json, "utf8");
+    await fs.rename(tmp, CATALOG_PATH);
+  }
 }
 
 export function toPublicVideo(v: StoredVideo): VideoPublic {

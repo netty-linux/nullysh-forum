@@ -16,6 +16,11 @@
 # next.js
 /.next/
 /out/
+.open-next/
+.wrangler/
+
+# Cloudflare local secrets (use wrangler secret / dashboard em prod)
+.dev.vars
 
 # production
 /build
