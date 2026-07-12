@@ -405,10 +405,20 @@ export const useForumStore = create<ForumState>()(
                 ),
               }));
             } else {
-              // reverte
-              set((s) => ({
-                posts: s.posts.map((p) => (p.id === postId && before ? before : p)),
-              }));
+              // reverte; se o post sumiu no servidor, remove em silêncio
+              const gone =
+                /not found|0 rows|PGRST116|does not exist/i.test(
+                  remote.error || ""
+                );
+              if (gone) {
+                get().removePostById(postId);
+              } else {
+                set((s) => ({
+                  posts: s.posts.map((p) =>
+                    p.id === postId && before ? before : p
+                  ),
+                }));
+              }
               console.error("[toggleLike] remote", remote.error);
             }
           } catch (e) {
