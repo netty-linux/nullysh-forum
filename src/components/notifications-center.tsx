@@ -19,7 +19,6 @@ import { fetchRemoteNotifications } from "@/lib/supabase/posts-service";
 import { fetchVideos } from "@/lib/videos/client";
 import { cn, formatRelative } from "@/lib/utils";
 import {
-  Bell,
   CalendarBlank,
   ChatCircle,
   FilmStrip,
@@ -36,19 +35,20 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+/** Ícones por tipo — 1 cor sólida (sem arco-íris); acento no círculo só. */
 const TYPE_ICON: Record<
   NotificationType,
   { Icon: typeof Heart; className: string }
 > = {
-  like: { Icon: Heart, className: "bg-red-500 text-white" },
+  like: { Icon: Heart, className: "bg-[#e11d48] text-white" },
   dislike: { Icon: ThumbsDown, className: "bg-zinc-600 text-white" },
-  comment: { Icon: ChatCircle, className: "bg-sky-500 text-white" },
-  repost: { Icon: Repeat, className: "bg-emerald-500 text-white" },
-  dm: { Icon: ChatCircle, className: "bg-violet-500 text-white" },
-  follow: { Icon: UserPlus, className: "bg-indigo-500 text-white" },
-  reaction: { Icon: Smiley, className: "bg-pink-500 text-white" },
-  material: { Icon: Package, className: "bg-amber-500 text-white" },
-  video: { Icon: FilmStrip, className: "bg-rose-500 text-white" },
+  comment: { Icon: ChatCircle, className: "bg-[#1f1f1f] text-white" },
+  repost: { Icon: Repeat, className: "bg-[#1f1f1f] text-white" },
+  dm: { Icon: ChatCircle, className: "bg-[#1f1f1f] text-white" },
+  follow: { Icon: UserPlus, className: "bg-[#1f1f1f] text-white" },
+  reaction: { Icon: Smiley, className: "bg-[#e11d48] text-white" },
+  material: { Icon: Package, className: "bg-amber-600 text-white" },
+  video: { Icon: FilmStrip, className: "bg-[#1f1f1f] text-white" },
   event: { Icon: CalendarBlank, className: "bg-[#1f1f1f] text-white" },
 };
 
@@ -374,17 +374,24 @@ export function NotificationsCenter() {
 
   return (
     <>
-      {/* Barulinho dopamina — topo */}
+      {/* Toast live — compacto estilo IG, paleta Nullysh (superfície + 1 acento) */}
       <AnimatePresence>
-        {showLive && (
+        {showLive && (() => {
+          const liveType = live!.type;
+          const typeMeta = TYPE_ICON[liveType] ?? TYPE_ICON.like;
+          const LiveIcon = typeMeta.Icon;
+          return (
           <motion.div
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: -28, scale: 0.96 }}
+            initial={
+              reduce ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.98 }
+            }
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 420, damping: 28 }}
-            className="pointer-events-auto fixed left-1/2 top-3 z-[90] w-[min(100%-1.5rem,24rem)] -translate-x-1/2"
+            exit={
+              reduce ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }
+            }
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="pointer-events-auto fixed left-1/2 top-3 z-[90] w-[min(100%-1.5rem,20rem)] -translate-x-1/2"
           >
-            {/* div (não button aninhado) — evita HTML inválido que quebra o click */}
             <div
               role="button"
               tabIndex={0}
@@ -396,49 +403,54 @@ export function NotificationsCenter() {
                 }
               }}
               className={cn(
-                "group relative flex w-full cursor-pointer items-start gap-3 overflow-hidden rounded-2xl border-2 border-white/30 px-3.5 py-3 text-left",
-                "bg-gradient-to-r from-rose-500 via-fuchsia-500 to-violet-600 text-white",
-                "shadow-[0_12px_40px_-8px_rgb(236_72_153/0.65),0_0_0_1px_rgb(255_255_255/0.12)]"
+                "group flex w-full cursor-pointer items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2.5 text-left",
+                "border border-[var(--border)] bg-[var(--surface-float)]",
+                "shadow-[var(--shadow-md)]",
+                "transition-opacity duration-150 hover:opacity-95",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
               )}
             >
-              {!reduce && (
-                <span
-                  className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent animate-[notif-shimmer_2.2s_ease-in-out_infinite]"
-                  aria-hidden
-                />
-              )}
-              <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 ring-2 ring-white/40">
-                <Heart size={20} weight="fill" className="text-white drop-shadow" />
-                {!reduce && (
-                  <span className="absolute inset-0 animate-ping rounded-full bg-white/30" />
+              {/* Ícone de tipo — único ponto de cor (sem gradiente) */}
+              <span
+                className={cn(
+                  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+                  typeMeta.className
                 )}
+                aria-hidden
+              >
+                <LiveIcon size={16} weight="fill" />
               </span>
-              <span className="relative min-w-0 flex-1">
-                <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-white/85">
-                  <Bell size={12} weight="fill" />
-                  Nova notificação
-                </span>
-                <span className="mt-0.5 block truncate text-[14px] font-bold leading-tight">
+
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text-primary)]">
                   {live!.title}
                 </span>
-                <span className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-white/90">
+                <span className="mt-0.5 line-clamp-1 text-[12px] leading-snug text-[var(--text-secondary)]">
                   {live!.body}
                 </span>
               </span>
+
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   clearLive();
                 }}
-                className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
+                className={cn(
+                  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                  "text-[var(--text-tertiary)] transition-colors duration-150",
+                  "hover:bg-neutral-100 hover:text-[var(--text-primary)]",
+                  "dark:hover:bg-zinc-800",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                )}
                 aria-label="Dispensar"
               >
                 <X size={14} weight="bold" />
               </button>
             </div>
           </motion.div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
       {/* Botão coração + painel */}
