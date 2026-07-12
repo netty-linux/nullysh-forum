@@ -2,7 +2,8 @@
 
 /**
  * Hidrata o feed a partir do Supabase e assina INSERT/DELETE em tempo real.
- * Zustand continua espelho local de UI; multi-user = Postgres.
+ * Espera o rehydrate do Zustand (localStorage) ANTES de sobrescrever com Postgres,
+ * senão o persist pode “ganhar” e cada browser fica com o próprio castelo de areia.
  */
 
 import { useForumStore } from "@/lib/forum-store";
@@ -13,13 +14,28 @@ import {
   mapPostRow,
 } from "@/lib/supabase/posts-service";
 import type { PostRow } from "@/lib/supabase/database.types";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+
+function waitForForumPersist(): Promise<void> {
+  const api = useForumStore.persist;
+  if (api.hasHydrated()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const unsub = api.onFinishHydration(() => {
+      unsub();
+      resolve();
+    });
+    // safety
+    window.setTimeout(() => {
+      unsub();
+      resolve();
+    }, 2500);
+  });
+}
 
 export function PostsBridge({ children }: { children: React.ReactNode }) {
   const hydratePosts = useForumStore((s) => s.hydratePosts);
   const upsertPost = useForumStore((s) => s.upsertPost);
   const removePostById = useForumStore((s) => s.removePostById);
-  const booted = useRef(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
@@ -30,10 +46,16 @@ export function PostsBridge({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
+        await waitForForumPersist();
+        if (cancelled) return;
         const posts = await fetchRemotePosts(100);
         if (!cancelled) {
           hydratePosts(posts);
-          booted.current = true;
+          console.info(
+            "[posts-bridge] hydrated",
+            posts.length,
+            "posts from Supabase"
+          );
         }
       } catch (e) {
         console.error("[posts-bridge] hydrate failed", e);
@@ -66,7 +88,9 @@ export function PostsBridge({ children }: { children: React.ReactNode }) {
           if (row?.id) removePostById(row.id);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.info("[posts-bridge] realtime", status);
+      });
 
     return () => {
       cancelled = true;

@@ -138,6 +138,21 @@ export async function insertRemotePost(
     hashtag: input.hashtag?.replace(/^#/, "").toLowerCase() || null,
   };
 
+  // Garante sessão (RLS exige auth.uid() = author_id)
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return {
+      ok: false,
+      error: "Sessão Supabase ausente. Saia e entre de novo.",
+    };
+  }
+  if (session.user.id !== input.authorId) {
+    // Corrige author_id para o uid real da sessão (evita RLS reject)
+    insert.author_id = session.user.id;
+  }
+
   const { data, error } = await supabase
     .from("posts")
     .insert(insert)
@@ -146,9 +161,13 @@ export async function insertRemotePost(
 
   if (error || !data) {
     console.error("[posts] insertRemotePost", error);
+    const hint =
+      error?.code === "42501" || /row-level security|RLS/i.test(error?.message || "")
+        ? " (RLS: confira se o profile existe e author_id = auth.uid())"
+        : "";
     return {
       ok: false,
-      error: error?.message || "Falha ao publicar no Supabase",
+      error: (error?.message || "Falha ao publicar no Supabase") + hint,
     };
   }
 

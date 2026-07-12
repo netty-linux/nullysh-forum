@@ -256,9 +256,20 @@ export const useForumStore = create<ForumState>()(
       },
 
       hydratePosts: (posts) => {
-        const normalized = posts.map(normalizePost);
+        const normalized = posts
+          .map(normalizePost)
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() -
+              new Date(a.createdAt).getTime()
+          );
+        // Com Supabase, Postgres é a fonte da verdade — NÃO manter fantasmas
+        // post_* do localStorage (senão User A vê o post e User B não).
+        if (isSupabaseConfigured()) {
+          set({ posts: normalized });
+          return;
+        }
         set((s) => {
-          // Mantém posts locais ainda sem id uuid remota (raro) se não colidir
           const remoteIds = new Set(normalized.map((p) => p.id));
           const localOnly = s.posts.filter(
             (p) => !remoteIds.has(p.id) && p.id.startsWith("post_")
