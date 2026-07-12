@@ -142,6 +142,9 @@ interface ForumState {
   isReposted: (postId: string, userId: string) => boolean;
   repostCount: (postId: string) => number;
   getRepostsByUser: (userId: string) => PostRepost[];
+  hydrateMessages: (messages: ChatMessage[]) => void;
+  upsertMessage: (message: ChatMessage) => void;
+  removeMessageById: (messageId: string) => void;
   sendMessage: (data: {
     channelId: string;
     authorId: string;
@@ -156,7 +159,7 @@ interface ForumState {
     mediaThumbUrl?: string | null;
     mediaWidth?: number | null;
     mediaHeight?: number | null;
-  }) => ChatMessage;
+  }) => Promise<ChatMessage>;
   /**
    * Apaga mensagem própria (ou admin).
    */
@@ -164,7 +167,7 @@ interface ForumState {
     messageId: string,
     userId: string,
     opts?: { isAdmin?: boolean }
-  ) => { ok: true } | { ok: false; error: string };
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   /**
    * Alterna reação do usuário em uma mensagem (emoji único por pessoa —
    * clicar de novo no mesmo remove; trocar emoji substitui).
@@ -968,8 +971,96 @@ export const useForumStore = create<ForumState>()(
               new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           ),
 
-      sendMessage: (data) => {
+      hydrateMessages: (messages) => {
+        const sorted = [...messages].sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+        if (isSupabaseConfigured()) {
+          set({ messages: sorted });
+          return;
+        }
+        set((s) => {
+          const remoteIds = new Set(sorted.map((m) => m.id));
+          const localOnly = s.messages.filter(
+            (m) => !remoteIds.has(m.id) && m.id.startsWith("msg")
+          );
+          return {
+            messages: [...sorted, ...localOnly].sort(
+              (a, b) =>
+                new Date(a.createdAt).getTime() -
+                new Date(b.createdAt).getTime()
+            ),
+          };
+        });
+      },
+
+      upsertMessage: (message) => {
+        set((s) => {
+          const exists = s.messages.some((m) => m.id === message.id);
+          if (exists) {
+            return {
+              messages: s.messages.map((m) =>
+                m.id === message.id ? message : m
+              ),
+            };
+          }
+          return {
+            messages: [...s.messages, message].sort(
+              (a, b) =>
+                new Date(a.createdAt).getTime() -
+                new Date(b.createdAt).getTime()
+            ),
+          };
+        });
+      },
+
+      removeMessageById: (messageId) => {
+        set((s) => ({
+          messages: s.messages.filter((m) => m.id !== messageId),
+        }));
+      },
+
+      sendMessage: async (data) => {
         const kind = data.mediaKind || (data.sharedPostId ? "text" : "text");
+
+        // Multi-user: grava no Supabase (realtime + notif DM via trigger)
+        if (isSupabaseConfigured()) {
+          const { insertRemoteChatMessage } = await import(
+            "@/lib/supabase/chat-service"
+          );
+          const remote = await insertRemoteChatMessage({
+            channelId: data.channelId,
+            authorId: data.authorId,
+            authorName: data.authorName,
+            authorAvatar: data.authorAvatar,
+            content: (data.content || "").trim(),
+            sharedPostId: data.sharedPostId ?? null,
+            mediaKind: data.mediaKind ?? null,
+            mediaUrl: data.mediaUrl ?? null,
+            mediaMime: data.mediaMime ?? null,
+            mediaDuration: data.mediaDuration ?? null,
+            mediaThumbUrl: data.mediaThumbUrl ?? null,
+            mediaWidth: data.mediaWidth ?? null,
+            mediaHeight: data.mediaHeight ?? null,
+          });
+          if (!remote.ok) {
+            throw new Error(remote.error);
+          }
+          const message = remote.message;
+          set((s) => {
+            if (s.messages.some((m) => m.id === message.id)) return s;
+            return {
+              messages: [...s.messages, message].sort(
+                (a, b) =>
+                  new Date(a.createdAt).getTime() -
+                  new Date(b.createdAt).getTime()
+              ),
+            };
+          });
+          return message;
+        }
+
         const message: ChatMessage = {
           id: uid("msg"),
           channelId: data.channelId,
@@ -988,7 +1079,7 @@ export const useForumStore = create<ForumState>()(
           mediaHeight: data.mediaHeight ?? null,
         };
         set((s) => ({ messages: [...s.messages, message] }));
-        // DM: notifica o outro participante
+        // DM: notifica o outro participante (modo local)
         if (isDmChannel(data.channelId)) {
           const peer = getDmPeerId(data.channelId, data.authorId);
           if (peer) {
@@ -1018,7 +1109,7 @@ export const useForumStore = create<ForumState>()(
         return message;
       },
 
-      deleteMessage: (messageId, userId, opts) => {
+      deleteMessage: async (messageId, userId, opts) => {
         const msg = get().messages.find((m) => m.id === messageId);
         if (!msg) {
           return { ok: false, error: "Mensagem não encontrada." };
@@ -1030,6 +1121,17 @@ export const useForumStore = create<ForumState>()(
             error: "Você só pode apagar as suas próprias mensagens.",
           };
         }
+
+        if (isSupabaseConfigured() && !messageId.startsWith("msg")) {
+          const { deleteRemoteChatMessage } = await import(
+            "@/lib/supabase/chat-service"
+          );
+          const remote = await deleteRemoteChatMessage(messageId);
+          if (!remote.ok) {
+            return remote;
+          }
+        }
+
         set((s) => ({
           messages: s.messages.filter((m) => m.id !== messageId),
         }));
@@ -1038,6 +1140,7 @@ export const useForumStore = create<ForumState>()(
 
       toggleMessageReaction: (messageId, userId, emoji) => {
         if (!userId || !emoji) return;
+        let nextReactions: Record<string, string[]> = {};
         set((s) => ({
           messages: s.messages.map((m) => {
             if (m.id !== messageId) return m;
@@ -1056,9 +1159,18 @@ export const useForumStore = create<ForumState>()(
             if (!hadThis) {
               reactions[emoji] = [...(reactions[emoji] || []), userId];
             }
+            nextReactions = reactions;
             return { ...m, reactions };
           }),
         }));
+
+        if (isSupabaseConfigured() && !messageId.startsWith("msg")) {
+          void import("@/lib/supabase/chat-service").then(
+            ({ updateRemoteChatReactions }) => {
+              void updateRemoteChatReactions(messageId, nextReactions);
+            }
+          );
+        }
       },
 
       getPostById: (postId) => {

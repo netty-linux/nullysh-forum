@@ -212,20 +212,26 @@ function ChatPageInner() {
       (payload.mediaUrl || payload.mediaKind === "sticker");
     if (!payload.content.trim() && !hasMedia && !payload.mediaUrl) return;
 
-    sendMessage({
-      channelId,
-      authorId: user.id,
-      authorName: user.name,
-      authorAvatar: user.avatar,
-      content: payload.content,
-      mediaKind: payload.mediaKind,
-      mediaUrl: payload.mediaUrl,
-      mediaMime: payload.mediaMime,
-      mediaDuration: payload.mediaDuration,
-      mediaThumbUrl: payload.mediaThumbUrl,
-      mediaWidth: payload.mediaWidth,
-      mediaHeight: payload.mediaHeight,
-    });
+    void (async () => {
+      try {
+        await sendMessage({
+          channelId,
+          authorId: user.id,
+          authorName: user.name,
+          authorAvatar: user.avatar,
+          content: payload.content,
+          mediaKind: payload.mediaKind,
+          mediaUrl: payload.mediaUrl,
+          mediaMime: payload.mediaMime,
+          mediaDuration: payload.mediaDuration,
+          mediaThumbUrl: payload.mediaThumbUrl,
+          mediaWidth: payload.mediaWidth,
+          mediaHeight: payload.mediaHeight,
+        });
+      } catch (e) {
+        console.error("[chat] send failed", e);
+      }
+    })();
   }
 
   const headerTitle =
@@ -497,7 +503,7 @@ function ChatPageInner() {
                       currentUserId={user?.id ?? null}
                       onDelete={(id) => {
                         if (!user) return;
-                        deleteMessage(id, user.id, {
+                        void deleteMessage(id, user.id, {
                           isAdmin: user.role === "admin",
                         });
                       }}

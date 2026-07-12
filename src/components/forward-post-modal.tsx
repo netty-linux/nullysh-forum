@@ -103,7 +103,7 @@ export function ForwardPostModal({ open, onClose, post }: Props) {
     });
   }, [candidates, query]);
 
-  function onSend() {
+  async function onSend() {
     if (!me || !selectedId) return;
     setError("");
     setSending(true);
@@ -117,7 +117,7 @@ export function ForwardPostModal({ open, onClose, post }: Props) {
       // Só a frase do usuário — o preview do post vem do sharedPostId no chat
       const body = note.trim();
 
-      sendMessage({
+      await sendMessage({
         channelId,
         authorId: me.id,
         authorName: me.name,
@@ -129,6 +129,8 @@ export function ForwardPostModal({ open, onClose, post }: Props) {
       window.setTimeout(() => {
         onClose();
       }, 900);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao enviar.");
     } finally {
       setSending(false);
     }

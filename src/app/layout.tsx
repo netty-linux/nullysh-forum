@@ -1,3 +1,4 @@
+import { ChatBridge } from "@/components/chat-bridge";
 import { PostsBridge } from "@/components/posts-bridge";
 import { SupabaseAuthBridge } from "@/components/supabase-auth-bridge";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -86,7 +87,9 @@ export default function RootLayout({
       <body className="min-h-full bg-background text-foreground antialiased">
         <ThemeProvider>
           <SupabaseAuthBridge>
-            <PostsBridge>{children}</PostsBridge>
+            <PostsBridge>
+              <ChatBridge>{children}</ChatBridge>
+            </PostsBridge>
           </SupabaseAuthBridge>
         </ThemeProvider>
       </body>
