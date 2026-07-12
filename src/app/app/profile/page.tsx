@@ -97,10 +97,22 @@ export default function ProfilePage() {
   const logout = useAuthStore((s) => s.logout);
   const posts = useForumStore((s) => s.posts);
   const follows = useSocialStore((s) => s.follows);
-  const followerCount = useSocialStore((s) => s.followerCount);
-  const followingCount = useSocialStore((s) => s.followingCount);
   const router = useRouter();
-  void follows;
+  // Contagens derivadas do grafo (re-render garantido quando follows muda)
+  const nFollowers = useMemo(
+    () =>
+      user
+        ? follows.filter((f) => f.followingId === user.id).length
+        : 0,
+    [follows, user]
+  );
+  const nFollowing = useMemo(
+    () =>
+      user
+        ? follows.filter((f) => f.followerId === user.id).length
+        : 0,
+    [follows, user]
+  );
 
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -774,10 +786,10 @@ export default function ProfilePage() {
                 className="pressable rounded-lg text-left transition hover:opacity-80"
               >
                 <strong className="font-semibold tabular-nums text-[#1f1f1f]">
-                  {followerCount(user.id)}
+                  {nFollowers}
                 </strong>{" "}
                 <span className="text-neutral-500">
-                  {followerCount(user.id) === 1 ? "seguidor" : "seguidores"}
+                  {nFollowers === 1 ? "seguidor" : "seguidores"}
                 </span>
               </button>
               <button
@@ -789,7 +801,7 @@ export default function ProfilePage() {
                 className="pressable rounded-lg text-left transition hover:opacity-80"
               >
                 <strong className="font-semibold tabular-nums text-[#1f1f1f]">
-                  {followingCount(user.id)}
+                  {nFollowing}
                 </strong>{" "}
                 <span className="text-neutral-500">seguindo</span>
               </button>

@@ -20,12 +20,36 @@ export function mapFollowRow(row: FollowRow): FollowEdge {
   };
 }
 
+export type FetchFollowsResult =
+  | { ok: true; edges: FollowEdge[] }
+  | { ok: false; error: string; unauthorized?: boolean };
+
+/**
+ * Busca o grafo de follows.
+ * Importante: exige sessão — sem auth o RLS devolve [] e NÃO devemos
+ * tratar isso como “ninguém segue ninguém” (apagaria o cache local).
+ */
 export async function fetchRemoteFollows(
   limit = 2000
-): Promise<FollowEdge[]> {
-  if (!isSupabaseConfigured()) return [];
+): Promise<FetchFollowsResult> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Supabase não configurado" };
+  }
   const supabase = getSupabaseBrowser();
-  if (!supabase) return [];
+  if (!supabase) {
+    return { ok: false, error: "Cliente Supabase indisponível" };
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return {
+      ok: false,
+      error: "Sessão ausente",
+      unauthorized: true,
+    };
+  }
 
   const { data, error } = await supabase
     .from("follows")
@@ -35,10 +59,13 @@ export async function fetchRemoteFollows(
 
   if (error) {
     console.error("[social] fetchRemoteFollows", error);
-    return [];
+    return { ok: false, error: error.message };
   }
 
-  return (data as FollowRow[] | null)?.map(mapFollowRow) ?? [];
+  return {
+    ok: true,
+    edges: (data as FollowRow[] | null)?.map(mapFollowRow) ?? [],
+  };
 }
 
 export async function insertRemoteFollow(
@@ -103,4 +130,46 @@ export async function deleteRemoteFollow(
     return { ok: false, error: error.message };
   }
   return { ok: true };
+}
+
+/** Contagens diretas no banco (fonte da verdade, sem depender do cache). */
+export async function fetchFollowCounts(userId: string): Promise<{
+  followers: number;
+  following: number;
+}> {
+  if (!userId || !isSupabaseConfigured()) {
+    return { followers: 0, following: 0 };
+  }
+  const supabase = getSupabaseBrowser();
+  if (!supabase) return { followers: 0, following: 0 };
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return { followers: 0, following: 0 };
+  }
+
+  const [followersRes, followingRes] = await Promise.all([
+    supabase
+      .from("follows")
+      .select("*", { count: "exact", head: true })
+      .eq("following_id", userId),
+    supabase
+      .from("follows")
+      .select("*", { count: "exact", head: true })
+      .eq("follower_id", userId),
+  ]);
+
+  if (followersRes.error) {
+    console.error("[social] fetchFollowCounts followers", followersRes.error);
+  }
+  if (followingRes.error) {
+    console.error("[social] fetchFollowCounts following", followingRes.error);
+  }
+
+  return {
+    followers: followersRes.count ?? 0,
+    following: followingRes.count ?? 0,
+  };
 }

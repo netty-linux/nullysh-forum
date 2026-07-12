@@ -49,8 +49,7 @@ export function ProfileHoverCard({
   const follow = useSocialStore((s) => s.follow);
   const unfollow = useSocialStore((s) => s.unfollow);
   const isFollowing = useSocialStore((s) => s.isFollowing);
-  const followerCount = useSocialStore((s) => s.followerCount);
-  const followingCount = useSocialStore((s) => s.followingCount);
+  const follows = useSocialStore((s) => s.follows);
 
   const triggerRef = useRef<HTMLSpanElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -173,8 +172,8 @@ export function ProfileHoverCard({
 
   const isOwn = me?.id === userId;
   const amFollowing = !!(me && !isOwn && isFollowing(me.id, userId));
-  const nFollowers = followerCount(userId);
-  const nFollowing = followingCount(userId);
+  const nFollowers = follows.filter((f) => f.followingId === userId).length;
+  const nFollowing = follows.filter((f) => f.followerId === userId).length;
 
   function onFollowToggle() {
     if (!me || isOwn) return;

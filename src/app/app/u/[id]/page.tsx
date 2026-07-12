@@ -58,8 +58,6 @@ export default function PublicProfilePage() {
   const follow = useSocialStore((s) => s.follow);
   const unfollow = useSocialStore((s) => s.unfollow);
   const isFollowing = useSocialStore((s) => s.isFollowing);
-  const followerCount = useSocialStore((s) => s.followerCount);
-  const followingCount = useSocialStore((s) => s.followingCount);
   const [tab, setTab] = useState<Tab>("posts");
   const [blockError, setBlockError] = useState("");
   const [followError, setFollowError] = useState("");
@@ -70,11 +68,10 @@ export default function PublicProfilePage() {
     useState<FollowListMode>("followers");
 
   const isOwn = me?.id === id;
-  // re-render quando grafo social muda
-  void follows;
   const amFollowing = !!(me && !isOwn && isFollowing(me.id, id));
-  const nFollowers = followerCount(id);
-  const nFollowing = followingCount(id);
+  // Contagens do grafo multi-user (re-render quando follows muda)
+  const nFollowers = follows.filter((f) => f.followingId === id).length;
+  const nFollowing = follows.filter((f) => f.followerId === id).length;
 
   // Quem me bloqueou: perfil “não encontrado”
   const blockedByThem =
