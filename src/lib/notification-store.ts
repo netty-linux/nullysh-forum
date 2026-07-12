@@ -50,6 +50,8 @@ interface NotificationState {
   ) => AppNotification | null;
   markRead: (id: string) => void;
   markAllRead: (userId: string) => void;
+  /** Remove todas as notificações do usuário (esvazia a lista). */
+  clearForUser: (userId: string) => void;
   clearLive: () => void;
   unreadCount: (userId: string) => number;
   forUser: (userId: string) => AppNotification[];
@@ -125,6 +127,13 @@ export const useNotificationStore = create<NotificationState>()(
           ),
           live:
             s.live && s.live.userId === userId ? null : s.live,
+        }));
+      },
+
+      clearForUser: (userId) => {
+        set((s) => ({
+          items: s.items.filter((n) => n.userId !== userId),
+          live: s.live && s.live.userId === userId ? null : s.live,
         }));
       },
 

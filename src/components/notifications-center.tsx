@@ -73,6 +73,7 @@ export function NotificationsCenter() {
   const live = useNotificationStore((s) => s.live);
   const markRead = useNotificationStore((s) => s.markRead);
   const markAllRead = useNotificationStore((s) => s.markAllRead);
+  const clearForUser = useNotificationStore((s) => s.clearForUser);
   const clearLive = useNotificationStore((s) => s.clearLive);
   const catalogSeen = useNotificationStore((s) => s.catalogSeen);
   const setCatalogBooted = useNotificationStore((s) => s.setCatalogBooted);
@@ -384,14 +385,28 @@ export function NotificationsCenter() {
                     </p>
                   </div>
                 </div>
-                {unread > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => markAllRead(user.id)}
-                    className="text-[12px] font-semibold text-rose-600 hover:underline dark:text-rose-400"
-                  >
-                    Marcar lidas
-                  </button>
+                {mine.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    {unread > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => markAllRead(user.id)}
+                        className="text-[12px] font-semibold text-neutral-500 hover:underline dark:text-zinc-400"
+                      >
+                        Marcar lidas
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearForUser(user.id);
+                        clearLive();
+                      }}
+                      className="text-[12px] font-semibold text-rose-600 hover:underline dark:text-rose-400"
+                    >
+                      Limpar
+                    </button>
+                  </div>
                 )}
               </div>
 
