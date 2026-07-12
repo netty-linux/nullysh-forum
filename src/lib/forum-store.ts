@@ -91,9 +91,11 @@ interface ForumState {
   hydratePosts: (posts: Post[]) => void;
   upsertPost: (post: Post) => void;
   removePostById: (postId: string) => void;
-  toggleLike: (postId: string, userId: string) => void;
+  toggleLike: (postId: string, userId: string) => Promise<void>;
   toggleDislike: (postId: string, userId: string) => void;
   toggleSave: (postId: string, userId: string) => void;
+  hydrateComments: (comments: Comment[]) => void;
+  upsertComment: (comment: Comment) => void;
   /** Remove post próprio (ou admin). Apaga no Supabase + store local. */
   deletePost: (
     postId: string,
@@ -121,7 +123,7 @@ interface ForumState {
     replyToId?: string | null;
     /** GIF opcional no comentário */
     gifUrl?: string | null;
-  }) => Comment;
+  }) => Promise<Comment>;
   /** Curtir / descurtir comentário (qualquer usuário logado, incl. dono do post) */
   toggleCommentLike: (
     commentId: string,
@@ -205,6 +207,7 @@ export const useForumStore = create<ForumState>()(
             authorAvatarUrl: data.authorAvatarUrl ?? null,
             content: content || " ",
             imageUrl: data.imageUrl ?? null,
+            gifUrl: data.gifUrl?.trim() || null,
             location: data.location?.trim() || null,
             type: data.type ?? "discussion",
             communityId: data.communityId,
@@ -216,11 +219,7 @@ export const useForumStore = create<ForumState>()(
           if (!remote.ok) {
             throw new Error(remote.error);
           }
-          // GIFs ainda locais na UI (coluna DB ainda não tem gif_url)
-          const post: Post = {
-            ...remote.post,
-            gifUrl: data.gifUrl?.trim() || remote.post.gifUrl || null,
-          };
+          const post: Post = remote.post;
           set((s) => ({
             posts: [post, ...s.posts.filter((p) => p.id !== post.id)],
           }));
@@ -310,7 +309,96 @@ export const useForumStore = create<ForumState>()(
         }));
       },
 
-      toggleLike: (postId, userId) => {
+      hydrateComments: (comments) => {
+        if (isSupabaseConfigured()) {
+          set({ comments });
+          return;
+        }
+        set((s) => {
+          const remoteIds = new Set(comments.map((c) => c.id));
+          const localOnly = s.comments.filter(
+            (c) => !remoteIds.has(c.id) && c.id.startsWith("cm")
+          );
+          return { comments: [...comments, ...localOnly] };
+        });
+      },
+
+      upsertComment: (comment) => {
+        set((s) => {
+          const exists = s.comments.some((c) => c.id === comment.id);
+          if (exists) {
+            return {
+              comments: s.comments.map((c) =>
+                c.id === comment.id ? comment : c
+              ),
+            };
+          }
+          return {
+            comments: [...s.comments, comment],
+            posts: s.posts.map((p) =>
+              p.id === comment.postId
+                ? { ...p, comments: p.comments + 1 }
+                : p
+            ),
+          };
+        });
+      },
+
+      toggleLike: async (postId, userId) => {
+        // Multi-user: RPC Supabase (liked_by + notificação ao dono)
+        if (isSupabaseConfigured() && !postId.startsWith("post_")) {
+          const before = get().posts.find((p) => p.id === postId);
+          const wasLiked = !!before?.likedBy?.includes(userId);
+          // Otimista
+          set((s) => ({
+            posts: s.posts.map((raw) => {
+              const p = normalizePost(raw);
+              if (p.id !== postId) return p;
+              if (wasLiked) {
+                return {
+                  ...p,
+                  likes: Math.max(0, p.likes - 1),
+                  likedBy: p.likedBy.filter((id) => id !== userId),
+                };
+              }
+              return {
+                ...p,
+                likes: p.likes + 1,
+                likedBy: [...p.likedBy.filter((id) => id !== userId), userId],
+              };
+            }),
+          }));
+          try {
+            const { toggleRemotePostLike } = await import(
+              "@/lib/supabase/posts-service"
+            );
+            const remote = await toggleRemotePostLike(postId);
+            if (remote.ok) {
+              set((s) => ({
+                posts: s.posts.map((p) =>
+                  p.id === postId
+                    ? {
+                        ...p,
+                        likes: remote.post.likes,
+                        likedBy: remote.post.likedBy,
+                        gifUrl: remote.post.gifUrl ?? p.gifUrl,
+                      }
+                    : p
+                ),
+              }));
+            } else {
+              // reverte
+              set((s) => ({
+                posts: s.posts.map((p) => (p.id === postId && before ? before : p)),
+              }));
+              console.error("[toggleLike] remote", remote.error);
+            }
+          } catch (e) {
+            console.error("[toggleLike]", e);
+          }
+          return;
+        }
+
         const before = get().posts.find((p) => p.id === postId);
         const wasLiked = !!before?.likedBy?.includes(userId);
         set((s) => ({
@@ -319,7 +407,6 @@ export const useForumStore = create<ForumState>()(
             if (p.id !== postId) return p;
             const liked = p.likedBy.includes(userId);
             const disliked = p.dislikedBy.includes(userId);
-            // Like e dislike são exclusivos
             if (liked) {
               return {
                 ...p,
@@ -427,7 +514,7 @@ export const useForumStore = create<ForumState>()(
         return { ok: true };
       },
 
-      addComment: (data) => {
+      addComment: async (data) => {
         let parentId: string | null = null;
         let replyToName: string | null = null;
         let replyToAuthorId: string | null = null;
@@ -435,7 +522,6 @@ export const useForumStore = create<ForumState>()(
         if (data.replyToId) {
           const target = get().comments.find((c) => c.id === data.replyToId);
           if (target && target.postId === data.postId) {
-            // 1 nível: resposta a raiz ou a outra resposta → sob a raiz
             parentId = target.parentId || target.id;
             replyToName = target.authorName;
             replyToAuthorId = target.authorId;
@@ -443,6 +529,43 @@ export const useForumStore = create<ForumState>()(
         }
 
         const gifUrl = data.gifUrl?.trim() || null;
+
+        // Multi-user: grava no Supabase (trigger notifica o dono)
+        if (isSupabaseConfigured() && !data.postId.startsWith("post_")) {
+          const { insertRemoteComment } = await import(
+            "@/lib/supabase/posts-service"
+          );
+          const remote = await insertRemoteComment({
+            postId: data.postId,
+            authorId: data.authorId,
+            authorName: data.authorName,
+            authorAvatar: data.authorAvatar,
+            content: data.content.trim(),
+            gifUrl,
+            parentId,
+            replyToName,
+            replyToAuthorId,
+          });
+          if (!remote.ok) {
+            throw new Error(remote.error);
+          }
+          const comment = remote.comment;
+          set((s) => {
+            if (s.comments.some((c) => c.id === comment.id)) {
+              return s;
+            }
+            return {
+              comments: [...s.comments, comment],
+              posts: s.posts.map((p) =>
+                p.id === data.postId
+                  ? { ...p, comments: p.comments + 1 }
+                  : p
+              ),
+            };
+          });
+          return comment;
+        }
+
         const comment: Comment = {
           id: uid("cm"),
           postId: data.postId,
@@ -468,7 +591,6 @@ export const useForumStore = create<ForumState>()(
           const excerpt =
             data.content.trim().slice(0, 48) ||
             (gifUrl ? "enviou um GIF" : "");
-          // dono do post
           if (post.authorId !== data.authorId) {
             notifyComment({
               postAuthorId: post.authorId,
@@ -480,7 +602,6 @@ export const useForumStore = create<ForumState>()(
               isReply: !!parentId && replyToAuthorId === post.authorId,
             });
           }
-          // quem foi respondido (se não for o dono — já notificado — nem o próprio autor)
           if (
             replyToAuthorId &&
             replyToAuthorId !== data.authorId &&
@@ -549,6 +670,19 @@ export const useForumStore = create<ForumState>()(
               "Você só pode apagar comentários nos seus posts ou os seus próprios.",
           };
         }
+
+        // Multi-user: apaga no Postgres (cascade de replies no DB se parent_id)
+        if (isSupabaseConfigured() && !commentId.startsWith("cm")) {
+          void import("@/lib/supabase/posts-service").then(
+            async ({ deleteRemoteComment }) => {
+              const remote = await deleteRemoteComment(commentId);
+              if (!remote.ok) {
+                console.error("[deleteComment] remote", remote.error);
+              }
+            }
+          );
+        }
+
         // apaga o comentário e respostas aninhadas sob ele
         const toRemove = new Set<string>([commentId]);
         for (const c of get().comments) {

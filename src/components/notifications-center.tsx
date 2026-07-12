@@ -9,9 +9,13 @@ import {
   notifyEventStart,
   notifyMaterial,
   notifyVideo,
+  remoteToAppNotification,
   useNotificationStore,
 } from "@/lib/notification-store";
 import { useProgressStore } from "@/lib/progress-store";
+import { getSupabaseBrowser } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { fetchRemoteNotifications } from "@/lib/supabase/posts-service";
 import { fetchVideos } from "@/lib/videos/client";
 import { cn, formatRelative } from "@/lib/utils";
 import {
@@ -75,6 +79,8 @@ export function NotificationsCenter() {
   const markAllRead = useNotificationStore((s) => s.markAllRead);
   const clearForUser = useNotificationStore((s) => s.clearForUser);
   const clearLive = useNotificationStore((s) => s.clearLive);
+  const mergeRemote = useNotificationStore((s) => s.mergeRemote);
+  const upsertRemote = useNotificationStore((s) => s.upsertRemote);
   const catalogSeen = useNotificationStore((s) => s.catalogSeen);
   const setCatalogBooted = useNotificationStore((s) => s.setCatalogBooted);
   const markMaterialSeen = useNotificationStore((s) => s.markMaterialSeen);
@@ -142,6 +148,112 @@ export function NotificationsCenter() {
     document.addEventListener("pointerdown", onDoc);
     return () => document.removeEventListener("pointerdown", onDoc);
   }, [open]);
+
+  // Multi-user: hidrata + realtime de notificações do Supabase
+  useEffect(() => {
+    if (!user?.id || !isSupabaseConfigured()) return;
+    const supabase = getSupabaseBrowser();
+    if (!supabase) return;
+
+    let cancelled = false;
+    const userId = user.id;
+
+    (async () => {
+      try {
+        const remote = await fetchRemoteNotifications(userId);
+        if (cancelled || !remote.length) return;
+        mergeRemote(remote.map(remoteToAppNotification));
+      } catch (e) {
+        console.error("[notifications] hydrate failed", e);
+      }
+    })();
+
+    const channel = supabase
+      .channel(`nullysh-notifs-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const r = payload.new as Record<string, unknown>;
+          if (!r?.id) return;
+          upsertRemote(
+            remoteToAppNotification({
+              id: String(r.id),
+              userId: String(r.user_id),
+              type: String(r.type),
+              title: String(r.title),
+              body: String(r.body || ""),
+              href: String(r.href || "/app"),
+              actorId: r.actor_id ? String(r.actor_id) : undefined,
+              actorName: r.actor_name ? String(r.actor_name) : undefined,
+              read: !!r.read,
+              createdAt: String(r.created_at || new Date().toISOString()),
+              dedupeKey: r.dedupe_key ? String(r.dedupe_key) : undefined,
+            }),
+            { toast: true }
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const r = payload.new as Record<string, unknown>;
+          if (!r?.id) return;
+          upsertRemote(
+            remoteToAppNotification({
+              id: String(r.id),
+              userId: String(r.user_id),
+              type: String(r.type),
+              title: String(r.title),
+              body: String(r.body || ""),
+              href: String(r.href || "/app"),
+              actorId: r.actor_id ? String(r.actor_id) : undefined,
+              actorName: r.actor_name ? String(r.actor_name) : undefined,
+              read: !!r.read,
+              createdAt: String(r.created_at || new Date().toISOString()),
+              dedupeKey: r.dedupe_key ? String(r.dedupe_key) : undefined,
+            }),
+            { toast: false }
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const r = payload.old as { id?: string };
+          if (!r?.id) return;
+          useNotificationStore.setState((s) => ({
+            items: s.items.filter((n) => n.id !== r.id),
+            live: s.live?.id === r.id ? null : s.live,
+          }));
+        }
+      )
+      .subscribe((status) => {
+        console.info("[notifications] realtime", status);
+      });
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, mergeRemote, upsertRemote]);
 
   // Auto-some barulinho
   useEffect(() => {

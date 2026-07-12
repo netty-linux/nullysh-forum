@@ -48,6 +48,10 @@ interface NotificationState {
       dedupeKey?: string;
     }
   ) => AppNotification | null;
+  /** Mescla notificações vindas do Supabase (fonte multi-user) */
+  mergeRemote: (remote: AppNotification[]) => void;
+  /** Uma notificação realtime (INSERT) */
+  upsertRemote: (n: AppNotification, opts?: { toast?: boolean }) => void;
   markRead: (id: string) => void;
   markAllRead: (userId: string) => void;
   /** Remove todas as notificações do usuário (esvazia a lista). */
@@ -59,6 +63,51 @@ interface NotificationState {
   markMaterialSeen: (id: string) => void;
   markVideoSeen: (id: string) => void;
   markEventStartSeen: (id: string) => void;
+}
+
+const NOTIF_TYPES: NotificationType[] = [
+  "like",
+  "comment",
+  "repost",
+  "dm",
+  "material",
+  "video",
+  "event",
+];
+
+export function asNotifType(t: string): NotificationType {
+  return (NOTIF_TYPES as string[]).includes(t)
+    ? (t as NotificationType)
+    : "like";
+}
+
+/** Mapeia linha do Supabase → AppNotification */
+export function remoteToAppNotification(r: {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  href: string;
+  actorId?: string;
+  actorName?: string;
+  read: boolean;
+  createdAt: string;
+  dedupeKey?: string;
+}): AppNotification {
+  return {
+    id: r.id,
+    userId: r.userId,
+    type: asNotifType(r.type),
+    title: r.title,
+    body: r.body,
+    href: r.href || "/app",
+    actorId: r.actorId,
+    actorName: r.actorName,
+    read: r.read,
+    createdAt: r.createdAt,
+    dedupeKey: r.dedupeKey,
+  };
 }
 
 const MAX_ITEMS = 80;
@@ -111,6 +160,74 @@ export const useNotificationStore = create<NotificationState>()(
         return n;
       },
 
+      mergeRemote: (remote) => {
+        if (!remote.length) return;
+        set((s) => {
+          const byId = new Map(s.items.map((n) => [n.id, n]));
+          const byDedupe = new Map(
+            s.items
+              .filter((n) => n.dedupeKey)
+              .map((n) => [`${n.userId}:${n.dedupeKey}`, n])
+          );
+          for (const r of remote) {
+            if (byId.has(r.id)) {
+              byId.set(r.id, { ...byId.get(r.id)!, ...r });
+              continue;
+            }
+            const dk = r.dedupeKey
+              ? `${r.userId}:${r.dedupeKey}`
+              : null;
+            if (dk && byDedupe.has(dk)) {
+              // já existe local com mesma chave — preferir id remoto
+              const old = byDedupe.get(dk)!;
+              byId.delete(old.id);
+              byId.set(r.id, r);
+              byDedupe.set(dk, r);
+              continue;
+            }
+            byId.set(r.id, r);
+            if (dk) byDedupe.set(dk, r);
+          }
+          const items = Array.from(byId.values())
+            .sort(
+              (a, b) =>
+                new Date(b.createdAt).getTime() -
+                new Date(a.createdAt).getTime()
+            )
+            .slice(0, MAX_ITEMS);
+          return { items };
+        });
+      },
+
+      upsertRemote: (n, opts) => {
+        if (!n.userId) return;
+        if (n.actorId && n.actorId === n.userId) return;
+        set((s) => {
+          const exists = s.items.some((x) => x.id === n.id);
+          if (exists) {
+            return {
+              items: s.items.map((x) => (x.id === n.id ? n : x)),
+            };
+          }
+          if (n.dedupeKey) {
+            const dup = s.items.find(
+              (x) =>
+                x.userId === n.userId && x.dedupeKey === n.dedupeKey
+            );
+            if (dup) {
+              return {
+                items: s.items.map((x) => (x.id === dup.id ? n : x)),
+                live: opts?.toast === false ? s.live : n,
+              };
+            }
+          }
+          return {
+            items: [n, ...s.items].slice(0, MAX_ITEMS),
+            live: opts?.toast === false ? s.live : n,
+          };
+        });
+      },
+
       markRead: (id) => {
         set((s) => ({
           items: s.items.map((n) =>
@@ -118,6 +235,25 @@ export const useNotificationStore = create<NotificationState>()(
           ),
           live: s.live?.id === id ? null : s.live,
         }));
+        // sync remoto (ids uuid do Supabase, não ntf_ local)
+        if (!id.startsWith("ntf")) {
+          void (async () => {
+            try {
+              const { getSupabaseBrowser } = await import(
+                "@/lib/supabase/client"
+              );
+              const sb = getSupabaseBrowser();
+              if (sb) {
+                await sb
+                  .from("notifications")
+                  .update({ read: true })
+                  .eq("id", id);
+              }
+            } catch {
+              /* ignore */
+            }
+          })();
+        }
       },
 
       markAllRead: (userId) => {
@@ -128,6 +264,11 @@ export const useNotificationStore = create<NotificationState>()(
           live:
             s.live && s.live.userId === userId ? null : s.live,
         }));
+        void import("@/lib/supabase/posts-service").then(
+          ({ markRemoteNotificationsRead }) => {
+            void markRemoteNotificationsRead(userId);
+          }
+        );
       },
 
       clearForUser: (userId) => {
@@ -135,6 +276,11 @@ export const useNotificationStore = create<NotificationState>()(
           items: s.items.filter((n) => n.userId !== userId),
           live: s.live && s.live.userId === userId ? null : s.live,
         }));
+        void import("@/lib/supabase/posts-service").then(
+          ({ clearRemoteNotifications }) => {
+            void clearRemoteNotifications(userId);
+          }
+        );
       },
 
       clearLive: () => set({ live: null }),

@@ -46,6 +46,8 @@ export type PostRow = {
   title: string | null;
   content: string;
   image_url: string | null;
+  /** URL HTTPS do GIF (Giphy) — P1.b */
+  gif_url?: string | null;
   location: string | null;
   type: PostTypeDb | string;
   likes: number;

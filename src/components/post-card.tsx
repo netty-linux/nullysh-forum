@@ -339,20 +339,28 @@ export function PostCard({
       setError(rl.error);
       return;
     }
-    addComment({
-      postId: post.id,
-      authorId: user.id,
-      authorName: user.name,
-      authorAvatar: user.avatar,
-      content: text,
-      replyToId,
-    });
-    setDraft("");
-    setGifPanelOpen(false);
-    setReplyToId(null);
-    setReplyToName(null);
-    setError("");
-    setOpenComments(true);
+    void (async () => {
+      try {
+        await addComment({
+          postId: post.id,
+          authorId: user.id,
+          authorName: user.name,
+          authorAvatar: user.avatar,
+          content: text,
+          replyToId,
+        });
+        setDraft("");
+        setGifPanelOpen(false);
+        setReplyToId(null);
+        setReplyToName(null);
+        setError("");
+        setOpenComments(true);
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : "Não foi possível comentar."
+        );
+      }
+    })();
   }
 
   function sendCommentGif(g: GifItem) {
@@ -366,22 +374,30 @@ export function PostCard({
       return;
     }
     // Envia o GIF (+ legenda opcional se o usuário escreveu texto)
-    addComment({
-      postId: post.id,
-      authorId: user.id,
-      authorName: user.name,
-      authorAvatar: user.avatar,
-      content: draft.trim(),
-      replyToId,
-      gifUrl: g.url,
-    });
-    setGifPanelOpen(false);
-    setGifQ("");
-    setDraft("");
-    setReplyToId(null);
-    setReplyToName(null);
-    setError("");
-    setOpenComments(true);
+    void (async () => {
+      try {
+        await addComment({
+          postId: post.id,
+          authorId: user.id,
+          authorName: user.name,
+          authorAvatar: user.avatar,
+          content: draft.trim(),
+          replyToId,
+          gifUrl: g.url,
+        });
+        setGifPanelOpen(false);
+        setGifQ("");
+        setDraft("");
+        setReplyToId(null);
+        setReplyToName(null);
+        setError("");
+        setOpenComments(true);
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : "Não foi possível enviar o GIF."
+        );
+      }
+    })();
   }
 
   const rootComments = useMemo(

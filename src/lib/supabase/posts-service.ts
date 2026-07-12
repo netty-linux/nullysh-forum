@@ -1,15 +1,31 @@
 /**
  * Posts multi-user no Supabase.
- * UI ainda usa o tipo `Post` do app; este módulo é a borda DB ↔ domínio.
+ * UI ainda usa o tipo `Post` / `Comment` do app; este módulo é a borda DB ↔ domínio.
  */
 
-import type { Post } from "@/lib/types";
+import type { Comment, Post } from "@/lib/types";
 import { initials } from "@/lib/utils";
 import { getSupabaseBrowser } from "./client";
 import { isSupabaseConfigured } from "./config";
 import type { PostRow, PostWithAuthorRow } from "./database.types";
 
-function rowToPost(row: PostWithAuthorRow | PostRow): Post {
+export type CommentRow = {
+  id: string;
+  post_id: string;
+  author_id: string;
+  author_name: string;
+  author_avatar: string;
+  author_avatar_url?: string | null;
+  content: string;
+  created_at: string;
+  gif_url?: string | null;
+  parent_id?: string | null;
+  reply_to_name?: string | null;
+  reply_to_author_id?: string | null;
+  liked_by?: string[] | null;
+};
+
+function rowToPost(row: PostWithAuthorRow | PostRow & { gif_url?: string | null }): Post {
   const profile =
     "profiles" in row && row.profiles ? row.profiles : null;
   const authorName = profile?.name || row.author_name || "Membro";
@@ -17,6 +33,17 @@ function rowToPost(row: PostWithAuthorRow | PostRow): Post {
     profile?.avatar || row.author_avatar || initials(authorName) || "U";
   const authorAvatarUrl =
     profile?.avatar_url ?? row.author_avatar_url ?? null;
+  const rawGif =
+    "gif_url" in row
+      ? ((row as { gif_url?: string | null }).gif_url ?? null)
+      : null;
+  // Fallback: GIFs gravados em image_url antes da migration gif_url
+  const imageLooksLikeGif =
+    !rawGif &&
+    !!row.image_url &&
+    /giphy\.com|tenor\.com|\.gif(\?|$)/i.test(row.image_url);
+  const gifUrl = rawGif || (imageLooksLikeGif ? row.image_url : null);
+  const imageUrl = gifUrl ? null : row.image_url;
 
   return {
     id: row.id,
@@ -28,8 +55,8 @@ function rowToPost(row: PostWithAuthorRow | PostRow): Post {
     communityName: row.community_name || undefined,
     title: row.title || undefined,
     content: row.content || "",
-    imageUrl: row.image_url,
-    gifUrl: null,
+    imageUrl,
+    gifUrl,
     location: row.location,
     type: (["discussion", "news", "tutorial", "announcement"].includes(
       String(row.type)
@@ -39,11 +66,30 @@ function rowToPost(row: PostWithAuthorRow | PostRow): Post {
     likes: row.likes ?? 0,
     dislikes: 0,
     comments: row.comments_count ?? 0,
-    likedBy: Array.isArray(row.liked_by) ? row.liked_by : [],
+    likedBy: Array.isArray(row.liked_by)
+      ? row.liked_by.map(String)
+      : [],
     dislikedBy: [],
     savedBy: [],
     createdAt: row.created_at,
     vipOnly: !!row.vip_only,
+  };
+}
+
+export function rowToComment(row: CommentRow): Comment {
+  return {
+    id: row.id,
+    postId: row.post_id,
+    authorId: row.author_id,
+    authorName: row.author_name,
+    authorAvatar: row.author_avatar || "U",
+    content: row.content || "",
+    createdAt: row.created_at,
+    likedBy: Array.isArray(row.liked_by) ? row.liked_by.map(String) : [],
+    parentId: row.parent_id ?? null,
+    replyToName: row.reply_to_name ?? null,
+    replyToAuthorId: row.reply_to_author_id ?? null,
+    gifUrl: row.gif_url ?? null,
   };
 }
 
@@ -73,7 +119,6 @@ export async function fetchRemotePosts(limit = 80): Promise<Post[]> {
 
   if (error) {
     console.error("[posts] fetchRemotePosts", error);
-    // Fallback sem join se FK embed falhar
     const plain = await supabase
       .from("posts")
       .select("*")
@@ -86,6 +131,31 @@ export async function fetchRemotePosts(limit = 80): Promise<Post[]> {
   return ((data || []) as PostWithAuthorRow[]).map(rowToPost);
 }
 
+export async function fetchRemoteComments(
+  postIds?: string[]
+): Promise<Comment[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabaseBrowser();
+  if (!supabase) return [];
+
+  let q = supabase
+    .from("comments")
+    .select("*")
+    .order("created_at", { ascending: true })
+    .limit(500);
+
+  if (postIds && postIds.length > 0) {
+    q = q.in("post_id", postIds);
+  }
+
+  const { data, error } = await q;
+  if (error) {
+    console.error("[posts] fetchRemoteComments", error);
+    return [];
+  }
+  return ((data || []) as CommentRow[]).map(rowToComment);
+}
+
 export type CreateRemotePostInput = {
   authorId: string;
   authorName: string;
@@ -93,12 +163,12 @@ export type CreateRemotePostInput = {
   authorAvatarUrl?: string | null;
   content: string;
   imageUrl?: string | null;
+  gifUrl?: string | null;
   location?: string | null;
   type?: Post["type"];
   communityId?: string;
   communityName?: string;
   vipOnly?: boolean;
-  /** hashtag sem # (ex.: geral) */
   hashtag?: string | null;
   title?: string;
 };
@@ -115,11 +185,13 @@ export async function insertRemotePost(
   }
 
   const content = input.content.trim();
-  if (!content) {
+  const gifUrl = input.gifUrl?.trim() || null;
+  const imageUrl = input.imageUrl ?? null;
+  if (!content && !gifUrl && !imageUrl) {
     return { ok: false, error: "Conteúdo vazio" };
   }
 
-  const insert = {
+  const insert: Record<string, unknown> = {
     author_id: input.authorId,
     author_name: input.authorName,
     author_avatar: input.authorAvatar || "U",
@@ -127,8 +199,9 @@ export async function insertRemotePost(
     community_id: input.communityId ?? null,
     community_name: input.communityName ?? null,
     title: input.title?.trim() || null,
-    content,
-    image_url: input.imageUrl ?? null,
+    content: content || " ",
+    image_url: gifUrl ? null : imageUrl,
+    gif_url: gifUrl,
     location: input.location?.trim() || null,
     type: input.type ?? "discussion",
     likes: 0,
@@ -138,7 +211,6 @@ export async function insertRemotePost(
     hashtag: input.hashtag?.replace(/^#/, "").toLowerCase() || null,
   };
 
-  // Garante sessão (RLS exige auth.uid() = author_id)
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -149,7 +221,6 @@ export async function insertRemotePost(
     };
   }
   if (session.user.id !== input.authorId) {
-    // Corrige author_id para o uid real da sessão (evita RLS reject)
     insert.author_id = session.user.id;
   }
 
@@ -161,8 +232,38 @@ export async function insertRemotePost(
 
   if (error || !data) {
     console.error("[posts] insertRemotePost", error);
+    // Retry sem gif_url se coluna ainda não existir — grava GIF em image_url
+    // para o feed ainda exibir a mídia até aplicar a migration P1.b.
+    if (
+      gifUrl &&
+      (error?.message?.includes("gif_url") ||
+        error?.code === "PGRST204" ||
+        /column .*gif_url/i.test(error?.message || ""))
+    ) {
+      delete insert.gif_url;
+      insert.image_url = gifUrl;
+      const retry = await supabase
+        .from("posts")
+        .insert(insert)
+        .select("*")
+        .single();
+      if (retry.data) {
+        const post = rowToPost(retry.data as PostRow);
+        return {
+          ok: true,
+          post: { ...post, gifUrl, imageUrl: null },
+        };
+      }
+      return {
+        ok: false,
+        error:
+          (retry.error?.message || error?.message || "Falha ao publicar") +
+          " — aplique supabase/migrations/20260712_p1b_social_interactions.sql",
+      };
+    }
     const hint =
-      error?.code === "42501" || /row-level security|RLS/i.test(error?.message || "")
+      error?.code === "42501" ||
+      /row-level security|RLS/i.test(error?.message || "")
         ? " (RLS: confira se o profile existe e author_id = auth.uid())"
         : "";
     return {
@@ -171,15 +272,13 @@ export async function insertRemotePost(
     };
   }
 
-  return { ok: true, post: rowToPost(data as PostRow) };
+  return { ok: true, post: rowToPost(data as PostRow & { gif_url?: string }) };
 }
 
-/** Mapeia row crua (realtime payload) → Post */
 export function mapPostRow(row: PostRow): Post {
   return rowToPost(row);
 }
 
-/** Apaga post no Supabase (RLS: dono ou admin). */
 export async function deleteRemotePost(
   postId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -215,11 +314,227 @@ export async function deleteRemotePost(
     return { ok: false, error: error.message + hint };
   }
 
-  // Se 0 rows, post já não existia no DB (ou RLS bloqueou sem erro em alguns setups)
   if (count === 0) {
-    // Ainda assim ok do ponto de vista do cliente se já sumiu
     console.warn("[posts] deleteRemotePost: 0 rows affected", postId);
   }
 
+  return { ok: true };
+}
+
+/** Toggle like via RPC (atualiza liked_by + likes + notifica dono). */
+export async function toggleRemotePostLike(
+  postId: string
+): Promise<{ ok: true; post: Post } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Supabase não configurado" };
+  }
+  const supabase = getSupabaseBrowser();
+  if (!supabase) {
+    return { ok: false, error: "Cliente Supabase indisponível" };
+  }
+
+  const { data, error } = await supabase.rpc("toggle_post_like", {
+    p_post_id: postId,
+  });
+
+  if (error || !data) {
+    console.error("[posts] toggleRemotePostLike", error);
+    return {
+      ok: false,
+      error: error?.message || "Falha ao curtir",
+    };
+  }
+
+  return { ok: true, post: rowToPost(data as PostRow & { gif_url?: string }) };
+}
+
+export type CreateRemoteCommentInput = {
+  postId: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  content: string;
+  gifUrl?: string | null;
+  parentId?: string | null;
+  replyToName?: string | null;
+  replyToAuthorId?: string | null;
+};
+
+export async function insertRemoteComment(
+  input: CreateRemoteCommentInput
+): Promise<{ ok: true; comment: Comment } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Supabase não configurado" };
+  }
+  const supabase = getSupabaseBrowser();
+  if (!supabase) {
+    return { ok: false, error: "Cliente Supabase indisponível" };
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return { ok: false, error: "Sessão Supabase ausente." };
+  }
+
+  const content = input.content.trim();
+  const gifUrl = input.gifUrl?.trim() || null;
+  if (!content && !gifUrl) {
+    return { ok: false, error: "Comentário vazio" };
+  }
+
+  const insert: Record<string, unknown> = {
+    post_id: input.postId,
+    author_id: session.user.id,
+    author_name: input.authorName,
+    author_avatar: input.authorAvatar || "U",
+    content: content || "",
+    gif_url: gifUrl,
+    parent_id: input.parentId || null,
+    reply_to_name: input.replyToName || null,
+    reply_to_author_id: input.replyToAuthorId || null,
+    liked_by: [],
+  };
+
+  const { data, error } = await supabase
+    .from("comments")
+    .insert(insert)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    console.error("[posts] insertRemoteComment", error);
+    // Colunas gif/thread ainda não migradas: tenta insert mínimo
+    if (
+      error?.message?.includes("gif_url") ||
+      error?.message?.includes("parent_id") ||
+      error?.code === "PGRST204"
+    ) {
+      const minimal = {
+        post_id: input.postId,
+        author_id: session.user.id,
+        author_name: input.authorName,
+        author_avatar: input.authorAvatar || "U",
+        content:
+          content ||
+          (gifUrl ? "[GIF]" : ""),
+      };
+      const retry = await supabase
+        .from("comments")
+        .insert(minimal)
+        .select("*")
+        .single();
+      if (retry.data) {
+        const comment = rowToComment(retry.data as CommentRow);
+        return {
+          ok: true,
+          comment: {
+            ...comment,
+            gifUrl: gifUrl ?? comment.gifUrl,
+            parentId: input.parentId ?? null,
+            replyToName: input.replyToName ?? null,
+            replyToAuthorId: input.replyToAuthorId ?? null,
+          },
+        };
+      }
+    }
+    return {
+      ok: false,
+      error:
+        (error?.message || "Falha ao comentar") +
+        " — confira se a migration P1.b foi aplicada no Supabase",
+    };
+  }
+
+  return { ok: true, comment: rowToComment(data as CommentRow) };
+}
+
+export type RemoteNotification = {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  href: string;
+  actorId?: string;
+  actorName?: string;
+  read: boolean;
+  createdAt: string;
+  dedupeKey?: string;
+};
+
+export async function fetchRemoteNotifications(
+  userId: string
+): Promise<RemoteNotification[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabaseBrowser();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(80);
+
+  if (error || !data) {
+    console.error("[notifications] fetch", error);
+    return [];
+  }
+
+  return (data as Array<Record<string, unknown>>).map((r) => ({
+    id: String(r.id),
+    userId: String(r.user_id),
+    type: String(r.type),
+    title: String(r.title),
+    body: String(r.body || ""),
+    href: String(r.href || "/app"),
+    actorId: r.actor_id ? String(r.actor_id) : undefined,
+    actorName: r.actor_name ? String(r.actor_name) : undefined,
+    read: !!r.read,
+    createdAt: String(r.created_at),
+    dedupeKey: r.dedupe_key ? String(r.dedupe_key) : undefined,
+  }));
+}
+
+export async function markRemoteNotificationsRead(
+  userId: string
+): Promise<void> {
+  const supabase = getSupabaseBrowser();
+  if (!supabase) return;
+  await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", userId)
+    .eq("read", false);
+}
+
+export async function clearRemoteNotifications(userId: string): Promise<void> {
+  const supabase = getSupabaseBrowser();
+  if (!supabase) return;
+  await supabase.from("notifications").delete().eq("user_id", userId);
+}
+
+export async function deleteRemoteComment(
+  commentId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Supabase não configurado" };
+  }
+  const supabase = getSupabaseBrowser();
+  if (!supabase) {
+    return { ok: false, error: "Cliente Supabase indisponível" };
+  }
+
+  const { error } = await supabase
+    .from("comments")
+    .delete()
+    .eq("id", commentId);
+
+  if (error) {
+    console.error("[posts] deleteRemoteComment", error);
+    return { ok: false, error: error.message };
+  }
   return { ok: true };
 }
