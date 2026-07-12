@@ -26,7 +26,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { adminHeaders } from "@/lib/videos/client";
+import { getAdminAuthHeaders } from "@/lib/videos/client";
 
 type Props = {
   adminId: string;
@@ -180,9 +180,15 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
     }
     try {
       setProgress(`Enviando capa de “${v.title}”…`);
-      const headers = adminHeaders(admin) as Record<string, string>;
+      const headers = await getAdminAuthHeaders();
+      if (!headers.Authorization) {
+        throw new Error(
+          "Sessão Supabase ausente. Faça login de novo como admin."
+        );
+      }
       const presignRes = await fetch("/api/videos/presign", {
         method: "POST",
+        credentials: "include",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({
           filename: file.name,
@@ -204,11 +210,16 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
       const putHeaders: Record<string, string> = {
         "Content-Type": file.type || "image/jpeg",
       };
+      // worker-put precisa de auth; PUT S3 presignado não usa Bearer
       if (presign.mode === "worker-put" || presign.uploadUrl.startsWith("/")) {
         Object.assign(putHeaders, headers);
       }
       const putRes = await fetch(presign.uploadUrl, {
         method: "PUT",
+        credentials:
+          presign.mode === "worker-put" || presign.uploadUrl.startsWith("/")
+            ? "include"
+            : "omit",
         headers: putHeaders,
         body: file,
       });
@@ -219,6 +230,7 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
         `/api/videos/${encodeURIComponent(v.id)}/attach-thumb`,
         {
           method: "POST",
+          credentials: "include",
           headers: { ...headers, "Content-Type": "application/json" },
           body: JSON.stringify({ thumbObjectKey: presign.objectKey }),
         }

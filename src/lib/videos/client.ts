@@ -1,3 +1,4 @@
+import { getSupabaseBrowser } from "@/lib/supabase/client";
 import type { VideoPublic } from "@/lib/videos/types";
 
 export type VideosListResponse = {
@@ -29,28 +30,53 @@ export type VideoConfigResponse = {
 };
 
 /**
- * Headers de contexto admin (dev). Em produção a API valida sessão Supabase
- * (profiles.role=admin). NUNCA embutir ADMIN_API_SECRET no client (NEXT_PUBLIC_).
+ * Headers de autenticação admin para fetch às APIs.
+ * Usa o access_token da sessão Supabase (Bearer).
+ * NUNCA envia secrets NEXT_PUBLIC_* / x-admin-secret.
  */
-export function adminHeaders(admin: {
+export async function getAdminAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {};
+  const supabase = getSupabaseBrowser();
+  if (!supabase) return headers;
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  // Refresh se perto de expirar
+  let token = session?.access_token;
+  if (!token || (session?.expires_at && session.expires_at * 1000 < Date.now() + 60_000)) {
+    const { data } = await supabase.auth.refreshSession();
+    token = data.session?.access_token ?? token;
+  }
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+/** @deprecated Use getAdminAuthHeaders() — headers x-admin-* não autenticam em prod. */
+export function adminHeaders(_admin?: {
   id: string;
   name: string;
   role?: string;
 }): HeadersInit {
-  return {
-    "x-admin-id": admin.id,
-    "x-admin-name": admin.name,
-    "x-admin-role": admin.role || "admin",
-  };
+  return {};
 }
 
+const fetchOpts: RequestInit = {
+  credentials: "include",
+  cache: "no-store",
+};
+
 export async function fetchVideos(): Promise<VideosListResponse> {
-  const res = await fetch("/api/videos", { cache: "no-store" });
+  const res = await fetch("/api/videos", fetchOpts);
   return (await res.json()) as VideosListResponse;
 }
 
 export async function fetchVideoConfig(): Promise<VideoConfigResponse> {
-  const res = await fetch("/api/videos/config", { cache: "no-store" });
+  const res = await fetch("/api/videos/config", fetchOpts);
   return (await res.json()) as VideoConfigResponse;
 }
 
@@ -93,12 +119,15 @@ export async function uploadVideo(opts: {
     form.append("durationSec", String(opts.durationSec));
   }
 
+  const authHeaders = await getAdminAuthHeaders();
+
   let res: Response;
   try {
     res = await fetch("/api/videos", {
       method: "POST",
-      headers: adminHeaders(opts.admin),
+      headers: authHeaders,
       body: form,
+      credentials: "include",
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -142,11 +171,13 @@ export async function uploadVideo(opts: {
 
 export async function deleteVideo(
   id: string,
-  admin: { id: string; name: string; role?: string }
+  _admin?: { id: string; name: string; role?: string }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const authHeaders = await getAdminAuthHeaders();
   const res = await fetch(`/api/videos/${encodeURIComponent(id)}`, {
     method: "DELETE",
-    headers: adminHeaders(admin),
+    headers: authHeaders,
+    credentials: "include",
   });
   const data = (await res.json()) as { ok: boolean; error?: string };
   if (!data.ok) return { ok: false, error: data.error || `HTTP ${res.status}` };

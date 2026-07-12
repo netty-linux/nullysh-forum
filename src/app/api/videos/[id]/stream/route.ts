@@ -12,7 +12,11 @@ import {
   telegramFileUrl,
   telegramGetFile,
 } from "@/lib/telegram/bot";
-import { getSupabaseServer } from "@/lib/supabase/server";
+import {
+  getSupabaseFromRequest,
+  getSupabaseServer,
+  getSupabaseWithAccessToken,
+} from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { Readable } from "stream";
 
@@ -26,12 +30,57 @@ function nodeToWebStream(nodeStream: Readable): ReadableStream {
 }
 
 /** VIP-only: exige sessão + is_vip/admin em profiles (server-side). */
-async function assertCanStreamVideo(vipOnly: boolean): Promise<
-  { ok: true } | { ok: false; status: number; error: string }
-> {
+async function assertCanStreamVideo(
+  req: NextRequest,
+  vipOnly: boolean
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   if (!vipOnly) return { ok: true };
 
+  async function checkUser(
+    userId: string,
+    supabase: NonNullable<ReturnType<typeof getSupabaseFromRequest>>
+  ) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_vip, role")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profile?.is_vip || profile?.role === "admin") return true;
+    return false;
+  }
+
   try {
+    const bearer = (req.headers.get("authorization") || "")
+      .match(/^Bearer\s+(\S+)/i)?.[1]
+      ?.trim();
+    if (bearer) {
+      const supabase = getSupabaseWithAccessToken(bearer);
+      if (supabase) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser(bearer);
+        if (user && (await checkUser(user.id, supabase))) {
+          return { ok: true };
+        }
+        if (user) {
+          return { ok: false, status: 403, error: "Vídeo exclusivo VIP." };
+        }
+      }
+    }
+
+    const fromReq = getSupabaseFromRequest(req);
+    if (fromReq) {
+      const {
+        data: { user },
+      } = await fromReq.auth.getUser();
+      if (user && (await checkUser(user.id, fromReq))) {
+        return { ok: true };
+      }
+      if (user) {
+        return { ok: false, status: 403, error: "Vídeo exclusivo VIP." };
+      }
+    }
+
     const supabase = await getSupabaseServer();
     if (!supabase) {
       return {
@@ -50,20 +99,8 @@ async function assertCanStreamVideo(vipOnly: boolean): Promise<
         error: "Login necessário para vídeo VIP.",
       };
     }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("is_vip, role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profile?.is_vip || profile?.role === "admin") {
-      return { ok: true };
-    }
-    return {
-      ok: false,
-      status: 403,
-      error: "Vídeo exclusivo VIP.",
-    };
+    if (await checkUser(user.id, supabase)) return { ok: true };
+    return { ok: false, status: 403, error: "Vídeo exclusivo VIP." };
   } catch {
     return { ok: false, status: 401, error: "Não autorizado." };
   }
@@ -85,7 +122,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     );
   }
 
-  const access = await assertCanStreamVideo(!!video.vipOnly);
+  const access = await assertCanStreamVideo(req, !!video.vipOnly);
   if (!access.ok) {
     return NextResponse.json(
       { ok: false, error: access.error },

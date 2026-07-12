@@ -79,7 +79,7 @@ export async function OPTIONS() {
     headers: {
       "Access-Control-Allow-Methods": "PUT, OPTIONS",
       "Access-Control-Allow-Headers":
-        "Content-Type, x-admin-id, x-admin-name, x-admin-role, x-admin-secret",
+        "Content-Type, Authorization",
     },
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { adminHeaders } from "@/lib/videos/client";
+import { getAdminAuthHeaders } from "@/lib/videos/client";
 import type { VideoPublic } from "@/lib/videos/types";
 import { useCallback, useState } from "react";
 
@@ -83,6 +83,7 @@ async function presignAndPut(opts: {
 }): Promise<{ objectKey: string; mode?: string }> {
   const presignRes = await fetch("/api/videos/presign", {
     method: "POST",
+    credentials: "include",
     headers: {
       ...opts.headers,
       "Content-Type": "application/json",
@@ -142,9 +143,13 @@ export function useVideoUpload(admin: {
       setError(null);
       setPhase("Solicitando URL de upload…");
 
-      // AppSec: NÃO enviar NEXT_PUBLIC_* secret (visível no bundle).
-      // Auth admin = sessão Supabase (cookies) no server assertVideoAdmin.
-      const headers = adminHeaders(admin) as Record<string, string>;
+      // Auth admin = Bearer da sessão Supabase (sem secrets no client)
+      const headers = await getAdminAuthHeaders();
+      if (!headers.Authorization) {
+        throw new Error(
+          "Sessão Supabase ausente. Faça login de novo como admin."
+        );
+      }
 
       try {
         setPhase("Enviando vídeo ao R2…");
@@ -178,6 +183,7 @@ export function useVideoUpload(admin: {
         setProgress(98);
         const completeRes = await fetch("/api/videos/complete", {
           method: "POST",
+          credentials: "include",
           headers: {
             ...headers,
             "Content-Type": "application/json",
@@ -221,7 +227,7 @@ export function useVideoUpload(admin: {
         setIsUploading(false);
       }
     },
-    [admin]
+    []
   );
 
   return {
