@@ -94,12 +94,12 @@ interface ForumState {
   toggleLike: (postId: string, userId: string) => void;
   toggleDislike: (postId: string, userId: string) => void;
   toggleSave: (postId: string, userId: string) => void;
-  /** Remove post próprio (ou admin). Apaga comentários do post também. */
+  /** Remove post próprio (ou admin). Apaga no Supabase + store local. */
   deletePost: (
     postId: string,
     userId: string,
     opts?: { isAdmin?: boolean }
-  ) => { ok: true } | { ok: false; error: string };
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   /**
    * Apaga comentário se:
    * - for o autor do comentário, ou
@@ -395,7 +395,7 @@ export const useForumStore = create<ForumState>()(
         }));
       },
 
-      deletePost: (postId, userId, opts) => {
+      deletePost: async (postId, userId, opts) => {
         const post = get().posts.find((p) => p.id === postId);
         if (!post) {
           return { ok: false, error: "Post não encontrado." };
@@ -407,6 +407,19 @@ export const useForumStore = create<ForumState>()(
             error: "Você só pode apagar as suas próprias postagens.",
           };
         }
+
+        // Multi-user: apagar no Postgres primeiro (fonte da verdade)
+        // IDs locais legados (post_*) não existem no DB
+        if (isSupabaseConfigured() && !postId.startsWith("post_")) {
+          const { deleteRemotePost } = await import(
+            "@/lib/supabase/posts-service"
+          );
+          const remote = await deleteRemotePost(postId);
+          if (!remote.ok) {
+            return remote;
+          }
+        }
+
         set((s) => ({
           posts: s.posts.filter((p) => p.id !== postId),
           comments: s.comments.filter((c) => c.postId !== postId),

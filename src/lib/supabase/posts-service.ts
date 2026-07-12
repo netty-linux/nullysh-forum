@@ -178,3 +178,48 @@ export async function insertRemotePost(
 export function mapPostRow(row: PostRow): Post {
   return rowToPost(row);
 }
+
+/** Apaga post no Supabase (RLS: dono ou admin). */
+export async function deleteRemotePost(
+  postId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Supabase não configurado" };
+  }
+  const supabase = getSupabaseBrowser();
+  if (!supabase) {
+    return { ok: false, error: "Cliente Supabase indisponível" };
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return {
+      ok: false,
+      error: "Sessão Supabase ausente. Saia e entre de novo.",
+    };
+  }
+
+  const { error, count } = await supabase
+    .from("posts")
+    .delete({ count: "exact" })
+    .eq("id", postId);
+
+  if (error) {
+    console.error("[posts] deleteRemotePost", error);
+    const hint =
+      error.code === "42501" || /row-level security|RLS/i.test(error.message)
+        ? " (RLS: só o autor ou admin pode apagar)"
+        : "";
+    return { ok: false, error: error.message + hint };
+  }
+
+  // Se 0 rows, post já não existia no DB (ou RLS bloqueou sem erro em alguns setups)
+  if (count === 0) {
+    // Ainda assim ok do ponto de vista do cliente se já sumiu
+    console.warn("[posts] deleteRemotePost: 0 rows affected", postId);
+  }
+
+  return { ok: true };
+}

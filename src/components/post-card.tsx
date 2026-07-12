@@ -253,16 +253,18 @@ export function PostCard({
     if (!user || !canDelete || deleting || trashing) return;
     setConfirmDelete(false);
     setDeleting(true);
-    // animação “joga na lixeira”, depois remove do store
+    // animação “joga na lixeira”, depois remove do store + Supabase
     setTrashing(true);
     const delay = reduce ? 80 : 520;
     window.setTimeout(() => {
-      const res = deletePost(post.id, user.id, { isAdmin });
-      if (!res.ok) {
-        setError(res.error);
-        setDeleting(false);
-        setTrashing(false);
-      }
+      void (async () => {
+        const res = await deletePost(post.id, user.id, { isAdmin });
+        if (!res.ok) {
+          setError(res.error);
+          setDeleting(false);
+          setTrashing(false);
+        }
+      })();
     }, delay);
   }
 
