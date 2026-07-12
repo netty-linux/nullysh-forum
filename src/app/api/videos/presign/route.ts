@@ -13,12 +13,15 @@ import { randomUUID } from "crypto";
  */
 export const runtime = "nodejs";
 
-const MAX_PRESIGN_BYTES = 500 * 1024 * 1024; // 500 MB
+const MAX_VIDEO_BYTES = 500 * 1024 * 1024; // 500 MB
+const MAX_THUMB_BYTES = 5 * 1024 * 1024; // 5 MB
 
 type PresignBody = {
   filename?: string;
   contentType?: string;
   size?: number;
+  /** "video" (default) | "thumb" */
+  kind?: string;
 };
 
 function extensionFrom(filename: string, contentType: string): string {
@@ -26,6 +29,10 @@ function extensionFrom(filename: string, contentType: string): string {
   if (fromName && /^[a-z0-9]{1,8}$/.test(fromName)) return fromName;
   if (contentType.includes("webm")) return "webm";
   if (contentType.includes("quicktime")) return "mov";
+  if (contentType.includes("png")) return "png";
+  if (contentType.includes("webp")) return "webp";
+  if (contentType.includes("jpeg") || contentType.includes("jpg")) return "jpg";
+  if (contentType.startsWith("image/")) return "jpg";
   return "mp4";
 }
 
@@ -53,15 +60,35 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const filename = String(body.filename || "video.mp4").trim() || "video.mp4";
-  const contentType = String(body.contentType || "video/mp4").trim();
+  const kind =
+    String(body.kind || "video").trim().toLowerCase() === "thumb"
+      ? "thumb"
+      : "video";
+  const filename =
+    String(body.filename || (kind === "thumb" ? "thumb.jpg" : "video.mp4")).trim() ||
+    (kind === "thumb" ? "thumb.jpg" : "video.mp4");
+  const contentType = String(
+    body.contentType || (kind === "thumb" ? "image/jpeg" : "video/mp4")
+  ).trim();
   const size = Number(body.size || 0);
 
-  if (!contentType.startsWith("video/") && contentType !== "application/octet-stream") {
-    return NextResponse.json(
-      { ok: false, error: "contentType deve ser vídeo" },
-      { status: 400 }
-    );
+  if (kind === "video") {
+    if (
+      !contentType.startsWith("video/") &&
+      contentType !== "application/octet-stream"
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "contentType deve ser vídeo" },
+        { status: 400 }
+      );
+    }
+  } else {
+    if (!contentType.startsWith("image/")) {
+      return NextResponse.json(
+        { ok: false, error: "Thumbnail deve ser imagem (JPG/PNG/WebP)" },
+        { status: 400 }
+      );
+    }
   }
   if (!Number.isFinite(size) || size <= 0) {
     return NextResponse.json(
@@ -69,22 +96,32 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (size > MAX_PRESIGN_BYTES) {
+  const maxBytes = kind === "thumb" ? MAX_THUMB_BYTES : MAX_VIDEO_BYTES;
+  if (size > maxBytes) {
     return NextResponse.json(
       {
         ok: false,
-        error: `Arquivo maior que ${MAX_PRESIGN_BYTES / (1024 * 1024)} MB`,
+        error: `Arquivo maior que ${maxBytes / (1024 * 1024)} MB`,
       },
       { status: 413 }
     );
   }
 
   const ext = extensionFrom(filename, contentType);
-  const objectKey = `videos/${randomUUID()}.${ext}`;
-  const publicUrl = `/api/videos/stream/${objectKey
-    .split("/")
-    .map(encodeURIComponent)
-    .join("/")}`;
+  const objectKey =
+    kind === "thumb"
+      ? `thumbs/${randomUUID()}.${ext}`
+      : `videos/${randomUUID()}.${ext}`;
+  const publicUrl =
+    kind === "thumb"
+      ? `/api/videos/thumb-asset/${objectKey
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}`
+      : `/api/videos/stream/${objectKey
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}`;
 
   // 1) Ideal: PUT direto no R2 via S3 API (não passa body pelo Worker)
   if (hasR2S3Credentials()) {

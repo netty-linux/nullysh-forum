@@ -1,4 +1,5 @@
 import { getStoredVideo } from "@/lib/videos/catalog";
+import { getVideosBucket } from "@/lib/videos/cloud-bindings";
 import {
   isTelegramConfigured,
   telegramFileUrl,
@@ -10,15 +11,42 @@ export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** Thumbnail do Telegram (se existir). */
+/**
+ * Thumbnail do vídeo:
+ * 1) R2 (r2ThumbKey) — path R2-first
+ * 2) Telegram (telegramThumbFileId) — legado
+ */
 export async function GET(_req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  if (!isTelegramConfigured()) {
+  const video = await getStoredVideo(id);
+  if (!video) {
     return new NextResponse(null, { status: 404 });
   }
 
-  const video = await getStoredVideo(id);
-  if (!video?.telegramThumbFileId) {
+  // ── R2 ────────────────────────────────────────────────────────
+  if (video.r2ThumbKey) {
+    const bucket = await getVideosBucket();
+    if (bucket) {
+      try {
+        const obj = await bucket.get(video.r2ThumbKey);
+        if (obj?.body) {
+          return new NextResponse(obj.body, {
+            status: 200,
+            headers: {
+              "Content-Type":
+                obj.httpMetadata?.contentType || "image/jpeg",
+              "Cache-Control": "public, max-age=86400",
+            },
+          });
+        }
+      } catch (e) {
+        console.error("[thumb] R2 failed", e);
+      }
+    }
+  }
+
+  // ── Telegram legado ───────────────────────────────────────────
+  if (!video.telegramThumbFileId || !isTelegramConfigured()) {
     return new NextResponse(null, { status: 404 });
   }
 

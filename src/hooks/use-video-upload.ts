@@ -10,6 +10,8 @@ export type VideoUploadMeta = {
   vipOnly?: boolean;
   category?: string;
   duration?: string;
+  /** Capa/thumbnail (JPG/PNG/WebP) */
+  thumb?: File | null;
 };
 
 export type VideoUploadResult = {
@@ -67,15 +69,58 @@ function putWithProgress(
       }
       reject(new Error(msg));
     };
-    xhr.onerror = () => reject(new Error("Falha de rede no PUT do vídeo"));
+    xhr.onerror = () => reject(new Error("Falha de rede no PUT do arquivo"));
     xhr.onabort = () => reject(new Error("Upload cancelado"));
     xhr.send(file);
   });
 }
 
+async function presignAndPut(opts: {
+  file: File;
+  kind: "video" | "thumb";
+  headers: Record<string, string>;
+  onProgress: (pct: number) => void;
+}): Promise<{ objectKey: string; mode?: string }> {
+  const presignRes = await fetch("/api/videos/presign", {
+    method: "POST",
+    headers: {
+      ...opts.headers,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      filename: opts.file.name,
+      contentType: opts.file.type || (opts.kind === "thumb" ? "image/jpeg" : "video/mp4"),
+      size: opts.file.size,
+      kind: opts.kind,
+    }),
+  });
+  const presign = (await presignRes.json()) as PresignResponse;
+  if (!presignRes.ok || !presign.ok || !presign.uploadUrl || !presign.objectKey) {
+    throw new Error(
+      presign.error || `Presign (${opts.kind}) falhou HTTP ${presignRes.status}`
+    );
+  }
+
+  const putHeaders: Record<string, string> = {
+    "Content-Type":
+      opts.file.type || (opts.kind === "thumb" ? "image/jpeg" : "video/mp4"),
+  };
+  if (presign.mode === "worker-put" || presign.uploadUrl.startsWith("/")) {
+    Object.assign(putHeaders, opts.headers);
+  }
+
+  await putWithProgress(
+    presign.uploadUrl,
+    opts.file,
+    putHeaders,
+    opts.onProgress
+  );
+
+  return { objectKey: presign.objectKey, mode: presign.mode };
+}
+
 /**
- * Pipeline R2: presign → PUT (S3 ou Worker) → complete.
- * Não usa ffmpeg.wasm no path padrão (opcional separado).
+ * Pipeline R2: presign → PUT vídeo (+ thumb) → complete.
  */
 export function useVideoUpload(admin: {
   id: string;
@@ -98,54 +143,41 @@ export function useVideoUpload(admin: {
       setPhase("Solicitando URL de upload…");
 
       const headers = adminHeaders(admin) as Record<string, string>;
-      // Alias pedido no brief do architect
       const pub =
         process.env.NEXT_PUBLIC_ADMIN_API_SECRET?.trim() ||
         process.env.NEXT_PUBLIC_ADMIN_SECRET?.trim();
       if (pub) headers["x-admin-secret"] = pub;
 
       try {
-        const presignRes = await fetch("/api/videos/presign", {
-          method: "POST",
-          headers: {
-            ...headers,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            filename: file.name,
-            contentType: file.type || "video/mp4",
-            size: file.size,
-          }),
-        });
-        const presign = (await presignRes.json()) as PresignResponse;
-        if (!presignRes.ok || !presign.ok || !presign.uploadUrl || !presign.objectKey) {
-          throw new Error(
-            presign.error || `Presign falhou (HTTP ${presignRes.status})`
-          );
-        }
-
-        setPhase(
-          presign.mode === "s3-presign"
-            ? "Enviando direto ao R2…"
-            : "Enviando ao storage (Worker → R2)…"
-        );
-
-        const putHeaders: Record<string, string> = {
-          "Content-Type": file.type || "video/mp4",
-        };
-        // worker-put exige admin headers no mesmo origin
-        if (presign.mode === "worker-put" || presign.uploadUrl.startsWith("/")) {
-          Object.assign(putHeaders, headers);
-        }
-
-        await putWithProgress(
-          presign.uploadUrl,
+        setPhase("Enviando vídeo ao R2…");
+        const videoPut = await presignAndPut({
           file,
-          putHeaders,
-          setProgress
-        );
+          kind: "video",
+          headers,
+          onProgress: (pct) => setProgress(Math.min(90, Math.round(pct * 0.9))),
+        });
+
+        let thumbObjectKey: string | undefined;
+        if (meta.thumb && meta.thumb.size > 0) {
+          if (!meta.thumb.type.startsWith("image/")) {
+            throw new Error("Thumbnail deve ser imagem (JPG, PNG ou WebP).");
+          }
+          if (meta.thumb.size > 5 * 1024 * 1024) {
+            throw new Error("Thumbnail deve ter no máximo 5 MB.");
+          }
+          setPhase("Enviando thumbnail…");
+          const thumbPut = await presignAndPut({
+            file: meta.thumb,
+            kind: "thumb",
+            headers,
+            onProgress: (pct) =>
+              setProgress(90 + Math.min(8, Math.round(pct * 0.08))),
+          });
+          thumbObjectKey = thumbPut.objectKey;
+        }
 
         setPhase("Registrando no catálogo…");
+        setProgress(98);
         const completeRes = await fetch("/api/videos/complete", {
           method: "POST",
           headers: {
@@ -153,7 +185,8 @@ export function useVideoUpload(admin: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            objectKey: presign.objectKey,
+            objectKey: videoPut.objectKey,
+            thumbObjectKey: thumbObjectKey || undefined,
             title: meta.title,
             description: meta.description || "",
             vipOnly: !!meta.vipOnly,

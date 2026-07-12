@@ -116,7 +116,7 @@ export function toPublicVideo(v: StoredVideo): VideoPublic {
     hasStream: true,
     mimeType: v.mimeType,
     sizeBytes: v.sizeBytes,
-    hasThumb: !!v.telegramThumbFileId,
+    hasThumb: !!(v.r2ThumbKey || v.telegramThumbFileId),
   };
 }
 
@@ -160,6 +160,7 @@ export async function addStoredVideo(
     telegramChatId: input.telegramChatId,
     telegramThumbFileId: input.telegramThumbFileId ?? null,
     r2ObjectKey: input.r2ObjectKey ?? null,
+    r2ThumbKey: input.r2ThumbKey ?? null,
     fileName: input.fileName,
     mimeType: input.mimeType,
     sizeBytes: input.sizeBytes,
@@ -183,6 +184,8 @@ export async function updateStoredVideo(
       | "duration"
       | "thumbnail"
       | "views"
+      | "r2ThumbKey"
+      | "r2ObjectKey"
     >
   >
 ): Promise<StoredVideo | null> {

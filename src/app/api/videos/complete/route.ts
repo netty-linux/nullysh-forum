@@ -9,6 +9,8 @@ export const runtime = "nodejs";
 
 type CompleteBody = {
   objectKey?: string;
+  /** R2 key da thumbnail (thumbs/…) */
+  thumbObjectKey?: string;
   title?: string;
   description?: string;
   vipOnly?: boolean;
@@ -89,6 +91,16 @@ export async function POST(req: NextRequest) {
   const mimeType = String(body.mimeType || "video/mp4").trim();
   const fileName =
     String(body.fileName || "").trim() || objectKey.split("/").pop() || "video.mp4";
+  const thumbObjectKey = String(body.thumbObjectKey || "").trim();
+  if (
+    thumbObjectKey &&
+    (!thumbObjectKey.startsWith("thumbs/") || thumbObjectKey.includes(".."))
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "thumbObjectKey inválido" },
+      { status: 400 }
+    );
+  }
 
   const stored = await addStoredVideo({
     id: videoId,
@@ -96,11 +108,12 @@ export async function POST(req: NextRequest) {
     description,
     duration,
     category,
-    thumbnail: "R2",
+    thumbnail: thumbObjectKey ? "R2" : "R2",
     vipOnly,
     // Telegram opcional (vault); R2 é playback
     telegramFileId: "r2",
     r2ObjectKey: objectKey,
+    r2ThumbKey: thumbObjectKey || null,
     fileName,
     mimeType,
     sizeBytes,

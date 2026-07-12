@@ -18,6 +18,7 @@ import { cn, formatDate } from "@/lib/utils";
 import {
   CloudArrowUp,
   FilmStrip,
+  Image as ImageIcon,
   Lock,
   Play,
   SpinnerGap,
@@ -25,6 +26,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { adminHeaders } from "@/lib/videos/client";
 
 type Props = {
   adminId: string;
@@ -129,46 +131,20 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
         vipOnly,
         category,
         duration: duration.trim() || undefined,
+        thumb: thumb || null,
       });
-      onToast(`Vídeo “${result.video.title}” publicado no R2.`);
+      onToast(
+        result.video.hasThumb
+          ? `Vídeo “${result.video.title}” publicado com capa.`
+          : `Vídeo “${result.video.title}” publicado no R2.`
+      );
       resetForm();
       setShowForm(false);
       await reload();
 
-      /* TODO: old telegram flow — manter como vault/espelho opcional
-      if (!config?.configured) {
-        setError("Telegram não configurado…");
-        return;
-      }
-      const originalBytes = file.size;
-      let uploadFile = file;
-      const targetBytes =
-        config.compressTargetBytes ??
-        (config.hasR2 ? 48 : 18) * 1024 * 1024;
-      if (file.size > targetBytes) {
-        const { compressVideoInBrowser } = await import(
-          "@/lib/videos/compress-client"
-        );
-        const compressed = await compressVideoInBrowser(file, {
-          targetBytes,
-          onProgress: (p) => setProgress(p.message),
-        });
-        uploadFile = compressed.file;
-      }
-      const tg = await uploadVideo({
-        file: uploadFile,
-        title: title.trim(),
-        description: description.trim(),
-        category,
-        vipOnly,
-        duration: duration.trim() || undefined,
-        thumb,
-        admin,
-        clientCompressed: true,
-        originalBytes,
-      });
+      /* TODO: old telegram flow — vault/espelho opcional
+      const tg = await uploadVideo({ file, title, …, thumb, admin });
       */
-      void thumb; // thumb ainda no form; wire no complete R2 em sprint seguinte
     } catch (err) {
       let msg = uploadHookError || "Falha no upload";
       if (err instanceof Error) {
@@ -184,7 +160,7 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
   }
 
   async function onDelete(v: VideoPublic) {
-    if (!window.confirm(`Remover “${v.title}” do catálogo e do Telegram?`)) {
+    if (!window.confirm(`Remover “${v.title}” do catálogo?`)) {
       return;
     }
     const result = await deleteVideo(v.id, admin);
@@ -194,6 +170,76 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
     }
     onToast("Vídeo removido.");
     setVideos((list) => list.filter((x) => x.id !== v.id));
+  }
+
+  /** Anexa capa a vídeo já publicado (sem reenviar o MP4). */
+  async function onAttachThumb(v: VideoPublic, file: File) {
+    if (!file.type.startsWith("image/")) {
+      onToast("Use JPG, PNG ou WebP.");
+      return;
+    }
+    try {
+      setProgress(`Enviando capa de “${v.title}”…`);
+      const headers = adminHeaders(admin) as Record<string, string>;
+      const presignRes = await fetch("/api/videos/presign", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type || "image/jpeg",
+          size: file.size,
+          kind: "thumb",
+        }),
+      });
+      const presign = (await presignRes.json()) as {
+        ok?: boolean;
+        uploadUrl?: string;
+        objectKey?: string;
+        mode?: string;
+        error?: string;
+      };
+      if (!presign.ok || !presign.uploadUrl || !presign.objectKey) {
+        throw new Error(presign.error || "Presign da capa falhou");
+      }
+      const putHeaders: Record<string, string> = {
+        "Content-Type": file.type || "image/jpeg",
+      };
+      if (presign.mode === "worker-put" || presign.uploadUrl.startsWith("/")) {
+        Object.assign(putHeaders, headers);
+      }
+      const putRes = await fetch(presign.uploadUrl, {
+        method: "PUT",
+        headers: putHeaders,
+        body: file,
+      });
+      if (!putRes.ok) {
+        throw new Error(`Upload da capa HTTP ${putRes.status}`);
+      }
+      const attachRes = await fetch(
+        `/api/videos/${encodeURIComponent(v.id)}/attach-thumb`,
+        {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ thumbObjectKey: presign.objectKey }),
+        }
+      );
+      const attach = (await attachRes.json()) as {
+        ok?: boolean;
+        video?: VideoPublic;
+        error?: string;
+      };
+      if (!attach.ok || !attach.video) {
+        throw new Error(attach.error || "Falha ao vincular capa");
+      }
+      setVideos((list) =>
+        list.map((x) => (x.id === v.id ? attach.video! : x))
+      );
+      onToast(`Capa de “${v.title}” atualizada.`);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Falha na capa");
+    } finally {
+      setProgress("");
+    }
   }
 
   return (
@@ -433,6 +479,23 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
+                <label
+                  className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-neutral-200 px-3 text-[12px] font-semibold text-neutral-600 hover:bg-neutral-50 dark:border-zinc-600 dark:text-zinc-300"
+                  title="Definir / trocar capa"
+                >
+                  <ImageIcon size={14} weight="bold" />
+                  Capa
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void onAttachThumb(v, f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
                 <a
                   href={videoStreamUrl(v.id)}
                   target="_blank"

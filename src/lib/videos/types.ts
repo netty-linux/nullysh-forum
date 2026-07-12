@@ -25,6 +25,8 @@ export type StoredVideo = VideoPublic & {
   telegramThumbFileId?: string | null;
   /** Object key no R2, ex: videos/uuid.mp4 — playback preferencial. */
   r2ObjectKey?: string | null;
+  /** Thumbnail no R2, ex: thumbs/uuid.jpg */
+  r2ThumbKey?: string | null;
   fileName?: string;
   mimeType?: string;
   sizeBytes?: number;

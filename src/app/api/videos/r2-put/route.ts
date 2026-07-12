@@ -20,7 +20,10 @@ export async function PUT(req: NextRequest) {
   }
 
   const key = req.nextUrl.searchParams.get("key")?.trim() || "";
-  if (!key.startsWith("videos/") || key.includes("..")) {
+  if (
+    (!key.startsWith("videos/") && !key.startsWith("thumbs/")) ||
+    key.includes("..")
+  ) {
     return NextResponse.json(
       { ok: false, error: "objectKey inválido" },
       { status: 400 }
