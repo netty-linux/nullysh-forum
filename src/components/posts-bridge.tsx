@@ -14,11 +14,13 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   fetchRemoteComments,
   fetchRemotePosts,
+  fetchRemoteReposts,
   mapPostRow,
   rowToComment,
   type CommentRow,
 } from "@/lib/supabase/posts-service";
 import type { PostRow } from "@/lib/supabase/database.types";
+import type { PostRepost } from "@/lib/types";
 import { useEffect } from "react";
 
 function waitForForumPersist(): Promise<void> {
@@ -40,6 +42,7 @@ function waitForForumPersist(): Promise<void> {
 export function PostsBridge({ children }: { children: React.ReactNode }) {
   const hydratePosts = useForumStore((s) => s.hydratePosts);
   const hydrateComments = useForumStore((s) => s.hydrateComments);
+  const hydrateReposts = useForumStore((s) => s.hydrateReposts);
   const upsertPost = useForumStore((s) => s.upsertPost);
   const upsertComment = useForumStore((s) => s.upsertComment);
   const removePostById = useForumStore((s) => s.removePostById);
@@ -74,6 +77,28 @@ export function PostsBridge({ children }: { children: React.ReactNode }) {
             "[posts-bridge] hydrated",
             comments.length,
             "comments from Supabase"
+          );
+        }
+
+        const reposts = await fetchRemoteReposts(
+          postIds.length > 0 ? postIds : undefined
+        );
+        if (!cancelled) {
+          hydrateReposts(
+            reposts.map(
+              (r): PostRepost => ({
+                id: r.id,
+                postId: r.postId,
+                userId: r.userId,
+                userName: r.userName,
+                createdAt: r.createdAt,
+              })
+            )
+          );
+          console.info(
+            "[posts-bridge] hydrated",
+            reposts.length,
+            "reposts from Supabase"
           );
         }
       } catch (e) {
@@ -166,6 +191,41 @@ export function PostsBridge({ children }: { children: React.ReactNode }) {
           });
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "post_reposts" },
+        (payload) => {
+          const r = payload.new as Record<string, unknown>;
+          if (!r?.id) return;
+          const repost: PostRepost = {
+            id: String(r.id),
+            postId: String(r.post_id),
+            userId: String(r.user_id),
+            userName: String(r.user_name || "Membro"),
+            createdAt: String(r.created_at || new Date().toISOString()),
+          };
+          useForumStore.setState((s) => {
+            if (s.reposts.some((x) => x.id === repost.id)) return s;
+            // remove temp local
+            const withoutDup = s.reposts.filter(
+              (x) =>
+                !(x.postId === repost.postId && x.userId === repost.userId)
+            );
+            return { reposts: [repost, ...withoutDup] };
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "post_reposts" },
+        (payload) => {
+          const r = payload.old as { id?: string };
+          if (!r?.id) return;
+          useForumStore.setState((s) => ({
+            reposts: s.reposts.filter((x) => x.id !== r.id),
+          }));
+        }
+      )
       .subscribe((status) => {
         console.info("[posts-bridge] realtime", status);
       });
@@ -177,6 +237,7 @@ export function PostsBridge({ children }: { children: React.ReactNode }) {
   }, [
     hydratePosts,
     hydrateComments,
+    hydrateReposts,
     upsertPost,
     upsertComment,
     removePostById,

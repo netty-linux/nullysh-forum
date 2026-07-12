@@ -6,6 +6,7 @@ import { persist } from "zustand/middleware";
 
 export type NotificationType =
   | "like"
+  | "dislike"
   | "comment"
   | "repost"
   | "dm"
@@ -67,6 +68,7 @@ interface NotificationState {
 
 const NOTIF_TYPES: NotificationType[] = [
   "like",
+  "dislike",
   "comment",
   "repost",
   "dm",
@@ -367,6 +369,25 @@ export function notifyLike(opts: {
     actorId: opts.actorId,
     actorName: opts.actorName,
     dedupeKey: `like:${opts.postId}:${opts.actorId}`,
+  });
+}
+
+export function notifyDislike(opts: {
+  postAuthorId: string;
+  actorId: string;
+  actorName: string;
+  postId: string;
+  excerpt?: string;
+}) {
+  return useNotificationStore.getState().push({
+    userId: opts.postAuthorId,
+    type: "dislike",
+    title: "Não gostou do seu post",
+    body: `${opts.actorName} deu dislike no seu post${opts.excerpt ? `: “${opts.excerpt}”` : ""}`,
+    href: postHref(opts.postId),
+    actorId: opts.actorId,
+    actorName: opts.actorName,
+    dedupeKey: `dislike:${opts.postId}:${opts.actorId}`,
   });
 }
 

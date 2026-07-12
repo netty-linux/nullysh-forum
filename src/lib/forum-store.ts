@@ -13,6 +13,7 @@ import { getDmPeerId, isDmChannel } from "./dm";
 import {
   notifyComment,
   notifyCommentLike,
+  notifyDislike,
   notifyDm,
   notifyLike,
   notifyRepost,
@@ -92,9 +93,10 @@ interface ForumState {
   upsertPost: (post: Post) => void;
   removePostById: (postId: string) => void;
   toggleLike: (postId: string, userId: string) => Promise<void>;
-  toggleDislike: (postId: string, userId: string) => void;
+  toggleDislike: (postId: string, userId: string) => Promise<void>;
   toggleSave: (postId: string, userId: string) => void;
   hydrateComments: (comments: Comment[]) => void;
+  hydrateReposts: (reposts: PostRepost[]) => void;
   upsertComment: (comment: Comment) => void;
   /** Remove post próprio (ou admin). Apaga no Supabase + store local. */
   deletePost: (
@@ -129,12 +131,14 @@ interface ForumState {
     commentId: string,
     userId: string,
     actorName: string
-  ) => void;
+  ) => Promise<void>;
   toggleRepost: (
     postId: string,
     userId: string,
     userName: string
-  ) => { ok: true; reposted: boolean } | { ok: false; error: string };
+  ) => Promise<
+    { ok: true; reposted: boolean } | { ok: false; error: string }
+  >;
   isReposted: (postId: string, userId: string) => boolean;
   repostCount: (postId: string) => number;
   getRepostsByUser: (userId: string) => PostRepost[];
@@ -344,6 +348,20 @@ export const useForumStore = create<ForumState>()(
         });
       },
 
+      hydrateReposts: (reposts) => {
+        if (isSupabaseConfigured()) {
+          set({ reposts });
+          return;
+        }
+        set((s) => {
+          const remoteIds = new Set(reposts.map((r) => r.id));
+          const localOnly = s.reposts.filter(
+            (r) => !remoteIds.has(r.id) && r.id.startsWith("rp")
+          );
+          return { reposts: [...reposts, ...localOnly] };
+        });
+      },
+
       toggleLike: async (postId, userId) => {
         // Multi-user: RPC Supabase (liked_by + notificação ao dono)
         if (isSupabaseConfigured() && !postId.startsWith("post_")) {
@@ -439,7 +457,71 @@ export const useForumStore = create<ForumState>()(
         }
       },
 
-      toggleDislike: (postId, userId) => {
+      toggleDislike: async (postId, userId) => {
+        if (isSupabaseConfigured() && !postId.startsWith("post_")) {
+          const before = get().posts.find((p) => p.id === postId);
+          const wasDisliked = !!before?.dislikedBy?.includes(userId);
+          // Otimista
+          set((s) => ({
+            posts: s.posts.map((raw) => {
+              const p = normalizePost(raw);
+              if (p.id !== postId) return p;
+              if (wasDisliked) {
+                return {
+                  ...p,
+                  dislikes: Math.max(0, p.dislikes - 1),
+                  dislikedBy: p.dislikedBy.filter((id) => id !== userId),
+                };
+              }
+              return {
+                ...p,
+                dislikes: p.dislikes + 1,
+                dislikedBy: [
+                  ...p.dislikedBy.filter((id) => id !== userId),
+                  userId,
+                ],
+                likes: p.likedBy.includes(userId)
+                  ? Math.max(0, p.likes - 1)
+                  : p.likes,
+                likedBy: p.likedBy.filter((id) => id !== userId),
+              };
+            }),
+          }));
+          try {
+            const { toggleRemotePostDislike } = await import(
+              "@/lib/supabase/posts-service"
+            );
+            const remote = await toggleRemotePostDislike(postId);
+            if (remote.ok) {
+              set((s) => ({
+                posts: s.posts.map((p) =>
+                  p.id === postId
+                    ? {
+                        ...p,
+                        likes: remote.post.likes,
+                        likedBy: remote.post.likedBy,
+                        dislikes: remote.post.dislikes,
+                        dislikedBy: remote.post.dislikedBy,
+                      }
+                    : p
+                ),
+              }));
+            } else {
+              set((s) => ({
+                posts: s.posts.map((p) =>
+                  p.id === postId && before ? before : p
+                ),
+              }));
+              console.error("[toggleDislike] remote", remote.error);
+            }
+          } catch (e) {
+            console.error("[toggleDislike]", e);
+          }
+          return;
+        }
+
+        const before = get().posts.find((p) => p.id === postId);
+        const wasDisliked = !!before?.dislikedBy?.includes(userId);
         set((s) => ({
           posts: s.posts.map((raw) => {
             const p = normalizePost(raw);
@@ -464,6 +546,18 @@ export const useForumStore = create<ForumState>()(
             };
           }),
         }));
+        if (!wasDisliked && before && before.authorId !== userId) {
+          const actor =
+            useAuthStore.getState().users.find((u) => u.id === userId)?.name ||
+            "Alguém";
+          notifyDislike({
+            postAuthorId: before.authorId,
+            actorId: userId,
+            actorName: actor,
+            postId,
+            excerpt: before.content.slice(0, 48),
+          });
+        }
       },
 
       toggleSave: (postId, userId) => {
@@ -621,10 +715,52 @@ export const useForumStore = create<ForumState>()(
         return comment;
       },
 
-      toggleCommentLike: (commentId, userId, actorName) => {
+      toggleCommentLike: async (commentId, userId, actorName) => {
         const before = get().comments.find((c) => c.id === commentId);
         if (!before) return;
         const wasLiked = (before.likedBy ?? []).includes(userId);
+
+        // Multi-user: RPC notifica o autor do comentário
+        if (isSupabaseConfigured() && !commentId.startsWith("cm")) {
+          set((s) => ({
+            comments: s.comments.map((c) => {
+              if (c.id !== commentId) return c;
+              const likedBy = Array.isArray(c.likedBy) ? c.likedBy : [];
+              if (likedBy.includes(userId)) {
+                return {
+                  ...c,
+                  likedBy: likedBy.filter((id) => id !== userId),
+                };
+              }
+              return { ...c, likedBy: [...likedBy, userId] };
+            }),
+          }));
+          try {
+            const { toggleRemoteCommentLike } = await import(
+              "@/lib/supabase/posts-service"
+            );
+            const remote = await toggleRemoteCommentLike(commentId);
+            if (remote.ok) {
+              set((s) => ({
+                comments: s.comments.map((c) =>
+                  c.id === commentId
+                    ? { ...c, likedBy: remote.comment.likedBy ?? [] }
+                    : c
+                ),
+              }));
+            } else {
+              set((s) => ({
+                comments: s.comments.map((c) =>
+                  c.id === commentId ? before : c
+                ),
+              }));
+              console.error("[toggleCommentLike] remote", remote.error);
+            }
+          } catch (e) {
+            console.error("[toggleCommentLike]", e);
+          }
+          return;
+        }
 
         set((s) => ({
           comments: s.comments.map((c) => {
@@ -700,12 +836,88 @@ export const useForumStore = create<ForumState>()(
         return { ok: true };
       },
 
-      toggleRepost: (postId, userId, userName) => {
+      toggleRepost: async (postId, userId, userName) => {
         const post = get().posts.find((p) => p.id === postId);
         if (!post) return { ok: false, error: "Post não encontrado." };
         if (post.authorId === userId) {
           return { ok: false, error: "Você não pode repostar o próprio post." };
         }
+
+        // Multi-user: RPC grava + notifica o autor
+        if (isSupabaseConfigured() && !postId.startsWith("post_")) {
+          const existing = get().reposts.find(
+            (r) => r.postId === postId && r.userId === userId
+          );
+          // Otimista
+          if (existing) {
+            set((s) => ({
+              reposts: s.reposts.filter((r) => r.id !== existing.id),
+            }));
+          } else {
+            const temp: PostRepost = {
+              id: uid("rp"),
+              userId,
+              userName,
+              postId,
+              createdAt: new Date().toISOString(),
+            };
+            set((s) => ({ reposts: [temp, ...s.reposts] }));
+          }
+          try {
+            const { toggleRemoteRepost } = await import(
+              "@/lib/supabase/posts-service"
+            );
+            const remote = await toggleRemoteRepost(postId);
+            if (!remote.ok) {
+              // reverte
+              if (existing) {
+                set((s) => ({ reposts: [existing, ...s.reposts] }));
+              } else {
+                set((s) => ({
+                  reposts: s.reposts.filter(
+                    (r) => !(r.postId === postId && r.userId === userId)
+                  ),
+                }));
+              }
+              return { ok: false, error: remote.error };
+            }
+            if (remote.reposted && remote.repost) {
+              set((s) => ({
+                reposts: [
+                  {
+                    id: remote.repost!.id,
+                    userId: remote.repost!.userId,
+                    userName: remote.repost!.userName,
+                    postId: remote.repost!.postId,
+                    createdAt: remote.repost!.createdAt,
+                  },
+                  ...s.reposts.filter(
+                    (r) =>
+                      !(
+                        r.postId === postId &&
+                        r.userId === userId &&
+                        r.id.startsWith("rp")
+                      )
+                  ),
+                ],
+              }));
+            } else if (!remote.reposted) {
+              set((s) => ({
+                reposts: s.reposts.filter(
+                  (r) => !(r.postId === postId && r.userId === userId)
+                ),
+              }));
+            }
+            return { ok: true, reposted: remote.reposted };
+          } catch (e) {
+            console.error("[toggleRepost]", e);
+            return {
+              ok: false,
+              error: e instanceof Error ? e.message : "Falha ao repostar",
+            };
+          }
+        }
+
         const existing = get().reposts.find(
           (r) => r.postId === postId && r.userId === userId
         );

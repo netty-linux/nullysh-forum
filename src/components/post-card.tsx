@@ -174,12 +174,12 @@ export function PostCard({
       setPop(true);
       window.setTimeout(() => setPop(false), 450);
     }
-    toggleLike(post.id, user.id);
+    void toggleLike(post.id, user.id);
   }
 
   function onDislike() {
     if (!user || locked) return;
-    toggleDislike(post.id, user.id);
+    void toggleDislike(post.id, user.id);
   }
 
   function onRepost() {
@@ -188,16 +188,18 @@ export function PostCard({
       setError("Você não pode repostar o próprio post.");
       return;
     }
-    const res = toggleRepost(post.id, user.id, user.name);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
-    if (res.reposted) {
-      setRepostPop(true);
-      window.setTimeout(() => setRepostPop(false), 400);
-    }
-    setError("");
+    void (async () => {
+      const res = await toggleRepost(post.id, user.id, user.name);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      if (res.reposted) {
+        setRepostPop(true);
+        window.setTimeout(() => setRepostPop(false), 400);
+      }
+      setError("");
+    })();
   }
 
   function onDeleteComment(commentId: string) {
@@ -895,7 +897,7 @@ export function PostCard({
                               onDelete={() => onDeleteComment(c.id)}
                               onLike={() => {
                                 if (!user) return;
-                                toggleCommentLike(c.id, user.id, user.name);
+                                void toggleCommentLike(c.id, user.id, user.name);
                               }}
                             />
                             {replies.length > 0 && (
@@ -916,7 +918,7 @@ export function PostCard({
                                       onDelete={() => onDeleteComment(r.id)}
                                       onLike={() => {
                                         if (!user) return;
-                                        toggleCommentLike(
+                                        void toggleCommentLike(
                                           r.id,
                                           user.id,
                                           user.name

@@ -27,6 +27,7 @@ import {
   Heart,
   Package,
   Repeat,
+  ThumbsDown,
   X,
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -38,6 +39,7 @@ const TYPE_ICON: Record<
   { Icon: typeof Heart; className: string }
 > = {
   like: { Icon: Heart, className: "bg-red-500 text-white" },
+  dislike: { Icon: ThumbsDown, className: "bg-zinc-600 text-white" },
   comment: { Icon: ChatCircle, className: "bg-sky-500 text-white" },
   repost: { Icon: Repeat, className: "bg-emerald-500 text-white" },
   dm: { Icon: ChatCircle, className: "bg-violet-500 text-white" },

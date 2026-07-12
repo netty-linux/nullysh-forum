@@ -64,12 +64,19 @@ function rowToPost(row: PostWithAuthorRow | PostRow & { gif_url?: string | null 
       ? row.type
       : "discussion") as Post["type"],
     likes: row.likes ?? 0,
-    dislikes: 0,
+    dislikes:
+      typeof (row as PostRow).dislikes === "number"
+        ? ((row as PostRow).dislikes as number)
+        : Array.isArray((row as PostRow).disliked_by)
+          ? ((row as PostRow).disliked_by as string[]).length
+          : 0,
     comments: row.comments_count ?? 0,
     likedBy: Array.isArray(row.liked_by)
       ? row.liked_by.map(String)
       : [],
-    dislikedBy: [],
+    dislikedBy: Array.isArray((row as PostRow).disliked_by)
+      ? ((row as PostRow).disliked_by as string[]).map(String)
+      : [],
     savedBy: [],
     createdAt: row.created_at,
     vipOnly: !!row.vip_only,
@@ -346,6 +353,150 @@ export async function toggleRemotePostLike(
   }
 
   return { ok: true, post: rowToPost(data as PostRow & { gif_url?: string }) };
+}
+
+/** Toggle dislike via RPC (atualiza disliked_by + notifica dono). */
+export async function toggleRemotePostDislike(
+  postId: string
+): Promise<{ ok: true; post: Post } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Supabase não configurado" };
+  }
+  const supabase = getSupabaseBrowser();
+  if (!supabase) {
+    return { ok: false, error: "Cliente Supabase indisponível" };
+  }
+
+  const { data, error } = await supabase.rpc("toggle_post_dislike", {
+    p_post_id: postId,
+  });
+
+  if (error || !data) {
+    console.error("[posts] toggleRemotePostDislike", error);
+    return {
+      ok: false,
+      error: error?.message || "Falha ao dar dislike",
+    };
+  }
+
+  return { ok: true, post: rowToPost(data as PostRow & { gif_url?: string }) };
+}
+
+/** Toggle curtida em comentário + notifica o autor do comentário. */
+export async function toggleRemoteCommentLike(
+  commentId: string
+): Promise<{ ok: true; comment: Comment } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Supabase não configurado" };
+  }
+  const supabase = getSupabaseBrowser();
+  if (!supabase) {
+    return { ok: false, error: "Cliente Supabase indisponível" };
+  }
+
+  const { data, error } = await supabase.rpc("toggle_comment_like", {
+    p_comment_id: commentId,
+  });
+
+  if (error || !data) {
+    console.error("[posts] toggleRemoteCommentLike", error);
+    return {
+      ok: false,
+      error: error?.message || "Falha ao curtir comentário",
+    };
+  }
+
+  return { ok: true, comment: rowToComment(data as CommentRow) };
+}
+
+export type RemoteRepost = {
+  id: string;
+  postId: string;
+  userId: string;
+  userName: string;
+  createdAt: string;
+};
+
+export async function fetchRemoteReposts(
+  postIds?: string[]
+): Promise<RemoteRepost[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabaseBrowser();
+  if (!supabase) return [];
+
+  let q = supabase
+    .from("post_reposts")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (postIds && postIds.length > 0) {
+    q = q.in("post_id", postIds);
+  }
+
+  const { data, error } = await q;
+  if (error || !data) {
+    console.error("[posts] fetchRemoteReposts", error);
+    return [];
+  }
+
+  return (data as Array<Record<string, unknown>>).map((r) => ({
+    id: String(r.id),
+    postId: String(r.post_id),
+    userId: String(r.user_id),
+    userName: String(r.user_name || "Membro"),
+    createdAt: String(r.created_at),
+  }));
+}
+
+export async function toggleRemoteRepost(
+  postId: string
+): Promise<
+  | {
+      ok: true;
+      reposted: boolean;
+      count: number;
+      repost?: RemoteRepost;
+    }
+  | { ok: false; error: string }
+> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Supabase não configurado" };
+  }
+  const supabase = getSupabaseBrowser();
+  if (!supabase) {
+    return { ok: false, error: "Cliente Supabase indisponível" };
+  }
+
+  const { data, error } = await supabase.rpc("toggle_post_repost", {
+    p_post_id: postId,
+  });
+
+  if (error || !data) {
+    console.error("[posts] toggleRemoteRepost", error);
+    return {
+      ok: false,
+      error: error?.message || "Falha ao repostar",
+    };
+  }
+
+  const j = data as Record<string, unknown>;
+  const reposted = !!j.reposted;
+  return {
+    ok: true,
+    reposted,
+    count: Number(j.count ?? 0),
+    repost:
+      reposted && j.id
+        ? {
+            id: String(j.id),
+            postId: String(j.post_id || postId),
+            userId: String(j.user_id),
+            userName: String(j.user_name || "Membro"),
+            createdAt: String(j.created_at || new Date().toISOString()),
+          }
+        : undefined,
+  };
 }
 
 export type CreateRemoteCommentInput = {

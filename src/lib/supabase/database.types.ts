@@ -53,6 +53,9 @@ export type PostRow = {
   likes: number;
   comments_count: number;
   liked_by: string[] | null;
+  /** P1.c */
+  disliked_by?: string[] | null;
+  dislikes?: number | null;
   vip_only: boolean;
   hashtag: string | null;
   created_at: string;
