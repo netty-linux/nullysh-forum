@@ -20,6 +20,7 @@ import {
 } from "@/components/music-platform-icon";
 import { ProfileEmblem } from "@/components/profile-emblem";
 import { ProfileLinkIcon } from "@/components/profile-link-icon";
+import { ProfileSection } from "@/components/profile-section";
 import { RichText } from "@/components/rich-text";
 import { TagChips } from "@/components/tag-chips";
 import { Avatar } from "@/components/ui/avatar";
@@ -864,114 +865,136 @@ export default function ProfilePage() {
         id="profile-edit-form"
         onSubmit={onSave}
         autoComplete="off"
-        className="space-y-4 rounded-2xl border-2 border-neutral-200 bg-white p-6"
+        className="space-y-3"
       >
-        <h2 className="text-sm font-bold uppercase tracking-[0.1em] text-[#1f1f1f]">
-          Editar dados
-        </h2>
-        <Input
-          label="Nome"
-          name="profile-name"
-          autoComplete="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <Input
-          label="Nome de usuário (@)"
-          name="profile-username"
-          autoComplete="username"
-          spellCheck={false}
-          value={username}
-          onChange={(e) =>
-            setUsername(
-              e.target.value
-                .replace(/^@+/, "")
-                .toLowerCase()
-                .replace(/[^a-z0-9_]/g, "")
-            )
-          }
-          placeholder="seunome"
-          required
-        />
-        <Input
-          label="E-mail de cadastro"
-          type="email"
-          name="profile-email"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
+        <p className="px-0.5 text-[11px] font-medium uppercase tracking-[0.08em] text-neutral-400">
+          Configurações do perfil
+        </p>
 
-        <EmblemPicker
-          unlocked={badgesUnlocked}
-          equipped={badgeEquipped}
-          onEquip={(id) => setBadgeEquipped(id)}
-        />
-
-        <div>
-          <Textarea
-            ref={bioRef}
-            label="Bio"
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            placeholder="Conte um pouco sobre você..."
-            className="min-h-[100px]"
+        {/* ── Conta ─────────────────────────────────────────── */}
+        <ProfileSection
+          title="Conta"
+          description="Nome público, @ e e-mail de login"
+          defaultOpen
+        >
+          <Input
+            label="Nome"
+            name="profile-name"
+            autoComplete="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
           />
-          {user?.isVip && (
-            <div className="relative mt-2">
-              <button
-                type="button"
-                ref={bioEmojiBtnRef}
-                onClick={() => setShowBioEmoji((v) => !v)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600 transition hover:border-[#1f1f1f] hover:text-[#1f1f1f] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-                aria-expanded={showBioEmoji}
-              >
-                <Smiley size={16} className="text-sky-500" />
-                Emoji / Custom VIP
-                <CrownSimple
-                  size={12}
-                  weight="fill"
-                  className="text-amber-500"
-                />
-              </button>
-              <EmojiPicker
-                open={showBioEmoji}
-                onClose={() => setShowBioEmoji(false)}
-                panelRef={bioEmojiPanelRef}
-                isVip={!!user.isVip}
-                userId={user.id}
-                userName={user.name}
-                isAdmin={user.role === "admin"}
-                onPickUnicode={(em) => insertIntoBio(em)}
-                onPickCustom={(code) => insertIntoBio(code)}
-                className="!left-0 !right-auto"
-              />
-              {bio.trim() && (
-                <div className="mt-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-900">
-                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-neutral-400">
-                    Prévia da bio
-                  </p>
-                  <p className="text-sm leading-relaxed text-neutral-700 dark:text-zinc-300">
-                    <RichText text={bio} emojiSize={18} />
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+          <Input
+            label="Nome de usuário (@)"
+            name="profile-username"
+            autoComplete="username"
+            spellCheck={false}
+            value={username}
+            onChange={(e) =>
+              setUsername(
+                e.target.value
+                  .replace(/^@+/, "")
+                  .toLowerCase()
+                  .replace(/[^a-z0-9_]/g, "")
+              )
+            }
+            placeholder="seunome"
+            required
+          />
+          <Input
+            label="E-mail de cadastro"
+            type="email"
+            name="profile-email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </ProfileSection>
 
-        {/* Links na bio */}
-        <div className="rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-white to-neutral-50/80 p-4 shadow-[0_1px_2px_rgb(0_0_0/0.03)] sm:p-5">
-          <div className="mb-3 flex items-end justify-between gap-2">
-            <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
-              Links na biografia
-            </p>
-            <span className="text-[11px] font-medium tabular-nums text-neutral-400">
-              {links.length}/{linkLimit}
-            </span>
+        {/* ── Personalização ────────────────────────────────── */}
+        <ProfileSection
+          title="Personalização"
+          description="Bio, emblemas, links, músicas e emojis VIP"
+          defaultOpen
+          badge={
+            user?.isVip ? (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                <CrownSimple size={10} weight="fill" />
+                VIP
+              </span>
+            ) : null
+          }
+        >
+          <EmblemPicker
+            unlocked={badgesUnlocked}
+            equipped={badgeEquipped}
+            onEquip={(id) => setBadgeEquipped(id)}
+          />
+
+          <div>
+            <Textarea
+              ref={bioRef}
+              label="Bio"
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="Conte um pouco sobre você..."
+              className="min-h-[100px]"
+            />
+            {user?.isVip && (
+              <div className="relative mt-2">
+                <button
+                  type="button"
+                  ref={bioEmojiBtnRef}
+                  onClick={() => setShowBioEmoji((v) => !v)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600 transition hover:border-[#1f1f1f] hover:text-[#1f1f1f] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  aria-expanded={showBioEmoji}
+                >
+                  <Smiley size={16} className="text-sky-500" />
+                  Emoji / Custom VIP
+                  <CrownSimple
+                    size={12}
+                    weight="fill"
+                    className="text-amber-500"
+                  />
+                </button>
+                <EmojiPicker
+                  open={showBioEmoji}
+                  onClose={() => setShowBioEmoji(false)}
+                  panelRef={bioEmojiPanelRef}
+                  isVip={!!user.isVip}
+                  userId={user.id}
+                  userName={user.name}
+                  isAdmin={user.role === "admin"}
+                  onPickUnicode={(em) => insertIntoBio(em)}
+                  onPickCustom={(code) => insertIntoBio(code)}
+                  className="!left-0 !right-auto"
+                />
+                {bio.trim() && (
+                  <div className="mt-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-900">
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-neutral-400">
+                      Prévia da bio
+                    </p>
+                    <p className="text-sm leading-relaxed text-neutral-700 dark:text-zinc-300">
+                      <RichText text={bio} emojiSize={18} />
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Links na bio */}
+          <div className="rounded-xl border border-neutral-200/90 bg-neutral-50/50 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/40 sm:p-4">
+            <div className="mb-3 flex items-end justify-between gap-2">
+              <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
+                Links na biografia
+              </p>
+              <span className="text-[11px] font-medium tabular-nums text-neutral-400">
+                {links.length}/{linkLimit}
+              </span>
+            </div>
 
           <div className="space-y-2 sm:grid sm:grid-cols-[1fr_1.4fr_auto] sm:items-end sm:gap-2 sm:space-y-0">
             <Input
@@ -1046,279 +1069,283 @@ export default function ProfilePage() {
               ))}
             </ul>
           )}
-        </div>
-
-        {/* Músicas favoritas — VIP */}
-        <div className="rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-white to-neutral-50/80 p-4 shadow-[0_1px_2px_rgb(0_0_0/0.03)] sm:p-5 dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-950">
-          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-            <p className="flex items-center gap-1.5 text-[13px] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
-              <Headphones size={16} weight="bold" />
-              Ouvindo agora
-              <CrownSimple
-                size={13}
-                weight="fill"
-                className="text-amber-500"
-              />
-            </p>
-            {user?.isVip ? (
-              <span className="text-[11px] font-medium tabular-nums text-neutral-400">
-                {tracks.length}/{trackLimit}
-              </span>
-            ) : (
-              <Link href="/pricing">
-                <Button type="button" size="sm" variant="outline">
-                  Obter VIP
-                </Button>
-              </Link>
-            )}
           </div>
 
-          {user?.isVip ? (
-            <>
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                {(
-                  [
-                    ["auto", "Auto"],
-                    ["spotify", "Spotify"],
-                    ["youtube", "YouTube"],
-                    ["soundcloud", "SoundCloud"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setTrackPlatform(id)}
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition",
-                      trackPlatform === id
-                        ? "border-[#1f1f1f] bg-[#1f1f1f] text-white"
-                        : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-                    )}
-                  >
-                    {id !== "auto" && (
-                      <MusicPlatformIcon platform={id} size={12} />
-                    )}
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="space-y-2 sm:grid sm:grid-cols-[1fr_1.4fr_auto] sm:items-end sm:gap-2 sm:space-y-0">
-                <Input
-                  label="Título (opcional)"
-                  placeholder="Nome da faixa / vibe"
-                  value={trackTitle}
-                  onChange={(e) => setTrackTitle(e.target.value)}
-                  disabled={tracks.length >= trackLimit}
+          {/* Músicas favoritas — VIP */}
+          <div className="rounded-xl border border-neutral-200/90 bg-neutral-50/50 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/40 sm:p-4">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <p className="flex items-center gap-1.5 text-[13px] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
+                <Headphones size={16} weight="bold" />
+                Ouvindo agora
+                <CrownSimple
+                  size={13}
+                  weight="fill"
+                  className="text-amber-500"
                 />
-                <Input
-                  label="Link da música"
-                  placeholder={
-                    trackPlatform === "auto"
-                      ? "https://open.spotify.com/… ou YouTube / SoundCloud"
-                      : MUSIC_PLATFORM_META[trackPlatform].placeholder
-                  }
-                  value={trackUrl}
-                  onChange={(e) => setTrackUrl(e.target.value)}
-                  disabled={tracks.length >= trackLimit}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addTrack();
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full sm:mb-0 sm:h-12"
-                  onClick={() => void addTrack()}
-                  disabled={
-                    trackLoading ||
-                    tracks.length >= trackLimit ||
-                    !trackUrl.trim()
-                  }
-                >
-                  <Plus size={18} weight="bold" />
-                  {trackLoading ? "Buscando…" : "Add"}
-                </Button>
-              </div>
-              <p className="mt-2 text-[11px] text-neutral-400">
-                Cole o link — buscamos automaticamente o nome da faixa e do
-                artista, e liberamos o player no perfil.
               </p>
-
-              {tracks.length > 0 && (
-                <ul className="mt-3 space-y-2">
-                  {tracks.map((t) => (
-                    <li
-                      key={t.id}
-                      className="flex items-center gap-2.5 rounded-xl border border-neutral-200/80 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgb(0_0_0/0.03)] dark:border-zinc-700 dark:bg-zinc-900"
-                    >
-                      {t.thumbnailUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={t.thumbnailUrl}
-                          alt=""
-                          className="h-10 w-10 shrink-0 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-50 dark:bg-zinc-800">
-                          <MusicPlatformIcon
-                            platform={t.platform}
-                            size={18}
-                          />
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
-                          {t.title}
-                        </p>
-                        <p className="truncate text-[11px] text-neutral-500">
-                          {t.artist || musicPlatformLabel(t.platform)}
-                          <span className="text-neutral-300"> · </span>
-                          {musicPlatformLabel(t.platform)}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setTracks((prev) =>
-                            prev.filter((x) => x.id !== t.id)
-                          )
-                        }
-                        className="pressable shrink-0 rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-[#1f1f1f]"
-                        aria-label="Remover música"
-                      >
-                        <X size={16} weight="bold" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+              {user?.isVip ? (
+                <span className="text-[11px] font-medium tabular-nums text-neutral-400">
+                  {tracks.length}/{trackLimit}
+                </span>
+              ) : (
+                <Link href="/pricing">
+                  <Button type="button" size="sm" variant="outline">
+                    Obter VIP
+                  </Button>
+                </Link>
               )}
-            </>
-          ) : (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-neutral-300 bg-white/60 px-3 py-4 dark:border-zinc-700 dark:bg-zinc-900/50">
-              <MusicPlatformIcon platform="spotify" size={22} />
-              <MusicPlatformIcon platform="youtube" size={22} />
-              <MusicPlatformIcon platform="soundcloud" size={22} />
             </div>
-          )}
-        </div>
 
-        {/* Interesses */}
-        <div className="rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-white to-neutral-50/80 p-4 shadow-[0_1px_2px_rgb(0_0_0/0.03)] sm:p-5">
-          <div className="mb-3 flex items-end justify-between gap-2">
-            <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
-              Interesses
-            </p>
-            {interests.length > 0 && (
-              <span className="text-[11px] font-medium tabular-nums text-neutral-400">
-                {interests.length} selecionado
-                {interests.length === 1 ? "" : "s"}
-              </span>
+            {user?.isVip ? (
+              <>
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      ["auto", "Auto"],
+                      ["spotify", "Spotify"],
+                      ["youtube", "YouTube"],
+                      ["soundcloud", "SoundCloud"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setTrackPlatform(id)}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition",
+                        trackPlatform === id
+                          ? "border-[#1f1f1f] bg-[#1f1f1f] text-white"
+                          : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                      )}
+                    >
+                      {id !== "auto" && (
+                        <MusicPlatformIcon platform={id} size={12} />
+                      )}
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="space-y-2 sm:grid sm:grid-cols-[1fr_1.4fr_auto] sm:items-end sm:gap-2 sm:space-y-0">
+                  <Input
+                    label="Título (opcional)"
+                    placeholder="Nome da faixa / vibe"
+                    value={trackTitle}
+                    onChange={(e) => setTrackTitle(e.target.value)}
+                    disabled={tracks.length >= trackLimit}
+                  />
+                  <Input
+                    label="Link da música"
+                    placeholder={
+                      trackPlatform === "auto"
+                        ? "https://open.spotify.com/… ou YouTube / SoundCloud"
+                        : MUSIC_PLATFORM_META[trackPlatform].placeholder
+                    }
+                    value={trackUrl}
+                    onChange={(e) => setTrackUrl(e.target.value)}
+                    disabled={tracks.length >= trackLimit}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addTrack();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:mb-0 sm:h-12"
+                    onClick={() => void addTrack()}
+                    disabled={
+                      trackLoading ||
+                      tracks.length >= trackLimit ||
+                      !trackUrl.trim()
+                    }
+                  >
+                    <Plus size={18} weight="bold" />
+                    {trackLoading ? "Buscando…" : "Add"}
+                  </Button>
+                </div>
+                <p className="mt-2 text-[11px] text-neutral-400">
+                  Cole o link — buscamos automaticamente o nome da faixa e do
+                  artista, e liberamos o player no perfil.
+                </p>
+
+                {tracks.length > 0 && (
+                  <ul className="mt-3 space-y-2">
+                    {tracks.map((t) => (
+                      <li
+                        key={t.id}
+                        className="flex items-center gap-2.5 rounded-xl border border-neutral-200/80 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgb(0_0_0/0.03)] dark:border-zinc-700 dark:bg-zinc-900"
+                      >
+                        {t.thumbnailUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={t.thumbnailUrl}
+                            alt=""
+                            className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                          />
+                        ) : (
+                          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-50 dark:bg-zinc-800">
+                            <MusicPlatformIcon
+                              platform={t.platform}
+                              size={18}
+                            />
+                          </span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
+                            {t.title}
+                          </p>
+                          <p className="truncate text-[11px] text-neutral-500">
+                            {t.artist || musicPlatformLabel(t.platform)}
+                            <span className="text-neutral-300"> · </span>
+                            {musicPlatformLabel(t.platform)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTracks((prev) =>
+                              prev.filter((x) => x.id !== t.id)
+                            )
+                          }
+                          className="pressable shrink-0 rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-[#1f1f1f]"
+                          aria-label="Remover música"
+                        >
+                          <X size={16} weight="bold" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-neutral-300 bg-white/60 px-3 py-4 dark:border-zinc-700 dark:bg-zinc-900/50">
+                <MusicPlatformIcon platform="spotify" size={22} />
+                <MusicPlatformIcon platform="youtube" size={22} />
+                <MusicPlatformIcon platform="soundcloud" size={22} />
+              </div>
             )}
           </div>
-          <TagChips
-            tags={INTEREST_OPTIONS}
-            selected={interests}
-            onToggle={toggleInterest}
-          />
-        </div>
+        </ProfileSection>
 
-        {/* Objetivos */}
-        <div className="rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-white to-neutral-50/80 p-4 shadow-[0_1px_2px_rgb(0_0_0/0.03)] sm:p-5">
-          <div className="mb-3 flex items-end justify-between gap-2">
-            <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
-              Objetivos
-            </p>
-            <span className="text-[11px] font-medium tabular-nums text-neutral-400">
-              {goals.length}/{MAX_GOALS}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <Input
-              placeholder={GOAL_PLACEHOLDER}
-              value={customGoal}
-              onChange={(e) => setCustomGoal(e.target.value)}
-              disabled={goals.length >= MAX_GOALS}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addGoal(customGoal);
-                }
-              }}
+        {/* ── Interesses e objetivos ────────────────────────── */}
+        <ProfileSection
+          title="Interesses e objetivos"
+          description="Tags e metas que aparecem no seu perfil"
+        >
+          <div>
+            <div className="mb-3 flex items-end justify-between gap-2">
+              <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
+                Interesses
+              </p>
+              {interests.length > 0 && (
+                <span className="text-[11px] font-medium tabular-nums text-neutral-400">
+                  {interests.length} selecionado
+                  {interests.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+            <TagChips
+              tags={INTEREST_OPTIONS}
+              selected={interests}
+              onToggle={toggleInterest}
             />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => addGoal(customGoal)}
-              disabled={goals.length >= MAX_GOALS || !customGoal.trim()}
-              aria-label="Adicionar objetivo"
-            >
-              <Plus size={18} weight="bold" />
-            </Button>
           </div>
-          {goals.length > 0 && (
-            <ul className="mt-3 space-y-2">
-              {goals.map((g) => (
-                <li
-                  key={g}
-                  className="flex items-start gap-2 rounded-xl border border-neutral-200/80 bg-white px-3 py-2.5 text-sm text-neutral-700 shadow-[0_1px_2px_rgb(0_0_0/0.03)]"
-                >
-                  <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
-                    {g}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setGoals((prev) => prev.filter((x) => x !== g))
-                    }
-                    className="pressable shrink-0 rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-[#1f1f1f]"
-                    aria-label="Remover objetivo"
+
+          <div className="border-t border-neutral-100 pt-4 dark:border-zinc-800">
+            <div className="mb-3 flex items-end justify-between gap-2">
+              <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
+                Objetivos
+              </p>
+              <span className="text-[11px] font-medium tabular-nums text-neutral-400">
+                {goals.length}/{MAX_GOALS}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder={GOAL_PLACEHOLDER}
+                value={customGoal}
+                onChange={(e) => setCustomGoal(e.target.value)}
+                disabled={goals.length >= MAX_GOALS}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addGoal(customGoal);
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => addGoal(customGoal)}
+                disabled={goals.length >= MAX_GOALS || !customGoal.trim()}
+                aria-label="Adicionar objetivo"
+              >
+                <Plus size={18} weight="bold" />
+              </Button>
+            </div>
+            {goals.length > 0 && (
+              <ul className="mt-3 space-y-2">
+                {goals.map((g) => (
+                  <li
+                    key={g}
+                    className="flex items-start gap-2 rounded-xl border border-neutral-200/80 bg-white px-3 py-2.5 text-sm text-neutral-700 shadow-[0_1px_2px_rgb(0_0_0/0.03)] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
                   >
-                    <X size={16} weight="bold" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+                    <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
+                      {g}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setGoals((prev) => prev.filter((x) => x !== g))
+                      }
+                      className="pressable shrink-0 rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-[#1f1f1f]"
+                      aria-label="Remover objetivo"
+                    >
+                      <X size={16} weight="bold" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </ProfileSection>
 
-        {/* Mentoria */}
-        <div className="space-y-4 rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-white to-neutral-50/80 p-4 shadow-[0_1px_2px_rgb(0_0_0/0.03)] sm:p-5">
-          <p className="text-[13px] font-semibold tracking-tight text-[#1f1f1f]">
-            Mentoria
-          </p>
-
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200/80 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.02)] transition-colors hover:border-neutral-300">
+        {/* ── Mentoria ──────────────────────────────────────── */}
+        <ProfileSection
+          title="Mentoria"
+          description="Buscar ou oferecer mentoria na comunidade"
+        >
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200/80 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.02)] transition-colors hover:border-neutral-300 dark:border-zinc-700 dark:bg-zinc-900">
             <input
               type="checkbox"
               checked={seekingMentorship}
               onChange={(e) => setSeekingMentorship(e.target.checked)}
               className="mt-0.5 h-4 w-4 accent-[#1f1f1f]"
             />
-            <span className="text-sm text-neutral-700">
+            <span className="text-sm text-neutral-700 dark:text-zinc-300">
               Estou buscando mentoria
             </span>
           </label>
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200/80 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.02)] transition-colors hover:border-neutral-300">
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200/80 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.02)] transition-colors hover:border-neutral-300 dark:border-zinc-700 dark:bg-zinc-900">
             <input
               type="checkbox"
               checked={offeringMentorship}
               onChange={(e) => setOfferingMentorship(e.target.checked)}
               className="mt-0.5 h-4 w-4 accent-[#1f1f1f]"
             />
-            <span className="text-sm text-neutral-700">
+            <span className="text-sm text-neutral-700 dark:text-zinc-300">
               Ofereço mentoria para outros membros
             </span>
           </label>
 
           {offeringMentorship && (
-            <div className="space-y-3 rounded-xl border border-neutral-200/80 bg-white p-3.5 shadow-[inset_0_1px_0_rgb(255_255_255/0.8)]">
+            <div className="space-y-3 rounded-xl border border-neutral-200/80 bg-neutral-50/60 p-3.5 dark:border-zinc-700 dark:bg-zinc-900/50">
               <div>
-                <p className="text-[12px] font-semibold text-[#1f1f1f]">
+                <p className="text-[12px] font-semibold text-[#1f1f1f] dark:text-zinc-100">
                   Temas em que você mentoraria
                 </p>
                 <p className="mt-0.5 text-[11px] text-neutral-500">
@@ -1334,7 +1361,6 @@ export default function ProfilePage() {
                 )}
                 onToggle={toggleMentorTopic}
               />
-              {/* Temas personalizados já adicionados */}
               {mentorTopics.filter(
                 (t) =>
                   !INTEREST_OPTIONS.some(
@@ -1394,19 +1420,28 @@ export default function ProfilePage() {
 
           <Link
             href="/app/mentorship"
-            className="inline-flex text-xs font-semibold text-[#1f1f1f] underline underline-offset-2 transition-opacity hover:opacity-70"
+            className="inline-flex text-xs font-semibold text-[#1f1f1f] underline underline-offset-2 transition-opacity hover:opacity-70 dark:text-zinc-200"
           >
             Ver matches de mentoria
           </Link>
-        </div>
+        </ProfileSection>
 
-        {/* Senha isolada: o campo type=password no form principal era autofillado
-            e o Supabase recusava “same password”, abortando foto/GIF. */}
-        <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
-              Senha
-            </p>
+        {/* ── Segurança ───────────────────────────────────────
+            Senha isolada: type=password no form era autofillado e o
+            Supabase recusava “same password”, abortando foto/GIF. */}
+        <ProfileSection
+          title="Segurança"
+          description="Senha da conta e sessão"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200/80 bg-neutral-50/60 px-3.5 py-3 dark:border-zinc-700 dark:bg-zinc-900/40">
+            <div>
+              <p className="text-[13px] font-semibold text-[#1f1f1f] dark:text-zinc-100">
+                Senha
+              </p>
+              <p className="mt-0.5 text-[12px] text-neutral-500">
+                Altere apenas se quiser trocar a senha de acesso
+              </p>
+            </div>
             <Button
               type="button"
               variant="outline"
@@ -1420,31 +1455,30 @@ export default function ProfilePage() {
             </Button>
           </div>
           {changePassword && (
-            <div className="mt-3">
-              <Input
-                label="Nova senha"
-                type="password"
-                name="nullysh-new-password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Mínimo 6 caracteres"
-              />
-            </div>
+            <Input
+              label="Nova senha"
+              type="password"
+              name="nullysh-new-password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+            />
           )}
-        </div>
-        <div className="flex flex-wrap gap-2 pt-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              logout();
-              router.push("/");
-            }}
-          >
-            Sair da conta
-          </Button>
-        </div>
+          <div className="border-t border-neutral-100 pt-4 dark:border-zinc-800">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                logout();
+                router.push("/");
+              }}
+              className="text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+            >
+              Sair da conta
+            </Button>
+          </div>
+        </ProfileSection>
       </form>
 
       {/* Menu compacto no topo — discreto, segue o scroll até salvar */}
