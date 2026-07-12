@@ -35,7 +35,8 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
             headers: {
               "Content-Type":
                 obj.httpMetadata?.contentType || "image/jpeg",
-              "Cache-Control": "public, max-age=86400",
+              // max-age curto + query ?v= rev no client evita capa antiga
+              "Cache-Control": "public, max-age=300, stale-while-revalidate=86400",
             },
           });
         }

@@ -103,6 +103,13 @@ export async function writeVideoCatalog(videos: StoredVideo[]): Promise<void> {
 }
 
 export function toPublicVideo(v: StoredVideo): VideoPublic {
+  const hasThumb = !!(v.r2ThumbKey || v.telegramThumbFileId);
+  // Rev estável a partir da key — muda quando a capa é trocada (cache-bust no <img>)
+  const thumbRev = v.r2ThumbKey
+    ? v.r2ThumbKey.replace(/^thumbs\//, "").slice(0, 20)
+    : v.telegramThumbFileId
+      ? String(v.telegramThumbFileId).slice(-12)
+      : undefined;
   return {
     id: v.id,
     title: v.title,
@@ -116,7 +123,8 @@ export function toPublicVideo(v: StoredVideo): VideoPublic {
     hasStream: true,
     mimeType: v.mimeType,
     sizeBytes: v.sizeBytes,
-    hasThumb: !!(v.r2ThumbKey || v.telegramThumbFileId),
+    hasThumb,
+    thumbRev,
   };
 }
 

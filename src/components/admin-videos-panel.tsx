@@ -7,9 +7,9 @@ import {
   deleteVideo,
   fetchVideoConfig,
   fetchVideos,
-  // TODO: old telegram flow — uploadVideo ainda existe em @/lib/videos/client
-  // uploadVideo,
+  getAdminAuthHeaders,
   videoStreamUrl,
+  videoThumbUrl,
   type VideoConfigResponse,
 } from "@/lib/videos/client";
 import { useVideoUpload } from "@/hooks/use-video-upload";
@@ -26,7 +26,6 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getAdminAuthHeaders } from "@/lib/videos/client";
 
 type Props = {
   adminId: string;
@@ -241,11 +240,16 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
         error?: string;
       };
       if (!attach.ok || !attach.video) {
-        throw new Error(attach.error || "Falha ao vincular capa");
+        throw new Error(
+          attach.error ||
+            `Falha ao vincular capa (HTTP ${attachRes.status})`
+        );
       }
+      // Atualiza item + re-fetch do catálogo (garante hasThumb/thumbRev no painel)
       setVideos((list) =>
         list.map((x) => (x.id === v.id ? attach.video! : x))
       );
+      await reload();
       onToast(`Capa de “${v.title}” atualizada.`);
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Falha na capa");
@@ -466,9 +470,13 @@ export function AdminVideosPanel({ adminId, adminName, onToast }: Props) {
                 {v.hasThumb ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={`/api/videos/${v.id}/thumb`}
+                    key={`adm-thumb-${v.id}-${v.thumbRev || "0"}`}
+                    src={videoThumbUrl(v.id, v.thumbRev)}
                     alt=""
                     className="h-full w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
                 ) : (
                   <FilmStrip size={22} className="text-neutral-300" />

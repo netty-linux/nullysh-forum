@@ -187,18 +187,28 @@ function VideosPageInner() {
                   {v.hasThumb ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={videoThumbUrl(v.id)}
+                      key={`thumb-${v.id}-${v.thumbRev || "0"}`}
+                      src={videoThumbUrl(v.id, v.thumbRev)}
                       alt=""
                       className="absolute inset-0 h-full w-full object-cover"
+                      onError={(e) => {
+                        // fallback visual se a capa falhar no load
+                        const el = e.currentTarget;
+                        el.style.display = "none";
+                        const sib = el.nextElementSibling as HTMLElement | null;
+                        if (sib) sib.hidden = false;
+                      }}
                     />
-                  ) : (
-                    <>
-                      <div className="absolute inset-0 hero-grid opacity-50" />
-                      <span className="relative font-mono text-4xl font-bold tabular-nums text-neutral-300">
-                        {v.thumbnail || "▶"}
-                      </span>
-                    </>
-                  )}
+                  ) : null}
+                  <div
+                    hidden={!!v.hasThumb}
+                    className="absolute inset-0 flex items-center justify-center"
+                  >
+                    <div className="absolute inset-0 hero-grid opacity-50" />
+                    <span className="relative font-mono text-4xl font-bold tabular-nums text-neutral-300">
+                      {v.thumbnail && v.thumbnail !== "R2" ? v.thumbnail : "▶"}
+                    </span>
+                  </div>
                   <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-all duration-300 group-hover:bg-black/25">
                     <span className="inline-flex h-12 w-12 scale-90 items-center justify-center rounded-full bg-[#1f1f1f] text-white opacity-90 shadow-lg transition-transform duration-300 group-hover:scale-100 group-hover:opacity-100">
                       {locked ? (

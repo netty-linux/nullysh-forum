@@ -14,6 +14,8 @@ export type VideoPublic = {
   mimeType?: string;
   sizeBytes?: number;
   hasThumb?: boolean;
+  /** Cache-bust da capa (muda quando a thumb muda) */
+  thumbRev?: string;
 };
 
 /** Registro completo no catálogo server-side. */

@@ -14,6 +14,7 @@ type Ctx = { params: Promise<{ id: string }> };
 /**
  * Anexa / troca thumbnail R2 de um vídeo já publicado.
  * Body: { thumbObjectKey: "thumbs/…" }
+ * Exige que o objeto exista no R2 (não grava key órfã).
  */
 export async function POST(req: NextRequest, ctx: Ctx) {
   const auth = await assertVideoAdmin(req);
@@ -52,18 +53,50 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   }
 
   const bucket = await getVideosBucket();
-  if (bucket) {
-    try {
-      const head = await bucket.head(thumbObjectKey);
-      if (!head || head.size <= 0) {
-        return NextResponse.json(
-          { ok: false, error: "Thumbnail não encontrada no R2" },
-          { status: 400 }
-        );
-      }
-    } catch {
-      /* segue */
+  if (!bucket) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "VIDEOS_BUCKET ausente. Habilite o binding R2 e faça redeploy.",
+      },
+      { status: 503 }
+    );
+  }
+
+  // Confirma que o PUT da capa realmente gravou bytes no R2
+  try {
+    const obj = await bucket.get(thumbObjectKey);
+    if (!obj) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Capa não encontrada no R2. O upload (PUT) falhou — tente de novo.",
+        },
+        { status: 400 }
+      );
     }
+    // Alguns bindings expõem size no body; tenta head se disponível
+    const head = await bucket.head(thumbObjectKey).catch(() => null);
+    if (head && head.size <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "Capa vazia no R2 (0 bytes)." },
+        { status: 400 }
+      );
+    }
+  } catch (e) {
+    console.error("[attach-thumb] R2 verify", e);
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          e instanceof Error
+            ? `Falha ao verificar capa no R2: ${e.message}`
+            : "Falha ao verificar capa no R2",
+      },
+      { status: 500 }
+    );
   }
 
   const updated = await updateStoredVideo(id, {
@@ -72,7 +105,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   });
   if (!updated) {
     return NextResponse.json(
-      { ok: false, error: "Falha ao atualizar" },
+      { ok: false, error: "Falha ao atualizar catálogo" },
       { status: 500 }
     );
   }
@@ -86,8 +119,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     }
   }
 
+  const pub = toPublicVideo(updated);
   return NextResponse.json({
     ok: true,
-    video: toPublicVideo(updated),
+    video: pub,
+    // debug útil no painel
+    thumbUrl: `/api/videos/${encodeURIComponent(id)}/thumb?v=${encodeURIComponent(pub.thumbRev || "1")}`,
   });
 }

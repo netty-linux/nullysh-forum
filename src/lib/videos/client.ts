@@ -188,6 +188,9 @@ export function videoStreamUrl(id: string): string {
   return `/api/videos/${encodeURIComponent(id)}/stream`;
 }
 
-export function videoThumbUrl(id: string): string {
-  return `/api/videos/${encodeURIComponent(id)}/thumb`;
+/** URL da capa; `rev` evita cache stale após trocar a thumbnail. */
+export function videoThumbUrl(id: string, rev?: string | null): string {
+  const base = `/api/videos/${encodeURIComponent(id)}/thumb`;
+  if (!rev) return base;
+  return `${base}?v=${encodeURIComponent(rev)}`;
 }
