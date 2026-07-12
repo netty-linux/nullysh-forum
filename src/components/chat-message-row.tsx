@@ -1,6 +1,10 @@
 "use client";
 
 import { ChatMediaBubble } from "@/components/chat-media-bubble";
+import {
+  ChatMessageTicks,
+  deliveryStatusOf,
+} from "@/components/chat-message-ticks";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ProfileHoverCard } from "@/components/profile-hover-card";
 import { SharedPostEmbed } from "@/components/shared-post-embed";
@@ -408,6 +412,23 @@ export function ChatMessageRow({
                 )}
               </div>
             ) : null}
+
+            {/* Ticks WhatsApp — só nas minhas mensagens */}
+            {mine && (
+              <div
+                className={cn(
+                  "mt-0.5 flex items-center gap-1",
+                  isDm ? "justify-end" : "justify-start"
+                )}
+              >
+                <ChatMessageTicks
+                  status={deliveryStatusOf(m, {
+                    pending: m.id.startsWith("msg"),
+                  })}
+                  onDarkBubble={isDm}
+                />
+              </div>
+            )}
 
             {/* Chips de reações */}
             {reactionEntries.length > 0 && (

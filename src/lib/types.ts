@@ -324,6 +324,9 @@ export type ChatMediaKind =
   | "sticker"
   | "gif";
 
+/** Status de entrega estilo WhatsApp (só relevante para o autor) */
+export type ChatDeliveryStatus = "sending" | "sent" | "delivered" | "read";
+
 export interface ChatMessage {
   id: string;
   channelId: string;
@@ -355,6 +358,10 @@ export interface ChatMessage {
    * ex.: { "❤️": ["u1","u2"], "😂": ["u3"] }
    */
   reactions?: Record<string, string[]>;
+  /** IDs de quem recebeu a mensagem (não o autor) */
+  deliveredTo?: string[];
+  /** IDs de quem leu (abriu a sala depois da msg) */
+  readBy?: string[];
 }
 
 export interface ChatChannel {

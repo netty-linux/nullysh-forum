@@ -13,6 +13,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/lib/auth-store";
 import { useBlockStore } from "@/lib/block-store";
 import {
+  countUnreadInChannel,
+  markChannelAsRead,
+  useChatReadStore,
+} from "@/lib/chat-read-store";
+import {
   dmChannelId,
   getDmPeerId,
   isDmChannel,
@@ -21,7 +26,7 @@ import {
 import { chatChannels } from "@/lib/mock-data";
 import { useForumStore } from "@/lib/forum-store";
 import type { UserPublic } from "@/lib/types";
-import { cn, formatRelative } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import {
   ChatsCircle,
   Hash,
@@ -37,6 +42,31 @@ import {
   useState,
 } from "react";
 
+/** Badge de não lidas estilo WhatsApp (verde / contador) */
+function UnreadBadge({
+  count,
+  selected,
+}: {
+  count: number;
+  selected?: boolean;
+}) {
+  if (count <= 0) return null;
+  const label = count > 99 ? "99+" : String(count);
+  return (
+    <span
+      className={cn(
+        "ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums leading-none",
+        selected
+          ? "bg-white text-black dark:bg-black dark:text-white"
+          : "bg-[#25d366] text-white"
+      )}
+      aria-label={`${count} não lida${count > 1 ? "s" : ""}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 type ActiveChat =
   | { kind: "channel"; id: string }
   | { kind: "dm"; peerId: string; channelId: string };
@@ -49,6 +79,7 @@ function ChatPageInner() {
   const sendMessage = useForumStore((s) => s.sendMessage);
   const deleteMessage = useForumStore((s) => s.deleteMessage);
   const toggleMessageReaction = useForumStore((s) => s.toggleMessageReaction);
+  const readCursors = useChatReadStore((s) => s.cursors);
   const isEitherBlocked = useBlockStore((s) => s.isEitherBlocked);
   const blocks = useBlockStore((s) => s.blocks);
   const searchParams = useSearchParams();
@@ -59,6 +90,8 @@ function ChatPageInner() {
     id: chatChannels[0].id,
   });
   const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
 
   // Abre DM quando vem de ?dm=userId (ex.: botão Conversar no match)
   // Depende de userId (primitivo), não do objeto user inteiro.
@@ -171,9 +204,27 @@ function ChatPageInner() {
     [messages, channelId]
   );
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [channelMessages.length, channelId]);
+  const unreadByChannel = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (!user) return map;
+    for (const ch of chatChannels) {
+      map[ch.id] = countUnreadInChannel(
+        messages,
+        ch.id,
+        user.id,
+        readCursors[ch.id] ?? null
+      );
+    }
+    for (const { channelId: cid } of dmPeers) {
+      map[cid] = countUnreadInChannel(
+        messages,
+        cid,
+        user.id,
+        readCursors[cid] ?? null
+      );
+    }
+    return map;
+  }, [messages, user, readCursors, dmPeers]);
 
   function openChannel(id: string) {
     setActive({ kind: "channel", id });
@@ -193,6 +244,22 @@ function ChatPageInner() {
     active.kind === "dm" &&
     !!user &&
     isEitherBlocked(user.id, active.peerId);
+
+  // Marca sala como lida ao abrir / ao receber msgs enquanto está aberta
+  useEffect(() => {
+    if (!user || locked || dmBlocked) return;
+    void markChannelAsRead(channelId);
+  }, [channelId, user?.id, locked, dmBlocked, channelMessages.length]);
+
+  // Auto-scroll só se o user já está perto do fim (conversa flui sem puxar se leu o histórico)
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [channelMessages.length, channelId]);
+
+  useEffect(() => {
+    stickToBottomRef.current = true;
+  }, [channelId]);
 
   // Se a DM ativa ficou bloqueada, volta para sala pública
   useEffect(() => {
@@ -273,23 +340,25 @@ function ChatPageInner() {
               {chatChannels.map((ch) => {
                 const selected =
                   active.kind === "channel" && active.id === ch.id;
+                const unread = unreadByChannel[ch.id] ?? 0;
                 return (
                   <button
                     key={ch.id}
                     type="button"
                     onClick={() => openChannel(ch.id)}
                     className={cn(
-                      "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors",
+                      "flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors",
                       selected
                         ? "bg-black text-white dark:bg-white dark:text-black"
-                        : "text-neutral-600 hover:bg-neutral-100 hover:text-black dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+                        : "text-neutral-600 hover:bg-neutral-100 hover:text-black dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white",
+                      unread > 0 && !selected && "font-bold text-neutral-900 dark:text-zinc-100"
                     )}
                   >
-                    <span className="flex min-w-0 items-center gap-1.5 truncate">
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
                       <Hash size={14} weight="bold" className="shrink-0 opacity-60" />
                       <span className="truncate">{ch.name}</span>
                     </span>
-                    {ch.vipOnly && (
+                    {ch.vipOnly && unread === 0 && (
                       <span
                         className={cn(
                           "shrink-0 text-[9px] font-semibold uppercase",
@@ -299,6 +368,7 @@ function ChatPageInner() {
                         VIP
                       </span>
                     )}
+                    <UnreadBadge count={unread} selected={selected} />
                   </button>
                 );
               })}
@@ -321,6 +391,7 @@ function ChatPageInner() {
               {dmPeers.map(({ peer, channelId: cid }) => {
                 const selected =
                   active.kind === "dm" && active.channelId === cid;
+                const unread = unreadByChannel[cid] ?? 0;
                 return (
                   <button
                     key={cid}
@@ -340,7 +411,12 @@ function ChatPageInner() {
                       frame={peer.isVip ? peer.avatarFrame : null}
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1 truncate text-sm font-semibold">
+                      <span
+                        className={cn(
+                          "flex items-center gap-1 truncate text-sm",
+                          unread > 0 ? "font-bold" : "font-semibold"
+                        )}
+                      >
                         <span className="truncate">{peer.name}</span>
                         {peer.isVerified && (
                           <VerifiedBadge
@@ -352,12 +428,16 @@ function ChatPageInner() {
                       <span
                         className={cn(
                           "block truncate text-[11px]",
-                          selected ? "opacity-70" : "text-neutral-400"
+                          selected ? "opacity-70" : "text-neutral-400",
+                          unread > 0 && !selected && "font-medium text-neutral-600 dark:text-zinc-300"
                         )}
                       >
-                        Direct
+                        {unread > 0
+                          ? `${unread} nova${unread > 1 ? "s" : ""}`
+                          : "Direct"}
                       </span>
                     </span>
+                    <UnreadBadge count={unread} selected={selected} />
                   </button>
                 );
               })}
@@ -417,25 +497,39 @@ function ChatPageInner() {
             {chatChannels.map((ch) => {
               const selected =
                 active.kind === "channel" && active.id === ch.id;
+              const unread = unreadByChannel[ch.id] ?? 0;
               return (
                 <button
                   key={ch.id}
                   type="button"
                   onClick={() => openChannel(ch.id)}
                   className={cn(
-                    "shrink-0 rounded-full px-3 py-1 text-xs font-medium",
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium",
                     selected
                       ? "bg-neutral-950 text-white dark:bg-white dark:text-black"
                       : "bg-neutral-100 text-neutral-600 dark:bg-zinc-800 dark:text-zinc-400"
                   )}
                 >
                   #{ch.name}
+                  {unread > 0 && (
+                    <span
+                      className={cn(
+                        "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold",
+                        selected
+                          ? "bg-white text-black"
+                          : "bg-[#25d366] text-white"
+                      )}
+                    >
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
                 </button>
               );
             })}
-            {dmPeers.map(({ peer }) => {
+            {dmPeers.map(({ peer, channelId: cid }) => {
               const selected =
                 active.kind === "dm" && active.peerId === peer.id;
+              const unread = unreadByChannel[cid] ?? 0;
               return (
                 <button
                   key={peer.id}
@@ -450,6 +544,18 @@ function ChatPageInner() {
                 >
                   <Avatar name={peer.name} src={peer.avatarUrl} size="sm" className="!h-5 !w-5 !text-[9px]" />
                   {peer.name.split(" ")[0]}
+                  {unread > 0 && (
+                    <span
+                      className={cn(
+                        "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold",
+                        selected
+                          ? "bg-white text-black"
+                          : "bg-[#25d366] text-white"
+                      )}
+                    >
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -464,7 +570,16 @@ function ChatPageInner() {
             </div>
           ) : (
             <>
-              <div className="thin-scroll flex-1 space-y-4 overflow-y-auto p-4">
+              <div
+                ref={listRef}
+                className="thin-scroll flex-1 space-y-4 overflow-y-auto p-4"
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  const dist =
+                    el.scrollHeight - el.scrollTop - el.clientHeight;
+                  stickToBottomRef.current = dist < 80;
+                }}
+              >
                 {active.kind === "dm" && channelMessages.length === 0 && (
                   <div className="mx-auto max-w-sm py-10 text-center">
                     <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-neutral-100 dark:bg-zinc-800">

@@ -23,6 +23,8 @@ export type ChatMessageRow = {
   media_width?: number | null;
   media_height?: number | null;
   reactions?: Record<string, string[]> | null;
+  delivered_to?: string[] | null;
+  read_by?: string[] | null;
 };
 
 function asMediaKind(v: unknown): ChatMediaKind | null {
@@ -63,6 +65,10 @@ export function rowToChatMessage(row: ChatMessageRow): ChatMessage {
     mediaWidth: row.media_width ?? null,
     mediaHeight: row.media_height ?? null,
     reactions,
+    deliveredTo: Array.isArray(row.delivered_to)
+      ? row.delivered_to.map(String)
+      : [],
+    readBy: Array.isArray(row.read_by) ? row.read_by.map(String) : [],
   };
 }
 
@@ -259,4 +265,60 @@ export async function updateRemoteChatReactions(
     return { ok: false, error: error.message };
   }
   return { ok: true };
+}
+
+/** Marca mensagens de terceiros como entregues (tick ✓✓ cinza no autor). */
+export async function markRemoteChatDelivered(
+  messageIds: string[]
+): Promise<void> {
+  if (!messageIds.length || !isSupabaseConfigured()) return;
+  const supabase = getSupabaseBrowser();
+  if (!supabase) return;
+  const uuids = messageIds.filter((id) => !id.startsWith("msg"));
+  if (!uuids.length) return;
+  const { error } = await supabase.rpc("mark_chat_delivered", {
+    p_message_ids: uuids,
+  });
+  if (error) {
+    console.error("[chat] markRemoteChatDelivered", error);
+  }
+}
+
+/** Abriu a sala: marca lido + atualiza cursor de não-lidas. */
+export async function markRemoteChannelRead(
+  channelId: string
+): Promise<void> {
+  if (!channelId || !isSupabaseConfigured()) return;
+  const supabase = getSupabaseBrowser();
+  if (!supabase) return;
+  const { error } = await supabase.rpc("mark_channel_read", {
+    p_channel_id: channelId,
+  });
+  if (error) {
+    console.error("[chat] markRemoteChannelRead", error);
+  }
+}
+
+export async function fetchRemoteReadCursors(
+  userId: string
+): Promise<Record<string, string>> {
+  if (!userId || !isSupabaseConfigured()) return {};
+  const supabase = getSupabaseBrowser();
+  if (!supabase) return {};
+
+  const { data, error } = await supabase
+    .from("chat_read_cursors")
+    .select("channel_id, last_read_at")
+    .eq("user_id", userId);
+
+  if (error || !data) {
+    console.error("[chat] fetchRemoteReadCursors", error);
+    return {};
+  }
+
+  const out: Record<string, string> = {};
+  for (const row of data as Array<{ channel_id: string; last_read_at: string }>) {
+    out[row.channel_id] = row.last_read_at;
+  }
+  return out;
 }
