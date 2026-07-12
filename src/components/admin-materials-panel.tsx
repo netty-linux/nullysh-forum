@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useMaterialStore } from "@/lib/material-store";
-import type { MaterialType } from "@/lib/types";
+import type { Material, MaterialType } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
 import {
   Books,
   CrownSimple,
   Link as LinkIcon,
+  PencilSimple,
   Plus,
   Trash,
 } from "@phosphor-icons/react";
@@ -51,9 +52,11 @@ export function AdminMaterialsPanel({
 }: Props) {
   const materials = useMaterialStore((s) => s.materials);
   const createMaterial = useMaterialStore((s) => s.createMaterial);
+  const updateMaterial = useMaterialStore((s) => s.updateMaterial);
   const deleteMaterial = useMaterialStore((s) => s.deleteMaterial);
 
-  const [showForm, setShowForm] = useState(false);
+  /** null = fechado; "new" = criar; string = editando id */
+  const [formMode, setFormMode] = useState<"new" | string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<MaterialType>("pdf");
@@ -64,7 +67,10 @@ export function AdminMaterialsPanel({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  function resetForm() {
+  const isEditing = !!formMode && formMode !== "new";
+  const showForm = formMode !== null;
+
+  function resetFormFields() {
     setTitle("");
     setDescription("");
     setType("pdf");
@@ -76,12 +82,41 @@ export function AdminMaterialsPanel({
     setSaving(false);
   }
 
+  function closeForm() {
+    resetFormFields();
+    setFormMode(null);
+  }
+
+  function openCreate() {
+    resetFormFields();
+    setFormMode("new");
+  }
+
+  function openEdit(m: Material) {
+    setTitle(m.title);
+    setDescription(m.description);
+    setType(m.type);
+    setCategory(m.category || "Geral");
+    setSize(m.size || "");
+    setUrl(m.url || "");
+    setVipOnly(!!m.vipOnly);
+    setError("");
+    setSaving(false);
+    setFormMode(m.id);
+    // scroll suave até o formulário
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("admin-material-form")
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setSaving(true);
     try {
-      const res = createMaterial({
+      const payload = {
         title,
         description,
         type,
@@ -89,6 +124,21 @@ export function AdminMaterialsPanel({
         size: size || undefined,
         url: url || undefined,
         vipOnly,
+      };
+
+      if (isEditing && formMode) {
+        const res = updateMaterial(formMode, payload);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        onToast(`Material “${res.material.title}” atualizado.`);
+        closeForm();
+        return;
+      }
+
+      const res = createMaterial({
+        ...payload,
         createdById: adminId,
         createdByName: adminName,
       });
@@ -97,8 +147,7 @@ export function AdminMaterialsPanel({
         return;
       }
       onToast(`Material “${res.material.title}” publicado.`);
-      resetForm();
-      setShowForm(false);
+      closeForm();
     } finally {
       setSaving(false);
     }
@@ -111,6 +160,7 @@ export function AdminMaterialsPanel({
       onToast(res.error);
       return;
     }
+    if (formMode === id) closeForm();
     onToast(`Material “${matTitle}” removido.`);
   }
 
@@ -129,20 +179,32 @@ export function AdminMaterialsPanel({
           type="button"
           size="sm"
           onClick={() => {
-            resetForm();
-            setShowForm((v) => !v);
+            if (showForm && formMode === "new") closeForm();
+            else openCreate();
           }}
         >
           <Plus size={16} weight="bold" />
-          {showForm ? "Fechar" : "Novo material"}
+          {showForm && formMode === "new" ? "Fechar" : "Novo material"}
         </Button>
       </div>
 
       {showForm && (
         <form
+          id="admin-material-form"
           onSubmit={onSubmit}
           className="space-y-3 rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:p-5"
         >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-[#1f1f1f]">
+              {isEditing ? "Editar material" : "Novo material"}
+            </p>
+            {isEditing && (
+              <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700">
+                Editando publicação existente
+              </span>
+            )}
+          </div>
+
           <Input
             label="Título"
             value={title}
@@ -198,6 +260,10 @@ export function AdminMaterialsPanel({
                     {c}
                   </option>
                 ))}
+                {/* Se a categoria salva não está na lista, mantém no select */}
+                {category && !CATEGORIES.includes(category) && (
+                  <option value={category}>{category}</option>
+                )}
               </select>
             </div>
           </div>
@@ -257,16 +323,13 @@ export function AdminMaterialsPanel({
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                resetForm();
-                setShowForm(false);
-              }}
+              onClick={closeForm}
               disabled={saving}
             >
               Cancelar
             </Button>
             <Button type="submit" loading={saving}>
-              Publicar material
+              {isEditing ? "Salvar alterações" : "Publicar material"}
             </Button>
           </div>
         </form>
@@ -288,57 +351,79 @@ export function AdminMaterialsPanel({
         </div>
       ) : (
         <ul className="space-y-2">
-          {materials.map((m) => (
-            <li
-              key={m.id}
-              className="flex flex-col gap-3 rounded-2xl border border-neutral-200/90 bg-white p-4 sm:flex-row sm:items-center"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-[#1f1f1f]">
-                    {m.title}
-                  </p>
-                  <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase text-neutral-600">
-                    {TYPES.find((t) => t.value === m.type)?.label || m.type}
-                  </span>
-                  {m.vipOnly && (
-                    <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-700">
-                      <CrownSimple size={10} weight="fill" />
-                      VIP
-                    </span>
-                  )}
-                </div>
-                <p className="mt-0.5 line-clamp-2 text-[13px] text-neutral-500">
-                  {m.description}
-                </p>
-                <p className="mt-1 text-[11px] tabular-nums text-neutral-400">
-                  {m.category}
-                  {m.size ? ` · ${m.size}` : ""} ·{" "}
-                  {m.downloads.toLocaleString("pt-BR")} downloads ·{" "}
-                  {formatDate(m.createdAt)}
-                  {m.url ? (
-                    <>
-                      {" · "}
-                      <span className="inline-flex items-center gap-0.5">
-                        <LinkIcon size={11} />
-                        link
-                      </span>
-                    </>
-                  ) : null}
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onDelete(m.id, m.title)}
-                className="shrink-0 text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+          {materials.map((m) => {
+            const isActiveEdit = formMode === m.id;
+            return (
+              <li
+                key={m.id}
+                className={cn(
+                  "flex flex-col gap-3 rounded-2xl border bg-white p-4 sm:flex-row sm:items-center",
+                  isActiveEdit
+                    ? "border-sky-300 ring-2 ring-sky-100"
+                    : "border-neutral-200/90"
+                )}
               >
-                <Trash size={14} weight="bold" />
-                Remover
-              </Button>
-            </li>
-          ))}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-[#1f1f1f]">
+                      {m.title}
+                    </p>
+                    <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase text-neutral-600">
+                      {TYPES.find((t) => t.value === m.type)?.label || m.type}
+                    </span>
+                    {m.vipOnly && (
+                      <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-700">
+                        <CrownSimple size={10} weight="fill" />
+                        VIP
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 line-clamp-2 text-[13px] text-neutral-500">
+                    {m.description}
+                  </p>
+                  <p className="mt-1 text-[11px] tabular-nums text-neutral-400">
+                    {m.category}
+                    {m.size ? ` · ${m.size}` : ""} ·{" "}
+                    {m.downloads.toLocaleString("pt-BR")} downloads ·{" "}
+                    {formatDate(m.createdAt)}
+                    {m.url ? (
+                      <>
+                        {" · "}
+                        <span className="inline-flex items-center gap-0.5">
+                          <LinkIcon size={11} />
+                          link
+                        </span>
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (isActiveEdit) closeForm();
+                      else openEdit(m);
+                    }}
+                  >
+                    <PencilSimple size={14} weight="bold" />
+                    {isActiveEdit ? "Fechar" : "Editar"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onDelete(m.id, m.title)}
+                    className="text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+                  >
+                    <Trash size={14} weight="bold" />
+                    Remover
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
