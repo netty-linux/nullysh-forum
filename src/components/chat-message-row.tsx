@@ -377,8 +377,7 @@ export function ChatMessageRow({
             {note ? (
               <div
                 className={cn(
-                  "relative inline-block max-w-full rounded-2xl px-3.5 py-2 text-sm leading-relaxed",
-                  mine && "pb-5",
+                  "inline-block max-w-full rounded-2xl px-3.5 py-2 text-sm leading-relaxed",
                   hasMedia && "mt-1.5",
                   isDm && mine
                     ? "rounded-tr-sm bg-black text-white dark:bg-white dark:text-black"
@@ -390,30 +389,19 @@ export function ChatMessageRow({
                 <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                   {note}
                 </p>
-                {/*
-                  WhatsApp (correto): ticks SÓ na mensagem de quem enviou (mine).
-                  ✓ = enviada · ✓✓ cinza = o outro recebeu · ✓✓ azul = o outro leu
-                  Quem recebe NÃO vê ticks na mensagem do outro (não é o autor).
-                */}
-                {mine && (
-                  <span className="absolute bottom-1.5 right-2.5">
-                    <ChatMessageTicks
-                      status={deliveryStatusOf(m, {
-                        pending: m.id.startsWith("msg"),
-                      })}
-                      onDarkBubble={!!(isDm && mine)}
-                    />
-                  </span>
-                )}
               </div>
             ) : null}
 
-            {/* Mídia sem legenda: ticks só se for minha msg */}
-            {mine && hasMedia && !note && (
+            {/*
+              Ticks fora da bolha, abaixo do conteúdo (texto e/ou mídia) —
+              mesmo padrão do GIF: ✓✓ sob a mensagem, não dentro dela.
+              Só na mensagem de quem enviou (mine).
+            */}
+            {mine && (hasMedia || note) ? (
               <div
                 className={cn(
                   "mt-0.5 flex",
-                  isDm ? "justify-end" : "justify-start"
+                  isDm && mine ? "justify-end" : "justify-start"
                 )}
               >
                 <ChatMessageTicks
@@ -422,7 +410,7 @@ export function ChatMessageRow({
                   })}
                 />
               </div>
-            )}
+            ) : null}
 
             {m.sharedPostId ? (
               <div
