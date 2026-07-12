@@ -573,20 +573,30 @@ export const useAuthStore = create<AuthState>()(
         const id = get().currentUserId;
         if (!id) return { ok: false, error: "Você precisa estar logado." };
 
+        // AppSec: strip campos privilegiados mesmo se o caller passar cast sujo
+        const safeData = { ...data } as ProfileUpdate & {
+          isVip?: unknown;
+          role?: unknown;
+          isVerified?: unknown;
+        };
+        delete (safeData as { isVip?: unknown }).isVip;
+        delete (safeData as { role?: unknown }).role;
+        delete (safeData as { isVerified?: unknown }).isVerified;
+
         if (isSupabaseConfigured()) {
-          const result = await supabaseUpdateProfile(id, data);
+          const result = await supabaseUpdateProfile(id, safeData);
           if (!result.ok) return result;
           // Garante emblemas no user retornado (colunas podem não existir no DB ainda)
           const withBadges = {
             ...result.user,
             badgesUnlocked:
-              data.badgesUnlocked ??
+              safeData.badgesUnlocked ??
               result.user.badgesUnlocked ??
               get().users.find((u) => u.id === id)?.badgesUnlocked ??
               [],
             badgeEquipped:
-              data.badgeEquipped !== undefined
-                ? data.badgeEquipped
+              safeData.badgeEquipped !== undefined
+                ? safeData.badgeEquipped
                 : result.user.badgeEquipped ??
                   get().users.find((u) => u.id === id)?.badgeEquipped ??
                   null,
@@ -617,18 +627,18 @@ export const useAuthStore = create<AuthState>()(
           return { ok: true, user: withBadges };
         }
 
-        if (data.email) {
-          const normalized = data.email.trim().toLowerCase();
+        if (safeData.email) {
+          const normalized = safeData.email.trim().toLowerCase();
           const taken = get().users.some(
             (u) => u.email === normalized && u.id !== id
           );
           if (taken) return { ok: false, error: "Este e-mail já está em uso." };
         }
 
-        if (data.username !== undefined) {
-          const err = usernameValidationError(data.username);
+        if (safeData.username !== undefined) {
+          const err = usernameValidationError(safeData.username);
           if (err) return { ok: false, error: err };
-          const handle = normalizeUsername(data.username);
+          const handle = normalizeUsername(safeData.username);
           const taken = get().users.some(
             (u) =>
               u.id !== id &&
@@ -645,74 +655,89 @@ export const useAuthStore = create<AuthState>()(
             const u = normalizeUser(raw);
             if (u.id !== id) return u;
 
-            const nextName = data.name?.trim() ?? u.name;
+            const nextName = safeData.name?.trim() ?? u.name;
             const nextUsername =
-              data.username !== undefined
-                ? normalizeUsername(data.username)
+              safeData.username !== undefined
+                ? normalizeUsername(safeData.username)
                 : u.username;
             updated = {
               ...u,
               name: nextName,
               username: nextUsername,
-              bio: data.bio !== undefined ? data.bio : u.bio,
-              email: data.email?.trim().toLowerCase() ?? u.email,
+              bio: safeData.bio !== undefined ? safeData.bio : u.bio,
+              email: safeData.email?.trim().toLowerCase() ?? u.email,
+              // isVip / role / isVerified: nunca alteráveis por self-update
               password:
-                data.password && data.password.length >= 6
-                  ? data.password
+                safeData.password && safeData.password.length >= 6
+                  ? safeData.password
                   : u.password,
               avatar: initials(nextName) || u.avatar,
               avatarUrl:
-                data.avatarUrl !== undefined ? data.avatarUrl : u.avatarUrl,
+                safeData.avatarUrl !== undefined
+                  ? safeData.avatarUrl
+                  : u.avatarUrl,
               bannerUrl:
-                data.bannerUrl !== undefined ? data.bannerUrl : u.bannerUrl,
+                safeData.bannerUrl !== undefined
+                  ? safeData.bannerUrl
+                  : u.bannerUrl,
               bannerFit:
-                data.bannerFit !== undefined
-                  ? normalizeBannerFit(data.bannerFit)
+                safeData.bannerFit !== undefined
+                  ? normalizeBannerFit(safeData.bannerFit)
                   : u.bannerFit,
               avatarFrame: (() => {
                 // Free não mantém moldura VIP
                 if (!u.isVip && u.role !== "admin") return null;
-                if (data.avatarFrame === undefined) return u.avatarFrame;
-                if (data.avatarFrame === null) return null;
-                return isAvatarFrameId(data.avatarFrame)
-                  ? data.avatarFrame
+                if (safeData.avatarFrame === undefined) return u.avatarFrame;
+                if (safeData.avatarFrame === null) return null;
+                return isAvatarFrameId(safeData.avatarFrame)
+                  ? safeData.avatarFrame
                   : null;
               })(),
               interests:
-                data.interests !== undefined ? data.interests : u.interests,
-              goals: data.goals !== undefined ? data.goals : u.goals,
+                safeData.interests !== undefined
+                  ? safeData.interests
+                  : u.interests,
+              goals: safeData.goals !== undefined ? safeData.goals : u.goals,
               seekingMentorship:
-                data.seekingMentorship !== undefined
-                  ? data.seekingMentorship
+                safeData.seekingMentorship !== undefined
+                  ? safeData.seekingMentorship
                   : u.seekingMentorship,
               offeringMentorship:
-                data.offeringMentorship !== undefined
-                  ? data.offeringMentorship
+                safeData.offeringMentorship !== undefined
+                  ? safeData.offeringMentorship
                   : u.offeringMentorship,
               mentorTopics:
-                data.mentorTopics !== undefined
-                  ? data.mentorTopics
+                safeData.mentorTopics !== undefined
+                  ? safeData.mentorTopics
                   : u.mentorTopics,
-              links: data.links !== undefined ? data.links : u.links,
+              links: safeData.links !== undefined ? safeData.links : u.links,
               favoriteTracks: (() => {
                 if (!u.isVip && u.role !== "admin") return [];
-                if (data.favoriteTracks === undefined) return u.favoriteTracks;
-                return normalizeFavoriteTracks(data.favoriteTracks).slice(0, 6);
+                if (safeData.favoriteTracks === undefined)
+                  return u.favoriteTracks;
+                return normalizeFavoriteTracks(safeData.favoriteTracks).slice(
+                  0,
+                  6
+                );
               })(),
               badgesUnlocked: (() => {
-                if (data.badgesUnlocked === undefined) return u.badgesUnlocked;
-                return normalizeBadgesUnlocked(data.badgesUnlocked);
+                if (safeData.badgesUnlocked === undefined)
+                  return u.badgesUnlocked;
+                return normalizeBadgesUnlocked(safeData.badgesUnlocked);
               })(),
               badgeEquipped: (() => {
                 const unlocked =
-                  data.badgesUnlocked !== undefined
-                    ? normalizeBadgesUnlocked(data.badgesUnlocked)
+                  safeData.badgesUnlocked !== undefined
+                    ? normalizeBadgesUnlocked(safeData.badgesUnlocked)
                     : u.badgesUnlocked;
-                if (data.badgeEquipped === undefined) {
+                if (safeData.badgeEquipped === undefined) {
                   return normalizeBadgeEquipped(u.badgeEquipped, unlocked);
                 }
-                if (data.badgeEquipped === null) return null;
-                return normalizeBadgeEquipped(data.badgeEquipped, unlocked);
+                if (safeData.badgeEquipped === null) return null;
+                return normalizeBadgeEquipped(
+                  safeData.badgeEquipped,
+                  unlocked
+                );
               })(),
               updatedAt: new Date().toISOString(),
             };

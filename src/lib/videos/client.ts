@@ -28,21 +28,20 @@ export type VideoConfigResponse = {
   uploadPipeline?: string;
 };
 
+/**
+ * Headers de contexto admin (dev). Em produção a API valida sessão Supabase
+ * (profiles.role=admin). NUNCA embutir ADMIN_API_SECRET no client (NEXT_PUBLIC_).
+ */
 export function adminHeaders(admin: {
   id: string;
   name: string;
   role?: string;
 }): HeadersInit {
-  const h: Record<string, string> = {
+  return {
     "x-admin-id": admin.id,
     "x-admin-name": admin.name,
     "x-admin-role": admin.role || "admin",
   };
-  // Opcional: secret em prod (definir no .env.local e espelhar só no server —
-  // se NEXT_PUBLIC_ADMIN_API_SECRET existir, envia; caso contrário só dev headers)
-  const pub = process.env.NEXT_PUBLIC_ADMIN_API_SECRET?.trim();
-  if (pub) h["x-admin-secret"] = pub;
-  return h;
 }
 
 export async function fetchVideos(): Promise<VideosListResponse> {

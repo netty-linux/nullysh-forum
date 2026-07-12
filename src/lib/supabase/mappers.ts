@@ -108,7 +108,11 @@ export function profileRowToUser(row: ProfileRow): UserPublic {
   };
 }
 
-/** Payload de update para profiles (snake_case) */
+/**
+ * Payload de update para profiles (snake_case).
+ * Campos privilegiados (is_vip, role, is_verified) NÃO entram —
+ * evita mass-assignment / self-elevate via cliente.
+ */
 export function userUpdateToRow(
   data: Partial<
     Pick<
@@ -130,9 +134,6 @@ export function userUpdateToRow(
       | "favoriteTracks"
       | "badgesUnlocked"
       | "badgeEquipped"
-      | "isVip"
-      | "isVerified"
-      | "role"
       | "avatar"
     >
   >
@@ -163,9 +164,10 @@ export function userUpdateToRow(
   if (data.badgesUnlocked !== undefined)
     row.badges_unlocked = data.badgesUnlocked;
   if (data.badgeEquipped !== undefined) row.badge_equipped = data.badgeEquipped;
-  if (data.isVip !== undefined) row.is_vip = data.isVip;
-  if (data.isVerified !== undefined) row.is_verified = data.isVerified;
-  if (data.role !== undefined) row.role = data.role;
+
+  // NUNCA mapear is_vip / role / is_verified aqui.
+  // Self-elevate e mass-assignment são bloqueados no app + trigger SQL (P1.h).
+  // Admin altera privilégios só via fluxos server-side dedicados (service role).
 
   return row;
 }

@@ -104,9 +104,12 @@ export function sanitizeTrailHtml(input: string): string {
   if (!input || typeof input !== "string") return "";
 
   if (typeof document === "undefined") {
+    // Fallback SSR: strip scripts, handlers e hrefs perigosos
     return input
       .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
-      .replace(/on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+      .replace(/on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+      .replace(/\s(href|src|xlink:href)\s*=\s*("|')\s*javascript:[^"']*\2/gi, "")
+      .replace(/\s(href|src)\s*=\s*("|')\s*data:[^"']*\2/gi, "");
   }
 
   const tpl = document.createElement("template");
@@ -197,11 +200,18 @@ export function sanitizeTrailHtml(input: string): string {
 
       if (tag === "a" && name === "href") {
         const href = attr.value.trim();
-        if (!/^(https?:|mailto:|\/)/i.test(href)) {
+        // Bloqueia javascript:, data:, vbscript: e protocolos estranhos (XSS)
+        const safe =
+          /^(https?:\/\/|mailto:|\/(?!\/)|#)/i.test(href) &&
+          !/^\s*javascript:/i.test(href) &&
+          !/^\s*data:/i.test(href) &&
+          !/^\s*vbscript:/i.test(href);
+        if (!safe) {
           el.removeAttribute("href");
         } else {
+          el.setAttribute("href", href);
           el.setAttribute("target", "_blank");
-          el.setAttribute("rel", "noopener noreferrer");
+          el.setAttribute("rel", "noopener noreferrer nofollow");
         }
         continue;
       }

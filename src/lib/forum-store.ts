@@ -1025,6 +1025,12 @@ export const useForumStore = create<ForumState>()(
       sendMessage: async (data) => {
         const kind = data.mediaKind || (data.sharedPostId ? "text" : "text");
 
+        // AppSec XSS: texto puro, sem HTML; limita tamanho (anti-flood / payload)
+        const safeContent = (data.content || "")
+          .replace(/\0/g, "")
+          .slice(0, 4000)
+          .trim();
+
         // Multi-user: grava no Supabase (realtime + notif DM via trigger)
         if (isSupabaseConfigured()) {
           const { insertRemoteChatMessage } = await import(
@@ -1035,7 +1041,7 @@ export const useForumStore = create<ForumState>()(
             authorId: data.authorId,
             authorName: data.authorName,
             authorAvatar: data.authorAvatar,
-            content: (data.content || "").trim(),
+            content: safeContent,
             sharedPostId: data.sharedPostId ?? null,
             mediaKind: data.mediaKind ?? null,
             mediaUrl: data.mediaUrl ?? null,
@@ -1068,7 +1074,7 @@ export const useForumStore = create<ForumState>()(
           authorId: data.authorId,
           authorName: data.authorName,
           authorAvatar: data.authorAvatar,
-          content: (data.content || "").trim(),
+          content: safeContent,
           createdAt: new Date().toISOString(),
           sharedPostId: data.sharedPostId ?? null,
           mediaKind: data.mediaKind ?? null,
@@ -1085,7 +1091,7 @@ export const useForumStore = create<ForumState>()(
           const peer = getDmPeerId(data.channelId, data.authorId);
           if (peer) {
             const preview =
-              data.content.trim().slice(0, 60) ||
+              safeContent.slice(0, 60) ||
               (data.sharedPostId
                 ? "encaminhou um post"
                 : kind === "image"

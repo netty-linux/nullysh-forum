@@ -12,6 +12,7 @@ import {
   telegramFileUrl,
   telegramGetFile,
 } from "@/lib/telegram/bot";
+import { getSupabaseServer } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { Readable } from "stream";
 
@@ -24,9 +25,54 @@ function nodeToWebStream(nodeStream: Readable): ReadableStream {
   return Readable.toWeb(nodeStream) as ReadableStream;
 }
 
+/** VIP-only: exige sessão + is_vip/admin em profiles (server-side). */
+async function assertCanStreamVideo(vipOnly: boolean): Promise<
+  { ok: true } | { ok: false; status: number; error: string }
+> {
+  if (!vipOnly) return { ok: true };
+
+  try {
+    const supabase = await getSupabaseServer();
+    if (!supabase) {
+      return {
+        ok: false,
+        status: 401,
+        error: "Login necessário para vídeo VIP.",
+      };
+    }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return {
+        ok: false,
+        status: 401,
+        error: "Login necessário para vídeo VIP.",
+      };
+    }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_vip, role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile?.is_vip || profile?.role === "admin") {
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      status: 403,
+      error: "Vídeo exclusivo VIP.",
+    };
+  } catch {
+    return { ok: false, status: 401, error: "Não autorizado." };
+  }
+}
+
 /**
  * Stream do vídeo para o player HTML5.
  * Ordem: R2 (cloud) → FS local (dev) → Telegram getFile (≤ ~20 MB).
+ * VIP-only: gate no servidor (não confia no front).
  */
 export async function GET(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -36,6 +82,14 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     return NextResponse.json(
       { ok: false, error: "Vídeo não encontrado" },
       { status: 404 }
+    );
+  }
+
+  const access = await assertCanStreamVideo(!!video.vipOnly);
+  if (!access.ok) {
+    return NextResponse.json(
+      { ok: false, error: access.error },
+      { status: access.status }
     );
   }
 

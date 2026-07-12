@@ -6,25 +6,22 @@ export type AdminAuthResult =
   | { ok: false; error: string; status: number };
 
 /**
- * Autoriza mutações de vídeos (upload/delete).
- * Ordem:
- * 1. Header x-admin-secret === ADMIN_API_SECRET (recomendado em prod)
- * 2. Sessão Supabase com role admin no user_metadata / app_metadata
- * 3. Dev only: x-admin-role: admin + x-admin-id
+ * Autoriza mutações admin (vídeos, etc.).
+ *
+ * Ordem segura:
+ * 1. Sessão Supabase + role admin em public.profiles (fonte da verdade)
+ * 2. Header x-admin-secret === ADMIN_API_SECRET (server-only, NUNCA NEXT_PUBLIC_)
+ *
+ * NÃO confia em x-admin-role do client em produção.
+ * ALLOW_HEADER_ADMIN só em NODE_ENV=development e sem secret configurado.
  */
 export async function assertVideoAdmin(
   req: NextRequest
 ): Promise<AdminAuthResult> {
   const secret = process.env.ADMIN_API_SECRET?.trim();
   const headerSecret = req.headers.get("x-admin-secret")?.trim();
-  if (secret && headerSecret && headerSecret === secret) {
-    return {
-      ok: true,
-      adminId: req.headers.get("x-admin-id")?.trim() || "admin",
-      adminName: req.headers.get("x-admin-name")?.trim() || "Admin",
-    };
-  }
 
+  // 1) Sessão real + profiles.role (não confia em user_metadata spoofable)
   try {
     const supabase = await getSupabaseServer();
     if (supabase) {
@@ -32,17 +29,17 @@ export async function assertVideoAdmin(
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        const role =
-          (user.app_metadata?.role as string | undefined) ||
-          (user.user_metadata?.role as string | undefined);
-        if (role === "admin") {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id, name, role, is_vip")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profile?.role === "admin") {
           return {
             ok: true,
-            adminId: user.id,
-            adminName:
-              (user.user_metadata?.name as string) ||
-              user.email ||
-              "Admin",
+            adminId: profile.id,
+            adminName: profile.name || user.email || "Admin",
           };
         }
       }
@@ -51,12 +48,17 @@ export async function assertVideoAdmin(
     /* ignore */
   }
 
-  // Dev local OU preview cloud com mock auth (ALLOW_HEADER_ADMIN=1)
-  const allowHeaderAdmin =
-    process.env.NODE_ENV === "development" ||
-    process.env.ALLOW_HEADER_ADMIN === "1" ||
-    process.env.ALLOW_HEADER_ADMIN === "true";
-  if (allowHeaderAdmin) {
+  // 2) Shared secret server-side (automation / CI). Nunca expor no NEXT_PUBLIC_*
+  if (secret && headerSecret && headerSecret === secret) {
+    return {
+      ok: true,
+      adminId: req.headers.get("x-admin-id")?.trim() || "admin-service",
+      adminName: req.headers.get("x-admin-name")?.trim() || "Admin Service",
+    };
+  }
+
+  // 3) Dev local only — headers spoofáveis, nunca em produção
+  if (process.env.NODE_ENV === "development" && !secret) {
     const role = req.headers.get("x-admin-role")?.trim();
     const adminId = req.headers.get("x-admin-id")?.trim();
     if (role === "admin" && adminId) {
@@ -68,11 +70,11 @@ export async function assertVideoAdmin(
     }
   }
 
-  // Se tem secret configurado e falhou, 401 explícito
   if (secret) {
     return {
       ok: false,
-      error: "Não autorizado. Configure x-admin-secret (ADMIN_API_SECRET).",
+      error:
+        "Não autorizado. Faça login como admin ou envie x-admin-secret (ADMIN_API_SECRET).",
       status: 401,
     };
   }
@@ -80,7 +82,7 @@ export async function assertVideoAdmin(
   return {
     ok: false,
     error:
-      "Não autorizado. Em dev, entre como admin. Em prod, defina ADMIN_API_SECRET.",
+      "Não autorizado. Entre com uma conta admin (profiles.role = admin).",
     status: 401,
   };
 }

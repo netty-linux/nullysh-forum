@@ -142,11 +142,9 @@ export function useVideoUpload(admin: {
       setError(null);
       setPhase("Solicitando URL de upload…");
 
+      // AppSec: NÃO enviar NEXT_PUBLIC_* secret (visível no bundle).
+      // Auth admin = sessão Supabase (cookies) no server assertVideoAdmin.
       const headers = adminHeaders(admin) as Record<string, string>;
-      const pub =
-        process.env.NEXT_PUBLIC_ADMIN_API_SECRET?.trim() ||
-        process.env.NEXT_PUBLIC_ADMIN_SECRET?.trim();
-      if (pub) headers["x-admin-secret"] = pub;
 
       try {
         setPhase("Enviando vídeo ao R2…");

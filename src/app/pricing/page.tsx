@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/lib/auth-store";
 import { VIP_PLAN } from "@/lib/mock-data";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { formatCurrency } from "@/lib/utils";
 import { Check, CrownSimple } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -17,12 +18,23 @@ export default function PricingPage() {
   const router = useRouter();
   const [done, setDone] = useState(false);
 
+  const [vipError, setVipError] = useState("");
+
   async function handleSubscribe() {
     if (!user) {
       router.push("/register");
       return;
     }
+    setVipError("");
+    // Offline/demo: activateVip local. Com Supabase: bloqueado no servidor (AppSec).
     await activateVip();
+    const stillFree = !useAuthStore.getState().getCurrentUser()?.isVip;
+    if (stillFree && isSupabaseConfigured()) {
+      setVipError(
+        "VIP real exige pagamento (webhook no servidor). Self-promote no cliente foi desativado por segurança."
+      );
+      return;
+    }
     setDone(true);
     setTimeout(() => router.push("/app"), 900);
   }
@@ -105,9 +117,14 @@ export default function PricingPage() {
               )}
             </div>
 
+            {vipError && (
+              <p className="mt-3 text-center text-[13px] font-medium text-red-600">
+                {vipError}
+              </p>
+            )}
             <p className="mt-4 text-center text-xs text-neutral-500">
-              Pagamento real (Stripe / Hotmart / etc.) entra na próxima fase.
-              Aqui o VIP é ativado no protótipo local.
+              Pagamento real (Stripe / Hotmart / etc.) ativa VIP no servidor.
+              Self-promote no browser foi desativado (segurança).
             </p>
           </div>
         </div>

@@ -242,12 +242,58 @@ export async function supabaseLogout(): Promise<void> {
   await supabase.auth.signOut();
 }
 
+/** Campos que o próprio usuário pode editar (allowlist anti mass-assignment). */
+const PROFILE_SELF_EDIT_KEYS = [
+  "name",
+  "username",
+  "bio",
+  "email",
+  "password",
+  "avatarUrl",
+  "bannerUrl",
+  "bannerFit",
+  "avatarFrame",
+  "interests",
+  "goals",
+  "seekingMentorship",
+  "offeringMentorship",
+  "mentorTopics",
+  "links",
+  "favoriteTracks",
+  "badgesUnlocked",
+  "badgeEquipped",
+] as const satisfies readonly (keyof ProfileUpdate)[];
+
+function pickSelfEditableProfile(
+  data: ProfileUpdate
+): ProfileUpdate {
+  const out: ProfileUpdate = {};
+  for (const key of PROFILE_SELF_EDIT_KEYS) {
+    if (data[key] !== undefined) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (out as any)[key] = data[key];
+    }
+  }
+  return out;
+}
+
 export async function supabaseUpdateProfile(
   userId: string,
   data: ProfileUpdate
 ): Promise<{ ok: true; user: UserPublic } | { ok: false; error: string }> {
   try {
     const supabase = requireSupabaseBrowser();
+
+    // Só o dono da sessão pode atualizar o próprio perfil por este caminho
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.user?.id || session.user.id !== userId) {
+      return { ok: false, error: "Não autorizado a editar este perfil." };
+    }
+
+    // Allowlist: descarta is_vip, role, is_verified e qualquer chave extra
+    data = pickSelfEditableProfile(data);
 
     // Perfil atual (para não reenviar e-mail/senha iguais)
     const current = await fetchProfileById(userId);
@@ -420,48 +466,20 @@ export async function supabaseUpdateProfile(
   }
 }
 
+/**
+ * Self-service VIP no cliente FOI DESATIVADO (AppSec).
+ * Antes qualquer user autenticado podia UPDATE is_vip=true no próprio perfil.
+ * VIP real deve ser setado por webhook de pagamento (service role) ou admin.
+ * Demo local sem Supabase continua via auth-store.activateVip offline.
+ */
 export async function supabaseActivateVip(
-  userId: string
+  _userId: string
 ): Promise<{ ok: true; user: UserPublic } | { ok: false; error: string }> {
-  try {
-    const supabase = requireSupabaseBrowser();
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        is_vip: true,
-        role: "vip",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", userId)
-      .neq("role", "admin");
-
-    // admin mantém role admin
-    await supabase
-      .from("profiles")
-      .update({ is_vip: true, updated_at: new Date().toISOString() })
-      .eq("id", userId)
-      .eq("role", "admin");
-
-    if (error) {
-      // pode falhar se RLS bloquear self-promote — em prod use edge function
-      console.warn("[vip]", error.message);
-    }
-
-    // fallback local-friendly: tenta update is_vip only
-    await supabase
-      .from("profiles")
-      .update({ is_vip: true })
-      .eq("id", userId);
-
-    const profile = await fetchProfileById(userId);
-    if (!profile) return { ok: false, error: "Perfil não encontrado." };
-    return { ok: true, user: profile };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : "Erro ao ativar VIP",
-    };
-  }
+  return {
+    ok: false,
+    error:
+      "Ativação VIP no cliente desabilitada por segurança. Use o fluxo de pagamento (servidor) ou painel admin.",
+  };
 }
 
 export async function supabaseGetSessionUser(): Promise<UserPublic | null> {
@@ -485,6 +503,23 @@ export async function supabaseSetVerified(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const supabase = requireSupabaseBrowser();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.user?.id) {
+      return { ok: false, error: "Não autenticado." };
+    }
+
+    // Só admin (profiles.role) pode marcar verificado — confere no DB
+    const { data: me, error: meErr } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", session.user.id)
+      .maybeSingle();
+    if (meErr || !me || me.role !== "admin") {
+      return { ok: false, error: "Apenas admin pode alterar verificação." };
+    }
+
     const { error } = await supabase
       .from("profiles")
       .update({ is_verified: verified })

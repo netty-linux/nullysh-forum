@@ -5,6 +5,7 @@ import { MaterialDropTimer } from "@/components/material-drop-timer";
 import { Button } from "@/components/ui/button";
 import { VipBadge } from "@/components/vip-gate";
 import { useAuth } from "@/hooks/use-auth";
+import { redactMaterialsForViewer } from "@/lib/access-control";
 import { useMaterialStore } from "@/lib/material-store";
 import { formatDate } from "@/lib/utils";
 import {
@@ -41,10 +42,20 @@ export default function MaterialsPage() {
   const { isVip, user } = useAuth();
   const searchParams = useSearchParams();
   const focusId = searchParams.get("id");
-  const materials = useMaterialStore((s) => s.materials);
+  const materialsRaw = useMaterialStore((s) => s.materials);
   const recordDownload = useMaterialStore((s) => s.recordDownload);
   const [category, setCategory] = useState("Todos");
   const [toast, setToast] = useState("");
+
+  // AppSec: free nunca recebe URL de material VIP no React tree
+  const materials = useMemo(
+    () =>
+      redactMaterialsForViewer(materialsRaw, {
+        isVip: !!isVip,
+        isAdmin: user?.role === "admin",
+      }),
+    [materialsRaw, isVip, user?.role]
+  );
 
   const categories = useMemo(() => {
     const set = new Set(materials.map((m) => m.category));
@@ -85,14 +96,20 @@ export default function MaterialsPage() {
     locked: boolean,
     url?: string | null
   ) {
-    if (locked) return;
-    recordDownload(id);
-    if (url) {
-      window.open(url, "_blank", "noopener,noreferrer");
-      setToast(`Abrindo: ${title}`);
-    } else {
-      setToast(`Download registrado: ${title}`);
+    if (locked) {
+      setToast("Material exclusivo VIP.");
+      setTimeout(() => setToast(""), 2200);
+      return;
     }
+    // URL já redacted no list se free — se null, não abre nada sensível
+    if (!url) {
+      setToast("Link indisponível para o seu plano.");
+      setTimeout(() => setToast(""), 2200);
+      return;
+    }
+    recordDownload(id);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setToast(`Abrindo: ${title}`);
     setTimeout(() => setToast(""), 2200);
   }
 
