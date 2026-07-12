@@ -1,6 +1,7 @@
 "use client";
 
 import { BannerImage } from "@/components/gif-banner-editor";
+import { RichText } from "@/components/rich-text";
 import { Avatar } from "@/components/ui/avatar";
 import { VerifiedBadge } from "@/components/verified-badge";
 import { VipBadge } from "@/components/vip-gate";
