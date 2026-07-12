@@ -79,7 +79,18 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
 }
 
-/** Remove do catálogo e tenta apagar a mensagem no Telegram. */
+/**
+ * Remove vídeo de ponta a ponta (best-effort):
+ * 1) Catálogo (KV / FS / R2 catalog)
+ * 2) Objetos R2: videos/… + thumbs/… (+ legado media/{id}.mp4)
+ * 3) FS local (dev)
+ * 4) Mensagem no Telegram (só se telegramMessageId existir — path legado)
+ *
+ * Notas:
+ * - Vídeos só-R2 (telegramFileId === "r2") não têm mensagem TG → skip TG.
+ * - deleteMessage no Telegram não apaga o file_id do CDN do bot de forma
+ *   garantida; remove a mensagem do chat de storage. É o máximo da Bot API.
+ */
 export async function DELETE(req: NextRequest, ctx: Ctx) {
   const auth = await assertVideoAdmin(req);
   if (!auth.ok) {
@@ -98,11 +109,40 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
     );
   }
 
-  await deleteVideoFile(id);
+  // Limpa blobs R2 (keys reais do pipeline novo) + legado
+  await deleteVideoFile(id, {
+    r2ObjectKey: removed.r2ObjectKey,
+    r2ThumbKey: removed.r2ThumbKey,
+  });
 
-  if (removed.telegramMessageId) {
-    await telegramDeleteMessage(removed.telegramMessageId);
+  // KV individual (se existir)
+  try {
+    const { getDataKv } = await import("@/lib/videos/cloud-bindings");
+    const kv = await getDataKv();
+    if (kv) await kv.delete(`videos:${id}`);
+  } catch {
+    /* ignore */
   }
 
-  return NextResponse.json({ ok: true, id });
+  // Telegram vault (só path legado com messageId)
+  let telegramDeleted = false;
+  if (
+    removed.telegramMessageId &&
+    removed.telegramFileId &&
+    removed.telegramFileId !== "r2"
+  ) {
+    await telegramDeleteMessage(removed.telegramMessageId);
+    telegramDeleted = true;
+  }
+
+  return NextResponse.json({
+    ok: true,
+    id,
+    cleaned: {
+      catalog: true,
+      r2Video: !!removed.r2ObjectKey,
+      r2Thumb: !!removed.r2ThumbKey,
+      telegram: telegramDeleted,
+    },
+  });
 }

@@ -113,13 +113,30 @@ export async function getVideoFileStat(
   return { path: src.path, size: src.size };
 }
 
-export async function deleteVideoFile(id: string): Promise<void> {
+/**
+ * Remove blobs de um vídeo.
+ * - Legado: media/{id}.mp4 (FS e R2)
+ * - Pipeline atual: r2ObjectKey (videos/…) + r2ThumbKey (thumbs/…)
+ */
+export async function deleteVideoFile(
+  id: string,
+  opts?: { r2ObjectKey?: string | null; r2ThumbKey?: string | null }
+): Promise<void> {
   const bucket = await getVideosBucket();
   if (bucket) {
-    try {
-      await bucket.delete(mediaObjectKey(id));
-    } catch {
-      /* ignore */
+    const keys = [
+      mediaObjectKey(id),
+      opts?.r2ObjectKey,
+      opts?.r2ThumbKey,
+    ].filter((k): k is string => !!k && k.length > 0);
+    // unique
+    const unique = Array.from(new Set(keys));
+    for (const key of unique) {
+      try {
+        await bucket.delete(key);
+      } catch {
+        /* ignore missing */
+      }
     }
   }
   try {
