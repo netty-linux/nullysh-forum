@@ -1,4 +1,5 @@
 import { ChatBridge } from "@/components/chat-bridge";
+import { EmojiBridge } from "@/components/emoji-bridge";
 import { PostsBridge } from "@/components/posts-bridge";
 import { SocialBridge } from "@/components/social-bridge";
 import { SupabaseAuthBridge } from "@/components/supabase-auth-bridge";
@@ -90,7 +91,9 @@ export default function RootLayout({
           <SupabaseAuthBridge>
             <PostsBridge>
               <ChatBridge>
-                <SocialBridge>{children}</SocialBridge>
+                <SocialBridge>
+                  <EmojiBridge>{children}</EmojiBridge>
+                </SocialBridge>
               </ChatBridge>
             </PostsBridge>
           </SupabaseAuthBridge>

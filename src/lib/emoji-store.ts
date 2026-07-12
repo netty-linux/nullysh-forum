@@ -40,6 +40,10 @@ function emojiBlobKey(id: string) {
 interface EmojiState {
   emojis: CustomEmoji[];
   hydrated: boolean;
+  /** Catálogo remoto = fonte multi-user (todos veem; VIP cria). */
+  hydrateEmojis: (remote: CustomEmoji[]) => void;
+  upsertEmoji: (emoji: CustomEmoji) => void;
+  removeEmojiById: (id: string) => void;
   createEmoji: (data: {
     name: string;
     imageUrl: string;
@@ -52,6 +56,35 @@ interface EmojiState {
     isAdmin: boolean
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   getByName: (name: string) => CustomEmoji | undefined;
+}
+
+/** Mescla remoto (prioridade) + locais com https que ainda não subiram. */
+function mergeEmojiCatalog(
+  remote: CustomEmoji[],
+  local: CustomEmoji[]
+): CustomEmoji[] {
+  const byName = new Map<string, CustomEmoji>();
+  for (const e of remote) {
+    if (!e?.name || !e.imageUrl) continue;
+    byName.set(e.name.toLowerCase(), e);
+  }
+  // Mantém locais só se tiverem URL pública e o nome não existir no remoto
+  // (legado VIP: imagem no Storage, linha ainda não na tabela)
+  for (const e of local) {
+    if (!e?.name) continue;
+    const key = e.name.toLowerCase();
+    if (byName.has(key)) continue;
+    if (
+      e.imageUrl.startsWith("http://") ||
+      e.imageUrl.startsWith("https://")
+    ) {
+      byName.set(key, e);
+    }
+  }
+  return Array.from(byName.values()).sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 }
 
 export function normalizeEmojiName(raw: string): string {
@@ -356,6 +389,57 @@ export const useEmojiStore = create<EmojiState>()(
       emojis: [],
       hydrated: false,
 
+      hydrateEmojis: (remote) => {
+        const local = get().emojis;
+        const merged = mergeEmojiCatalog(remote, local);
+        set({ emojis: merged, hydrated: true });
+
+        // Publica legados locais (https no Storage, sem linha na tabela)
+        if (isSupabaseConfigured() && local.length) {
+          const remoteNames = new Set(
+            remote.map((e) => e.name.toLowerCase())
+          );
+          void import("@/lib/supabase/emoji-service").then(
+            ({ insertRemoteEmoji }) => {
+              for (const e of local) {
+                if (!e.name || remoteNames.has(e.name.toLowerCase())) continue;
+                if (
+                  !e.imageUrl.startsWith("http://") &&
+                  !e.imageUrl.startsWith("https://")
+                ) {
+                  continue;
+                }
+                void insertRemoteEmoji({
+                  name: e.name,
+                  imageUrl: e.imageUrl,
+                  createdById: e.createdById,
+                  createdByName: e.createdByName,
+                }).then((res) => {
+                  if (res.ok) {
+                    get().upsertEmoji(res.emoji);
+                  }
+                });
+              }
+            }
+          );
+        }
+      },
+
+      upsertEmoji: (emoji) => {
+        set((s) => {
+          const key = emoji.name.toLowerCase();
+          const without = s.emojis.filter(
+            (e) =>
+              e.id !== emoji.id && e.name.toLowerCase() !== key
+          );
+          return { emojis: [emoji, ...without] };
+        });
+      },
+
+      removeEmojiById: (id) => {
+        set((s) => ({ emojis: s.emojis.filter((e) => e.id !== id) }));
+      },
+
       createEmoji: async ({ name, imageUrl, userId, userName }) => {
         const n = normalizeEmojiName(name);
         if (!isValidEmojiName(n)) {
@@ -381,18 +465,51 @@ export const useEmojiStore = create<EmojiState>()(
           };
         }
 
-        const id = uid("ce");
-        const stored = await persistEmojiImage(userId, id, imageUrl);
+        const tempId = uid("ce");
+        const stored = await persistEmojiImage(userId, tempId, imageUrl);
         if (!stored.ok) return stored;
 
-        // Em memória: se for idb, hidrata data URL para preview imediato
+        // Multi-user: exige URL pública no Storage + linha em custom_emojis
+        if (isSupabaseConfigured()) {
+          if (
+            !stored.url.startsWith("http://") &&
+            !stored.url.startsWith("https://")
+          ) {
+            return {
+              ok: false,
+              error:
+                "Falha no upload do emoji para a nuvem. Tente de novo com uma imagem menor.",
+            };
+          }
+          const { insertRemoteEmoji } = await import(
+            "@/lib/supabase/emoji-service"
+          );
+          const remote = await insertRemoteEmoji({
+            name: n,
+            imageUrl: stored.url,
+            createdById: userId,
+            createdByName: userName,
+          });
+          if (!remote.ok) return remote;
+
+          try {
+            set((s) => ({ emojis: [remote.emoji, ...s.emojis] }));
+          } catch (e) {
+            const msg =
+              e instanceof Error ? e.message : "Falha ao guardar o emoji.";
+            return { ok: false, error: msg };
+          }
+          return { ok: true, emoji: remote.emoji };
+        }
+
+        // Modo local (sem Supabase)
         let displayUrl = stored.url;
         if (isMediaRef(stored.url)) {
           displayUrl = (await mediaGet(stored.url)) || stored.url;
         }
 
         const emoji: CustomEmoji = {
-          id,
+          id: tempId,
           name: n,
           imageUrl: displayUrl,
           createdById: userId,
@@ -403,7 +520,6 @@ export const useEmojiStore = create<EmojiState>()(
         try {
           set((s) => ({ emojis: [emoji, ...s.emojis] }));
         } catch (e) {
-          // Zustand persist pode rethrow se storage falhar
           const msg =
             e instanceof Error ? e.message : "Falha ao guardar o emoji.";
           if (/quota|exceeded|storage/i.test(msg)) {
@@ -423,6 +539,13 @@ export const useEmojiStore = create<EmojiState>()(
         if (!emoji) return { ok: false, error: "Emoji não encontrado." };
         if (!isAdmin && emoji.createdById !== userId) {
           return { ok: false, error: "Só o criador ou admin pode remover." };
+        }
+        if (isSupabaseConfigured()) {
+          const { deleteRemoteEmoji } = await import(
+            "@/lib/supabase/emoji-service"
+          );
+          const remote = await deleteRemoteEmoji(id);
+          if (!remote.ok) return remote;
         }
         await mediaDelete(emojiBlobKey(id));
         set((s) => ({ emojis: s.emojis.filter((e) => e.id !== id) }));

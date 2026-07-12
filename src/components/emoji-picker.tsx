@@ -286,22 +286,52 @@ export function EmojiPicker({
         {tab === "custom" && (
           <div className="space-y-3">
             {!isVip && (
-              <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 p-3 text-center">
-                <p className="text-xs font-semibold text-amber-100">
-                  Emojis customizados são exclusivos VIP
-                </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
-                  Como o Nitro no Discord: só VIP cria e usa emojis
-                  personalizados no feed.
-                </p>
-                <Link
-                  href="/pricing"
-                  onClick={onClose}
-                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-black"
-                >
-                  <CrownSimple size={12} weight="fill" />
-                  Obter VIP
-                </Link>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 p-3 text-center">
+                  <p className="text-xs font-semibold text-amber-100">
+                    Criar emojis é exclusivo VIP
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
+                    Você já consegue ver os emojis custom no feed e na bio.
+                    Só VIP cria e envia :shortcodes: personalizados.
+                  </p>
+                  <Link
+                    href="/pricing"
+                    onClick={onClose}
+                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-black"
+                  >
+                    <CrownSimple size={12} weight="fill" />
+                    Obter VIP
+                  </Link>
+                </div>
+                {/* Catálogo só leitura — free visualiza, não envia */}
+                {filteredCustom.length > 0 ? (
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {filteredCustom.map((em) => (
+                      <div
+                        key={em.id}
+                        title={`:${em.name}: (só VIP envia)`}
+                        className="flex flex-col items-center gap-0.5 rounded-lg p-1.5 opacity-90"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={em.imageUrl}
+                          alt={`:${em.name}:`}
+                          width={28}
+                          height={28}
+                          className="h-7 w-7 object-contain"
+                        />
+                        <span className="max-w-full truncate text-[9px] text-white/50">
+                          {em.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-[11px] text-white/45">
+                    Nenhum emoji custom no catálogo ainda.
+                  </p>
+                )}
               </div>
             )}
 
