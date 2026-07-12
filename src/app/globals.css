@@ -156,6 +156,34 @@ html {
   }
 }
 
+/* Música do post (feed IG) — barrinhas de equalizer */
+@keyframes post-music-bar {
+  from {
+    transform: scaleY(0.4);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.post-music-bar {
+  height: 60%;
+  transform-origin: bottom;
+  animation: post-music-bar 0.55s ease-in-out infinite alternate;
+}
+.post-music-bar--2 {
+  height: 90%;
+  animation-delay: 0.12s;
+}
+.post-music-bar--3 {
+  height: 50%;
+  animation-delay: 0.24s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .post-music-bar {
+    animation: none;
+  }
+}
+
 @keyframes notif-heart-beat {
   0%,
   100% {

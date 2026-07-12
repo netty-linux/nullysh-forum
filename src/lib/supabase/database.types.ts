@@ -58,6 +58,8 @@ export type PostRow = {
   dislikes?: number | null;
   vip_only: boolean;
   hashtag: string | null;
+  /** P1.i — música do post (estilo IG) */
+  music?: unknown | null;
   created_at: string;
 };
 

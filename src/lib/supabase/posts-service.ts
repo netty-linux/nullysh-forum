@@ -3,7 +3,8 @@
  * UI ainda usa o tipo `Post` / `Comment` do app; este módulo é a borda DB ↔ domínio.
  */
 
-import type { Comment, Post } from "@/lib/types";
+import { normalizePostMusic, postMusicToJson } from "@/lib/post-music";
+import type { Comment, Post, PostMusic } from "@/lib/types";
 import { initials } from "@/lib/utils";
 import { getSupabaseBrowser } from "./client";
 import { isSupabaseConfigured } from "./config";
@@ -45,6 +46,9 @@ function rowToPost(row: PostWithAuthorRow | PostRow & { gif_url?: string | null 
   const gifUrl = rawGif || (imageLooksLikeGif ? row.image_url : null);
   const imageUrl = gifUrl ? null : row.image_url;
 
+  const musicRaw =
+    "music" in row ? (row as PostRow).music : null;
+
   return {
     id: row.id,
     authorId: row.author_id,
@@ -58,6 +62,7 @@ function rowToPost(row: PostWithAuthorRow | PostRow & { gif_url?: string | null 
     imageUrl,
     gifUrl,
     location: row.location,
+    music: normalizePostMusic(musicRaw),
     type: (["discussion", "news", "tutorial", "announcement"].includes(
       String(row.type)
     )
@@ -172,6 +177,7 @@ export type CreateRemotePostInput = {
   imageUrl?: string | null;
   gifUrl?: string | null;
   location?: string | null;
+  music?: PostMusic | null;
   type?: Post["type"];
   communityId?: string;
   communityName?: string;
@@ -194,7 +200,8 @@ export async function insertRemotePost(
   const content = input.content.trim();
   const gifUrl = input.gifUrl?.trim() || null;
   const imageUrl = input.imageUrl ?? null;
-  if (!content && !gifUrl && !imageUrl) {
+  const music = normalizePostMusic(input.music);
+  if (!content && !gifUrl && !imageUrl && !music) {
     return { ok: false, error: "Conteúdo vazio" };
   }
 
@@ -217,6 +224,9 @@ export async function insertRemotePost(
     vip_only: !!input.vipOnly,
     hashtag: input.hashtag?.replace(/^#/, "").toLowerCase() || null,
   };
+  if (music) {
+    insert.music = postMusicToJson(music);
+  }
 
   const {
     data: { session },
@@ -239,6 +249,31 @@ export async function insertRemotePost(
 
   if (error || !data) {
     console.error("[posts] insertRemotePost", error);
+
+    // Retry sem music se coluna ainda não migrada
+    if (
+      music &&
+      (error?.message?.includes("music") ||
+        error?.code === "PGRST204" ||
+        /column .*music/i.test(error?.message || ""))
+    ) {
+      delete insert.music;
+      const retryMusic = await supabase
+        .from("posts")
+        .insert(insert)
+        .select("*")
+        .single();
+      if (retryMusic.data) {
+        return {
+          ok: true,
+          post: {
+            ...rowToPost(retryMusic.data as PostRow),
+            music, // client ainda vê a música localmente
+          },
+        };
+      }
+    }
+
     // Retry sem gif_url se coluna ainda não existir — grava GIF em image_url
     // para o feed ainda exibir a mídia até aplicar a migration P1.b.
     if (

@@ -3,6 +3,7 @@
 import { EmojiPicker } from "@/components/emoji-picker";
 import { HashtagSuggestMenu } from "@/components/hashtag-suggest-menu";
 import { ImageCropEditor } from "@/components/image-crop-editor";
+import { PostMusicAttach } from "@/components/post-music-attach";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -19,6 +20,7 @@ import { fetchTrendingGifs, searchGifs, type GifItem } from "@/lib/giphy";
 import { fileToObjectUrl, revokeObjectUrl } from "@/lib/image";
 import { maxPostChars } from "@/lib/post-limits";
 import { consumeRateLimit } from "@/lib/rate-limit";
+import type { PostMusic } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
   Crop as CropIcon,
@@ -26,6 +28,7 @@ import {
   Image as ImageIcon,
   MagnifyingGlass,
   MapPin,
+  MusicNotes,
   NavigationArrow,
   Smiley,
   SpinnerGap,
@@ -80,6 +83,8 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
   const [showLocation, setShowLocation] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showGif, setShowGif] = useState(false);
+  const [showMusic, setShowMusic] = useState(false);
+  const [music, setMusic] = useState<PostMusic | null>(null);
   const [gifQ, setGifQ] = useState("");
   const [gifs, setGifs] = useState<GifItem[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
@@ -128,6 +133,8 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     setShowLocation(false);
     setShowEmoji(false);
     setShowGif(false);
+    setShowMusic(false);
+    setMusic(null);
     setGifQ("");
     setGifs([]);
     setPlaceResults([]);
@@ -370,7 +377,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     e.preventDefault();
     if (!user || publishing) return;
     const text = content.trim();
-    if (!text && !imageUrl && !gifUrl) return;
+    if (!text && !imageUrl && !gifUrl && !music) return;
     if (content.length > maxChars) {
       setError(
         vipPlan
@@ -418,6 +425,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
         imageUrl: gifUrl ? null : imageUrl,
         gifUrl: gifUrl || null,
         location: location.trim() || null,
+        music: music || null,
         type: "discussion",
         communityId: primary?.id,
         communityName: primary?.name,
@@ -439,7 +447,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
 
   const canPost =
     !!user &&
-    (content.trim().length > 0 || !!imageUrl || !!gifUrl) &&
+    (content.trim().length > 0 || !!imageUrl || !!gifUrl || !!music) &&
     content.length <= maxChars &&
     !publishing;
 
@@ -638,6 +646,12 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                       >
                         <X size={16} weight="bold" />
                       </button>
+                    </div>
+                  )}
+
+                  {(showMusic || music) && (
+                    <div className="mt-3">
+                      <PostMusicAttach value={music} onChange={setMusic} />
                     </div>
                   )}
 
@@ -917,6 +931,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                         onClick={() => {
                           setShowEmoji(false);
                           setShowGif(false);
+                          setShowMusic(false);
                           setShowLocation((v) => !v);
                         }}
                         className={cn(
@@ -929,6 +944,26 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                         aria-label="Localização"
                       >
                         <MapPin size={22} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEmoji(false);
+                          setShowGif(false);
+                          setShowLocation(false);
+                          setShowMusic((v) => !v);
+                        }}
+                        className={cn(
+                          "inline-flex h-10 w-10 items-center justify-center rounded-full transition",
+                          showMusic || music
+                            ? "bg-sky-500/10 text-sky-500"
+                            : "text-sky-500 hover:bg-sky-500/10"
+                        )}
+                        title="Música (estilo Instagram)"
+                        aria-label="Adicionar música"
+                        aria-expanded={showMusic}
+                      >
+                        <MusicNotes size={22} weight={music ? "fill" : "regular"} />
                       </button>
 
                     </div>

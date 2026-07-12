@@ -2,6 +2,7 @@
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ForwardPostModal } from "@/components/forward-post-modal";
+import { PostFeedMusic } from "@/components/post-feed-music";
 import { ProfileHoverCard } from "@/components/profile-hover-card";
 import { ProtectedMedia } from "@/components/protected-media";
 import { ReportPostDialog } from "@/components/report-post-dialog";
@@ -604,6 +605,11 @@ export function PostCard({
               >
                 <RichText text={body} emojiSize={22} />
               </p>
+            )}
+
+            {/* Música do post (estilo IG) — autoplay quando centralizado */}
+            {post.music && !locked && (
+              <PostFeedMusic postId={post.id} music={post.music} />
             )}
 
             {/* GIF animado — NÃO usar ProtectedMedia (canvas congela frames) */}

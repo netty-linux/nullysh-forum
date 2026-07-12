@@ -1,12 +1,12 @@
 import type { AvatarFrameId } from "./avatar-frames";
 import type { EmblemId } from "./emblems";
-import type { FavoriteTrack } from "./music";
+import type { FavoriteTrack, MusicPlatform } from "./music";
 
 export type UserRole = "member" | "vip" | "admin";
 
 export type { AvatarFrameId };
 export type { EmblemId };
-export type { FavoriteTrack, MusicPlatform } from "./music";
+export type { FavoriteTrack, MusicPlatform };
 
 export interface User {
   id: string;
@@ -215,6 +215,23 @@ export interface Community {
   createdAt: string;
 }
 
+/**
+ * Música do post (estilo Instagram Reels/Feed).
+ * Toca quando o card está centralizado no viewport.
+ */
+export type PostMusic = {
+  title: string;
+  artist: string;
+  url: string;
+  platform: MusicPlatform;
+  thumbnailUrl?: string | null;
+  embedUrl?: string | null;
+  /** Início do trecho (s) definido pelo autor */
+  startAtSec: number;
+  /** Duração do loop do trecho (s) — default 30 */
+  clipDurationSec: number;
+};
+
 export interface Post {
   id: string;
   authorId: string;
@@ -232,6 +249,8 @@ export interface Post {
   gifUrl?: string | null;
   /** Localização livre (ex.: São Paulo, BR) */
   location?: string | null;
+  /** Música em destaque no post (estilo IG) */
+  music?: PostMusic | null;
   type: "discussion" | "news" | "tutorial" | "announcement";
   likes: number;
   dislikes: number;

@@ -20,17 +20,19 @@ import {
   notifyRepost,
 } from "./notification-store";
 import { isSupabaseConfigured } from "./supabase/config";
+import { normalizePostMusic } from "./post-music";
 import type {
   ChatMediaKind,
   ChatMessage,
   Comment,
   Post,
+  PostMusic,
   PostRepost,
 } from "./types";
 import { uid } from "./utils";
 
-/** v5: mídia no chat (áudio/imagem/vídeo/sticker/gif) */
-const FORUM_STORAGE_VERSION = 5;
+/** v6: música no post (estilo IG) */
+const FORUM_STORAGE_VERSION = 6;
 
 function normalizePost(p: Post): Post {
   const likedBy = (Array.isArray(p.likedBy) ? p.likedBy : []).filter(
@@ -44,6 +46,7 @@ function normalizePost(p: Post): Post {
   );
   return {
     ...p,
+    music: normalizePostMusic(p.music) ?? null,
     likes: likedBy.length,
     dislikes: dislikedBy.length,
     comments: p.comments ?? 0,
@@ -82,6 +85,7 @@ interface ForumState {
     imageUrl?: string | null;
     gifUrl?: string | null;
     location?: string | null;
+    music?: PostMusic | null;
     communityId?: string;
     communityName?: string;
     type?: Post["type"];
@@ -217,6 +221,7 @@ export const useForumStore = create<ForumState>()(
             imageUrl: data.imageUrl ?? null,
             gifUrl: data.gifUrl?.trim() || null,
             location: data.location?.trim() || null,
+            music: normalizePostMusic(data.music),
             type: data.type ?? "discussion",
             communityId: data.communityId,
             communityName: data.communityName,
@@ -248,6 +253,7 @@ export const useForumStore = create<ForumState>()(
           imageUrl: data.imageUrl ?? null,
           gifUrl: data.gifUrl?.trim() || null,
           location: data.location?.trim() || null,
+          music: normalizePostMusic(data.music),
           type: data.type ?? "discussion",
           likes: 0,
           dislikes: 0,

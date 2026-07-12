@@ -22,42 +22,10 @@ import {
 
 /* ─── YouTube IFrame API (progresso real) ─── */
 
-type YTPlayer = {
-  playVideo: () => void;
-  pauseVideo: () => void;
-  stopVideo: () => void;
-  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
-  getCurrentTime: () => number;
-  getDuration: () => number;
-  getPlayerState: () => number;
-  setVolume: (vol: number) => void;
-  getVolume: () => number;
-  mute: () => void;
-  unMute: () => void;
-  isMuted: () => boolean;
-  destroy: () => void;
-};
-
-type YTNamespace = {
-  Player: new (
-    el: string | HTMLElement,
-    opts: Record<string, unknown>
-  ) => YTPlayer;
-  PlayerState: {
-    ENDED: number;
-    PLAYING: number;
-    PAUSED: number;
-    BUFFERING: number;
-    CUED: number;
-  };
-};
-
-declare global {
-  interface Window {
-    YT?: YTNamespace;
-    onYouTubeIframeAPIReady?: () => void;
-  }
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type YTPlayer = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type YTNamespace = any;
 
 let ytApiPromise: Promise<YTNamespace> | null = null;
 
@@ -65,16 +33,18 @@ function loadYouTubeApi(): Promise<YTNamespace> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("no window"));
   }
-  if (window.YT?.Player) {
-    return Promise.resolve(window.YT);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  if (w.YT?.Player) {
+    return Promise.resolve(w.YT);
   }
   if (ytApiPromise) return ytApiPromise;
 
   ytApiPromise = new Promise((resolve) => {
-    const prev = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => {
+    const prev = w.onYouTubeIframeAPIReady;
+    w.onYouTubeIframeAPIReady = () => {
       prev?.();
-      if (window.YT) resolve(window.YT);
+      if (w.YT) resolve(w.YT);
     };
 
     if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
@@ -85,9 +55,9 @@ function loadYouTubeApi(): Promise<YTNamespace> {
     }
 
     const poll = window.setInterval(() => {
-      if (window.YT?.Player) {
+      if (w.YT?.Player) {
         window.clearInterval(poll);
-        resolve(window.YT);
+        resolve(w.YT);
       }
     }, 40);
   });
