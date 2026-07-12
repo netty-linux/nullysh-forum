@@ -17,6 +17,7 @@ import {
   notifyLike,
   notifyRepost,
 } from "./notification-store";
+import { isSupabaseConfigured } from "./supabase/config";
 import type {
   ChatMediaKind,
   ChatMessage,
@@ -83,7 +84,13 @@ interface ForumState {
     communityName?: string;
     type?: Post["type"];
     vipOnly?: boolean;
-  }) => Post;
+    /** hashtag sem # (ex.: geral) — gravado no Supabase */
+    hashtag?: string | null;
+  }) => Promise<Post>;
+  /** Substitui/mescla posts remotos (fonte da verdade quando Supabase ativo) */
+  hydratePosts: (posts: Post[]) => void;
+  upsertPost: (post: Post) => void;
+  removePostById: (postId: string) => void;
   toggleLike: (postId: string, userId: string) => void;
   toggleDislike: (postId: string, userId: string) => void;
   toggleSave: (postId: string, userId: string) => void;
@@ -176,9 +183,51 @@ export const useForumStore = create<ForumState>()(
       messages: [],
       reposts: [],
 
-      createPost: (data) => {
+      createPost: async (data) => {
         const content = data.content.trim();
-        // Sync community via hashtags (opcional no payload; UI resolve antes)
+        const hashtag =
+          data.hashtag?.replace(/^#/, "").toLowerCase() ||
+          data.communityName
+            ?.replace(/^#/, "")
+            .toLowerCase()
+            .replace(/\s+/g, "") ||
+          null;
+
+        // ── Supabase = fonte da verdade multi-user ──────────────
+        if (isSupabaseConfigured()) {
+          const { insertRemotePost } = await import(
+            "@/lib/supabase/posts-service"
+          );
+          const remote = await insertRemotePost({
+            authorId: data.authorId,
+            authorName: data.authorName,
+            authorAvatar: data.authorAvatar,
+            authorAvatarUrl: data.authorAvatarUrl ?? null,
+            content: content || " ",
+            imageUrl: data.imageUrl ?? null,
+            location: data.location?.trim() || null,
+            type: data.type ?? "discussion",
+            communityId: data.communityId,
+            communityName: data.communityName,
+            vipOnly: data.vipOnly ?? false,
+            hashtag,
+            title: data.title?.trim(),
+          });
+          if (!remote.ok) {
+            throw new Error(remote.error);
+          }
+          // GIFs ainda locais na UI (coluna DB ainda não tem gif_url)
+          const post: Post = {
+            ...remote.post,
+            gifUrl: data.gifUrl?.trim() || remote.post.gifUrl || null,
+          };
+          set((s) => ({
+            posts: [post, ...s.posts.filter((p) => p.id !== post.id)],
+          }));
+          return post;
+        }
+
+        // ── Modo local (dev sem Supabase) ───────────────────────
         const post: Post = {
           id: uid("post"),
           authorId: data.authorId,
@@ -200,11 +249,54 @@ export const useForumStore = create<ForumState>()(
           dislikedBy: [],
           savedBy: [],
           createdAt: new Date().toISOString(),
-          // VIP-only se o post foi marcado para comunidade VIP
           vipOnly: data.vipOnly ?? false,
         };
         set((s) => ({ posts: [post, ...s.posts] }));
         return post;
+      },
+
+      hydratePosts: (posts) => {
+        const normalized = posts.map(normalizePost);
+        set((s) => {
+          // Mantém posts locais ainda sem id uuid remota (raro) se não colidir
+          const remoteIds = new Set(normalized.map((p) => p.id));
+          const localOnly = s.posts.filter(
+            (p) => !remoteIds.has(p.id) && p.id.startsWith("post_")
+          );
+          return {
+            posts: [...normalized, ...localOnly].sort(
+              (a, b) =>
+                new Date(b.createdAt).getTime() -
+                new Date(a.createdAt).getTime()
+            ),
+          };
+        });
+      },
+
+      upsertPost: (post) => {
+        const n = normalizePost(post);
+        set((s) => {
+          const exists = s.posts.some((p) => p.id === n.id);
+          if (exists) {
+            return {
+              posts: s.posts.map((p) => (p.id === n.id ? n : p)),
+            };
+          }
+          return {
+            posts: [n, ...s.posts].sort(
+              (a, b) =>
+                new Date(b.createdAt).getTime() -
+                new Date(a.createdAt).getTime()
+            ),
+          };
+        });
+      },
+
+      removePostById: (postId) => {
+        set((s) => ({
+          posts: s.posts.filter((p) => p.id !== postId),
+          comments: s.comments.filter((c) => c.postId !== postId),
+        }));
       },
 
       toggleLike: (postId, userId) => {

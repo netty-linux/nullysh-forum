@@ -469,7 +469,7 @@ export default function FeedPage() {
     setError("");
   }
 
-  function onCreate(e: FormEvent) {
+  async function onCreate(e: FormEvent) {
     e.preventDefault();
     if (!user) return;
     const text = content.trim();
@@ -497,32 +497,45 @@ export default function FeedPage() {
     const anyVipOnly = matched.some(
       (c) => c.access === "vip" || c.vipOnly
     );
+    const hashtag =
+      primary?.hashtag?.replace(/^#/, "").toLowerCase() ||
+      primary?.slug?.replace(/^#/, "").toLowerCase() ||
+      null;
 
-    createPost({
-      authorId: user.id,
-      authorName: user.name,
-      authorAvatar: user.avatar,
-      authorAvatarUrl: user.avatarUrl,
-      content: text || " ",
-      imageUrl: gifUrl ? null : imageUrl,
-      gifUrl: gifUrl || null,
-      location: location.trim() || null,
-      type: "discussion",
-      communityId: primary?.id,
-      communityName: primary?.name,
-      vipOnly: anyVipOnly,
-    });
+    try {
+      await createPost({
+        authorId: user.id,
+        authorName: user.name,
+        authorAvatar: user.avatar,
+        authorAvatarUrl: user.avatarUrl,
+        content: text || " ",
+        imageUrl: gifUrl ? null : imageUrl,
+        gifUrl: gifUrl || null,
+        location: location.trim() || null,
+        type: "discussion",
+        communityId: primary?.id,
+        communityName: primary?.name,
+        vipOnly: anyVipOnly,
+        hashtag,
+      });
 
-    setContent("");
-    setImageUrl(null);
-    clearGif();
-    releaseCropSource();
-    setCropOpen(false);
-    clearLocation();
-    setShowEmoji(false);
-    setShowGif(false);
-    setError("");
-    if (fileRef.current) fileRef.current.value = "";
+      setContent("");
+      setImageUrl(null);
+      clearGif();
+      releaseCropSource();
+      setCropOpen(false);
+      clearLocation();
+      setShowEmoji(false);
+      setShowGif(false);
+      setError("");
+      if (fileRef.current) fileRef.current.value = "";
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Falha ao publicar. Verifique a sessão Supabase e o RLS."
+      );
+    }
   }
 
   const canPost =

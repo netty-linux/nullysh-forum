@@ -10,7 +10,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 let browserClient: SupabaseClient | null = null;
 
-/** Cliente browser (singleton). null se Supabase não configurado. */
+/**
+ * Cliente browser (singleton). null se Supabase não configurado.
+ * Tipos de domínio: ver `database.types.ts` (mantido manualmente).
+ */
 export function getSupabaseBrowser(): SupabaseClient | null {
   if (!isSupabaseConfigured()) return null;
   if (browserClient) return browserClient;

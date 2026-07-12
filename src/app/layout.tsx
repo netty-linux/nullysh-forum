@@ -1,3 +1,4 @@
+import { PostsBridge } from "@/components/posts-bridge";
 import { SupabaseAuthBridge } from "@/components/supabase-auth-bridge";
 import { ThemeProvider } from "@/components/theme-provider";
 import type { Metadata } from "next";
@@ -84,7 +85,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-full bg-background text-foreground antialiased">
         <ThemeProvider>
-          <SupabaseAuthBridge>{children}</SupabaseAuthBridge>
+          <SupabaseAuthBridge>
+            <PostsBridge>{children}</PostsBridge>
+          </SupabaseAuthBridge>
         </ThemeProvider>
       </body>
     </html>

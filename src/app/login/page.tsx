@@ -4,6 +4,7 @@ import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/lib/auth-store";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
@@ -97,11 +98,24 @@ export default function LoginPage() {
               </form>
 
               <div className="mt-6 rounded-xl border-2 border-dashed border-neutral-300 bg-[#f5f5f5] px-4 py-3 text-xs text-neutral-600">
-                <p className="font-semibold text-black">Supabase Auth</p>
-                <p className="mt-1.5 leading-relaxed">
-                  Use o e-mail e senha do cadastro. Contas antigas do MVP local
-                  não existem no Supabase.
-                </p>
+                {isSupabaseConfigured() ? (
+                  <>
+                    <p className="font-semibold text-black">Supabase Auth</p>
+                    <p className="mt-1.5 leading-relaxed">
+                      Sessão real no Supabase. Use o e-mail e senha do cadastro.
+                      Contas só do MVP local (sem Supabase) não existem aqui.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold text-black">Modo local (dev)</p>
+                    <p className="mt-1.5 leading-relaxed">
+                      Supabase não configurado. Seed de dev:{" "}
+                      <code className="rounded bg-white px-1">admin@nullysh.com</code>{" "}
+                      / <code className="rounded bg-white px-1">admin123</code>
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>

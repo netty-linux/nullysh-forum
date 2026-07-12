@@ -366,7 +366,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     onClose();
   }
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!user || publishing) return;
     const text = content.trim();
@@ -407,7 +407,9 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
 
     setPublishing(true);
     try {
-      createPost({
+      const hashtag =
+        primary?.hashtag?.replace(/^#/, "").toLowerCase() || null;
+      await createPost({
         authorId: user.id,
         authorName: user.name,
         authorAvatar: user.avatar,
@@ -420,12 +422,17 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
         communityId: primary?.id,
         communityName: primary?.name,
         vipOnly: anyVipOnly,
+        hashtag,
       });
       reset();
       onPublished?.();
       onClose();
-    } catch {
-      setError("Não foi possível publicar. Tente de novo.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Não foi possível publicar. Tente de novo."
+      );
       setPublishing(false);
     }
   }
