@@ -11,6 +11,7 @@ import {
 import { useAuthStore } from "./auth-store";
 import { getDmPeerId, isDmChannel } from "./dm";
 import {
+  notifyChatReaction,
   notifyComment,
   notifyCommentLike,
   notifyDislike,
@@ -1140,22 +1141,25 @@ export const useForumStore = create<ForumState>()(
 
       toggleMessageReaction: (messageId, userId, emoji) => {
         if (!userId || !emoji) return;
+        const before = get().messages.find((m) => m.id === messageId);
+        if (!before) return;
+
+        const hadThis = (before.reactions?.[emoji] || []).includes(userId);
         let nextReactions: Record<string, string[]> = {};
+
+        // Otimista local
         set((s) => ({
           messages: s.messages.map((m) => {
             if (m.id !== messageId) return m;
             const reactions: Record<string, string[]> = {
               ...(m.reactions || {}),
             };
-            // remove user de qualquer emoji
             for (const key of Object.keys(reactions)) {
               reactions[key] = (reactions[key] || []).filter(
                 (id) => id !== userId
               );
               if (reactions[key].length === 0) delete reactions[key];
             }
-            // se clicou no mesmo que já tinha, só remove (toggle off)
-            const hadThis = (m.reactions?.[emoji] || []).includes(userId);
             if (!hadThis) {
               reactions[emoji] = [...(reactions[emoji] || []), userId];
             }
@@ -1166,10 +1170,45 @@ export const useForumStore = create<ForumState>()(
 
         if (isSupabaseConfigured() && !messageId.startsWith("msg")) {
           void import("@/lib/supabase/chat-service").then(
-            ({ updateRemoteChatReactions }) => {
-              void updateRemoteChatReactions(messageId, nextReactions);
+            ({ toggleRemoteChatReaction }) => {
+              void toggleRemoteChatReaction(messageId, emoji).then((res) => {
+                if (res.ok) {
+                  set((s) => ({
+                    messages: s.messages.map((m) =>
+                      m.id === messageId
+                        ? { ...m, reactions: res.reactions }
+                        : m
+                    ),
+                  }));
+                } else {
+                  // rollback
+                  set((s) => ({
+                    messages: s.messages.map((m) =>
+                      m.id === messageId ? before : m
+                    ),
+                  }));
+                  console.error("[toggleMessageReaction] remote", res.error);
+                }
+              });
             }
           );
+          // Notif multi-user vem do RPC (insert em notifications)
+          return;
+        }
+
+        // Modo local: notifica o autor se adicionou reação de terceiros
+        if (!hadThis && before.authorId !== userId) {
+          const actor =
+            useAuthStore.getState().users.find((u) => u.id === userId)?.name ||
+            "Alguém";
+          notifyChatReaction({
+            messageAuthorId: before.authorId,
+            actorId: userId,
+            actorName: actor,
+            emoji,
+            channelId: before.channelId,
+            excerpt: before.content?.slice(0, 48),
+          });
         }
       },
 

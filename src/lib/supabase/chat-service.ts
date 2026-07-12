@@ -243,6 +243,44 @@ export async function deleteRemoteChatMessage(
   return { ok: true };
 }
 
+/**
+ * Toggle de reação no servidor (security definer).
+ * Contorna RLS (só o autor podia UPDATE) e cria notificação multi-user.
+ */
+export async function toggleRemoteChatReaction(
+  messageId: string,
+  emoji: string
+): Promise<
+  | { ok: true; reactions: Record<string, string[]> }
+  | { ok: false; error: string }
+> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Supabase não configurado" };
+  }
+  const supabase = getSupabaseBrowser();
+  if (!supabase) {
+    return { ok: false, error: "Cliente Supabase indisponível" };
+  }
+
+  const { data, error } = await supabase.rpc("toggle_chat_reaction", {
+    p_message_id: messageId,
+    p_emoji: emoji,
+  });
+
+  if (error) {
+    console.error("[chat] toggleRemoteChatReaction", error);
+    return { ok: false, error: error.message };
+  }
+
+  const reactions =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, string[]>)
+      : {};
+
+  return { ok: true, reactions };
+}
+
+/** @deprecated Preferir toggleRemoteChatReaction (RPC + notif). */
 export async function updateRemoteChatReactions(
   messageId: string,
   reactions: Record<string, string[]>

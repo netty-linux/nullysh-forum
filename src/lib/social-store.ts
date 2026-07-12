@@ -10,7 +10,10 @@ import {
   mediaGet,
   mediaSet,
 } from "./media-storage";
+import { notifyFollow } from "./notification-store";
+import { isSupabaseConfigured } from "./supabase/config";
 import { uid } from "./utils";
+import { useAuthStore } from "./auth-store";
 
 /** v2: remove follows/stories de contas seed */
 const SOCIAL_STORAGE_VERSION = 2;
@@ -192,6 +195,10 @@ interface SocialState {
 
   follow: (meId: string, targetId: string) => { ok: true } | { ok: false; error: string };
   unfollow: (meId: string, targetId: string) => void;
+  /** Substitui o grafo local pelo remoto (fonte multi-user). */
+  hydrateFollows: (edges: FollowEdge[]) => void;
+  upsertFollowEdge: (edge: FollowEdge) => void;
+  removeFollowEdge: (followerId: string, followingId: string) => void;
   isFollowing: (meId: string, targetId: string) => boolean;
   followersOf: (userId: string) => string[];
   followingOf: (userId: string) => string[];
@@ -238,16 +245,45 @@ export const useSocialStore = create<SocialState>()(
           return { ok: false, error: "Você não pode seguir a si mesmo." };
         }
         if (get().isFollowing(meId, targetId)) return { ok: true };
-        set((s) => ({
-          follows: [
-            {
-              followerId: meId,
-              followingId: targetId,
-              createdAt: new Date().toISOString(),
-            },
-            ...s.follows,
-          ],
-        }));
+
+        const edge: FollowEdge = {
+          followerId: meId,
+          followingId: targetId,
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({ follows: [edge, ...s.follows] }));
+
+        if (isSupabaseConfigured()) {
+          void import("@/lib/supabase/social-service").then(
+            ({ insertRemoteFollow }) => {
+              void insertRemoteFollow(targetId).then((res) => {
+                if (!res.ok) {
+                  // rollback otimista
+                  set((s) => ({
+                    follows: s.follows.filter(
+                      (f) =>
+                        !(
+                          f.followerId === meId &&
+                          f.followingId === targetId
+                        )
+                    ),
+                  }));
+                  console.error("[follow] remote", res.error);
+                }
+              });
+            }
+          );
+        } else {
+          // Modo local: notifica o alvo no mesmo browser
+          const actor =
+            useAuthStore.getState().users.find((u) => u.id === meId)?.name ||
+            "Alguém";
+          notifyFollow({
+            targetId,
+            actorId: meId,
+            actorName: actor,
+          });
+        }
         return { ok: true };
       },
 
@@ -256,6 +292,38 @@ export const useSocialStore = create<SocialState>()(
           follows: s.follows.filter(
             (f) =>
               !(f.followerId === meId && f.followingId === targetId)
+          ),
+        }));
+        if (isSupabaseConfigured()) {
+          void import("@/lib/supabase/social-service").then(
+            ({ deleteRemoteFollow }) => {
+              void deleteRemoteFollow(targetId);
+            }
+          );
+        }
+      },
+
+      hydrateFollows: (edges) => {
+        set({ follows: edges });
+      },
+
+      upsertFollowEdge: (edge) => {
+        set((s) => {
+          const exists = s.follows.some(
+            (f) =>
+              f.followerId === edge.followerId &&
+              f.followingId === edge.followingId
+          );
+          if (exists) return s;
+          return { follows: [edge, ...s.follows] };
+        });
+      },
+
+      removeFollowEdge: (followerId, followingId) => {
+        set((s) => ({
+          follows: s.follows.filter(
+            (f) =>
+              !(f.followerId === followerId && f.followingId === followingId)
           ),
         }));
       },

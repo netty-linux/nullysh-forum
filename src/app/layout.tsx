@@ -1,5 +1,6 @@
 import { ChatBridge } from "@/components/chat-bridge";
 import { PostsBridge } from "@/components/posts-bridge";
+import { SocialBridge } from "@/components/social-bridge";
 import { SupabaseAuthBridge } from "@/components/supabase-auth-bridge";
 import { ThemeProvider } from "@/components/theme-provider";
 import type { Metadata } from "next";
@@ -88,7 +89,9 @@ export default function RootLayout({
         <ThemeProvider>
           <SupabaseAuthBridge>
             <PostsBridge>
-              <ChatBridge>{children}</ChatBridge>
+              <ChatBridge>
+                <SocialBridge>{children}</SocialBridge>
+              </ChatBridge>
             </PostsBridge>
           </SupabaseAuthBridge>
         </ThemeProvider>

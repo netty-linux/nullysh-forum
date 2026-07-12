@@ -27,7 +27,9 @@ import {
   Heart,
   Package,
   Repeat,
+  Smiley,
   ThumbsDown,
+  UserPlus,
   X,
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -43,6 +45,8 @@ const TYPE_ICON: Record<
   comment: { Icon: ChatCircle, className: "bg-sky-500 text-white" },
   repost: { Icon: Repeat, className: "bg-emerald-500 text-white" },
   dm: { Icon: ChatCircle, className: "bg-violet-500 text-white" },
+  follow: { Icon: UserPlus, className: "bg-indigo-500 text-white" },
+  reaction: { Icon: Smiley, className: "bg-pink-500 text-white" },
   material: { Icon: Package, className: "bg-amber-500 text-white" },
   video: { Icon: FilmStrip, className: "bg-rose-500 text-white" },
   event: { Icon: CalendarBlank, className: "bg-[#1f1f1f] text-white" },
@@ -61,7 +65,12 @@ function resolveHref(n: AppNotification): string {
     case "event":
       return "/app/events";
     case "dm":
-      return n.actorId ? `/app/chat?dm=${encodeURIComponent(n.actorId)}` : "/app/chat";
+    case "reaction":
+      return n.actorId
+        ? `/app/chat?dm=${encodeURIComponent(n.actorId)}`
+        : "/app/chat";
+    case "follow":
+      return n.actorId ? `/app/u/${encodeURIComponent(n.actorId)}` : "/app";
     default:
       return "/app";
   }

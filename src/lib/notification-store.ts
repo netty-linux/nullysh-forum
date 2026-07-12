@@ -10,6 +10,8 @@ export type NotificationType =
   | "comment"
   | "repost"
   | "dm"
+  | "follow"
+  | "reaction"
   | "material"
   | "video"
   | "event";
@@ -72,6 +74,8 @@ const NOTIF_TYPES: NotificationType[] = [
   "comment",
   "repost",
   "dm",
+  "follow",
+  "reaction",
   "material",
   "video",
   "event",
@@ -470,6 +474,50 @@ export function notifyDm(opts: {
     actorId: opts.actorId,
     actorName: opts.actorName,
     dedupeKey: `dm:${opts.actorId}:${opts.recipientId}:${Math.floor(Date.now() / 15000)}`,
+  });
+}
+
+export function notifyFollow(opts: {
+  targetId: string;
+  actorId: string;
+  actorName: string;
+}) {
+  return useNotificationStore.getState().push({
+    userId: opts.targetId,
+    type: "follow",
+    title: "Novo seguidor",
+    body: `${opts.actorName} começou a te seguir`,
+    href: `/app/u/${encodeURIComponent(opts.actorId)}`,
+    actorId: opts.actorId,
+    actorName: opts.actorName,
+    dedupeKey: `follow:${opts.actorId}:${opts.targetId}`,
+  });
+}
+
+export function notifyChatReaction(opts: {
+  messageAuthorId: string;
+  actorId: string;
+  actorName: string;
+  emoji: string;
+  channelId: string;
+  excerpt?: string;
+}) {
+  const isDm = opts.channelId.startsWith("dm_");
+  const href = isDm
+    ? `/app/chat?dm=${encodeURIComponent(opts.actorId)}`
+    : `/app/chat?channel=${encodeURIComponent(opts.channelId)}`;
+
+  return useNotificationStore.getState().push({
+    userId: opts.messageAuthorId,
+    type: "reaction",
+    title: "Reação no bate-papo",
+    body: `${opts.actorName} reagiu com ${opts.emoji} à sua mensagem${
+      opts.excerpt ? `: “${opts.excerpt}”` : ""
+    }`,
+    href,
+    actorId: opts.actorId,
+    actorName: opts.actorName,
+    dedupeKey: `chat-react:${opts.channelId}:${opts.actorId}:${opts.emoji}:${Math.floor(Date.now() / 60000)}`,
   });
 }
 

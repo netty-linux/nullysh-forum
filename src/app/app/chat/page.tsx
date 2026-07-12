@@ -84,6 +84,7 @@ function ChatPageInner() {
   const blocks = useBlockStore((s) => s.blocks);
   const searchParams = useSearchParams();
   const dmParam = searchParams.get("dm");
+  const channelParam = searchParams.get("channel");
 
   const [active, setActive] = useState<ActiveChat>({
     kind: "channel",
@@ -92,6 +93,20 @@ function ChatPageInner() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+
+  // Abre sala quando vem de ?channel=ch1 (ex.: notif de reação no lobby)
+  useEffect(() => {
+    if (!channelParam || dmParam) return;
+    const ch = chatChannels.find(
+      (c) => c.id === channelParam || c.name === channelParam
+    );
+    if (!ch) return;
+    setActive((prev) =>
+      prev.kind === "channel" && prev.id === ch.id
+        ? prev
+        : { kind: "channel", id: ch.id }
+    );
+  }, [channelParam, dmParam]);
 
   // Abre DM quando vem de ?dm=userId (ex.: botão Conversar no match)
   // Depende de userId (primitivo), não do objeto user inteiro.
