@@ -314,13 +314,13 @@ export default function NullyshPayPage() {
     <div className="app-page mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
       <header className="mb-6">
         <div className="mb-4 flex items-center gap-3">
-          <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#0a0a0a] ring-1 ring-black/10 shadow-[0_1px_2px_rgb(0_0_0/0.06)] sm:h-14 sm:w-14">
+          <span className="relative flex h-12 w-12 shrink-0 items-center justify-center sm:h-14 sm:w-14">
             <Image
               src="/brand/nullysh-pay-logo.png"
               alt={NULLYSH_PAY_BRAND.name}
               width={56}
               height={56}
-              className="h-full w-full object-contain p-1.5"
+              className="h-full w-full object-contain"
               priority
             />
           </span>
