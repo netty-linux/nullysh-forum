@@ -23,6 +23,7 @@ import {
   SignOut,
   UserCircle,
   UsersThree,
+  CreditCard,
   Vault,
   X,
 } from "@phosphor-icons/react";
@@ -81,6 +82,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Vault",
     items: [
       { href: "/app/nullpass", label: "NullPass", icon: Vault },
+      { href: "/app/nullysh-pay", label: "Nullysh Pay", icon: CreditCard },
     ],
   },
   {

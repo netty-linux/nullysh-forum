@@ -12,6 +12,7 @@ import { VipBadge, VipGate } from "@/components/vip-gate";
 import { useAuth } from "@/hooks/use-auth";
 import {
   NULLPASS_BADGE_LABEL,
+  formatNullpassCompareAt,
   formatNullpassPrice,
   nullpassByCategory,
   nullpassCategories,
@@ -24,7 +25,9 @@ import {
   CrownSimple,
   Key,
   Lock,
+  Package,
   Sparkle,
+  Stack,
   Vault,
   X,
 } from "@phosphor-icons/react";
@@ -117,11 +120,19 @@ function PosterCard({
         aria-hidden
       />
 
-      {product.badge && (
-        <div className="absolute left-2.5 top-2.5 z-10">
-          <BadgePill badge={product.badge} />
-        </div>
-      )}
+      <div className="absolute left-2.5 top-2.5 z-10 flex flex-wrap gap-1">
+        {product.badge && <BadgePill badge={product.badge} />}
+        {product.kind === "combo" && (
+          <span className="inline-flex items-center rounded-md bg-violet-500 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+            Combo
+          </span>
+        )}
+        {product.promoActive && (
+          <span className="inline-flex items-center rounded-md bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+            Promo
+          </span>
+        )}
+      </div>
 
       {locked && (
         <div className="absolute right-2.5 top-2.5 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-black/50 text-white backdrop-blur-sm">
@@ -152,6 +163,14 @@ function PosterCard({
             {product.tagline}
           </p>
         )}
+        <p className="mt-1 flex flex-wrap items-baseline gap-1.5 text-[12px] font-semibold text-white">
+          {formatNullpassCompareAt(product) && (
+            <span className="text-[11px] font-medium text-white/55 line-through">
+              {formatNullpassCompareAt(product)}
+            </span>
+          )}
+          <span>{formatNullpassPrice(product)}</span>
+        </p>
       </div>
 
       <div
@@ -226,14 +245,24 @@ function ProductModal({
   isVip,
   onClose,
   onRequest,
+  catalog,
 }: {
   product: NullpassProduct;
   locked: boolean;
   isVip: boolean;
   onClose: () => void;
   onRequest: () => void;
+  catalog: NullpassProduct[];
 }) {
   const reduce = useReducedMotion();
+  const byId = (id: string) => catalog.find((p) => p.id === id);
+  const bundleItems = (product.bundleIds || [])
+    .map(byId)
+    .filter(Boolean) as NullpassProduct[];
+  const bumpItems = (product.orderBumpIds || [])
+    .map(byId)
+    .filter(Boolean) as NullpassProduct[];
+  const compareAt = formatNullpassCompareAt(product);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -329,23 +358,75 @@ function ProductModal({
           </p>
 
           <div className="mt-4 flex flex-wrap items-baseline gap-2">
+            {compareAt && (
+              <span className="text-[13px] font-medium text-neutral-400 line-through">
+                {compareAt}
+              </span>
+            )}
             <span className="text-[15px] font-semibold text-[#1f1f1f] dark:text-zinc-100">
               {formatNullpassPrice(product)}
             </span>
+            {product.promoActive && (
+              <span className="rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-rose-700">
+                Promo
+              </span>
+            )}
             {product.priceHint && (
               <span className="text-[12px] text-neutral-400">
                 {product.priceHint}
               </span>
             )}
-            {product.priceLabel &&
-              typeof product.price === "number" &&
-              product.priceLabel !== formatNullpassPrice(product) && (
-                <span className="text-[12px] text-neutral-400">
-                  · {product.priceLabel}
-                </span>
-              )}
             <VipBadge />
           </div>
+
+          {product.kind === "combo" && bundleItems.length > 0 && (
+            <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50/80 p-3 dark:border-violet-900/40 dark:bg-violet-950/20">
+              <p className="flex items-center gap-1.5 text-[12px] font-semibold text-violet-900 dark:text-violet-200">
+                <Stack size={14} weight="bold" />
+                Itens do combo
+              </p>
+              <ul className="mt-2 space-y-1">
+                {bundleItems.map((b) => (
+                  <li
+                    key={b.id}
+                    className="flex items-center justify-between gap-2 text-[13px] text-violet-950/80 dark:text-violet-100/80"
+                  >
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <Package size={12} className="shrink-0" />
+                      <span className="truncate">{b.title}</span>
+                    </span>
+                    <span className="shrink-0 text-[11px] font-medium text-violet-700/80">
+                      {formatNullpassPrice(b)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {bumpItems.length > 0 && isVip && !locked && (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+              <p className="text-[12px] font-semibold text-amber-900 dark:text-amber-200">
+                Order bumps disponíveis
+              </p>
+              <p className="mt-0.5 text-[11px] text-amber-800/75 dark:text-amber-100/70">
+                Ofertas extras no checkout (Nullysh Pay).
+              </p>
+              <ul className="mt-2 space-y-1">
+                {bumpItems.map((b) => (
+                  <li
+                    key={b.id}
+                    className="flex items-center justify-between gap-2 text-[13px] text-amber-950/85 dark:text-amber-50/85"
+                  >
+                    <span className="truncate">{b.title}</span>
+                    <span className="shrink-0 text-[11px] font-semibold">
+                      + {formatNullpassPrice(b)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <ul className="mt-4 space-y-2">
             {product.features.map((f) => (
@@ -601,6 +682,7 @@ function NullpassPageInner() {
             product={active}
             locked={locked}
             isVip={vip}
+            catalog={allProducts}
             onClose={() => setActiveId(null)}
             onRequest={handleRequest}
           />

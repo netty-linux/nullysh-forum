@@ -8,22 +8,47 @@
 
 export type NullpassBadge = "novo" | "custo-membro" | "limitado" | null;
 
+/** Capa vertical Netflix (cards 2:3) */
+export const NULLPASS_COVER_RECOMMENDED = {
+  width: 600,
+  height: 900,
+  aspect: "2:3",
+  label: "600 × 900 px (proporção 2:3)",
+  hint: "Poster vertical. JPG/PNG/WebP · ideal ~600×900. Featured usa o mesmo arquivo com crop visual.",
+} as const;
+
+export type NullpassProductKind = "single" | "combo";
+
 export type NullpassProduct = {
   id: string;
   title: string;
   tagline: string;
   category: string;
   badge?: NullpassBadge;
+  /** single = 1 benefício · combo = pacote de vários */
+  kind?: NullpassProductKind;
+  /** IDs dos produtos inclusos no combo */
+  bundleIds?: string[];
+  /**
+   * Order bumps oferecidos neste checkout (IDs de outros produtos).
+   * Tipicamente itens marcados como bump elegíveis.
+   */
+  orderBumpIds?: string[];
+  /** Pode ser oferecido como order bump em outros produtos */
+  isOrderBump?: boolean;
   /** Gradiente CSS de fallback se não houver capa */
   posterGradient: string;
-  /** Capa (URL https ou data URL) — opcional */
+  /** Capa (URL https ou data URL) — opcional · ideal 600×900 */
   coverUrl?: string | null;
   monogram: string;
   description: string;
   /**
-   * Preço em BRL (ex.: 19.9). Null = só usa priceLabel.
+   * Preço cheio em BRL (ex.: 19.9). Null = só usa priceLabel.
    */
   price?: number | null;
+  /** Preço promocional (exibe riscado o price se promoActive) */
+  promoPrice?: number | null;
+  promoActive?: boolean;
   /** Ex.: "Custo membro" — se vazio e price set, formata R$ */
   priceLabel: string;
   priceHint?: string;
@@ -286,14 +311,47 @@ export function monogramFromTitle(title: string): string {
   return t.slice(0, 2).toUpperCase();
 }
 
-export function formatNullpassPrice(p: NullpassProduct): string {
-  if (typeof p.price === "number" && Number.isFinite(p.price) && p.price >= 0) {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(p.price);
+export function formatBRL(value: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+}
+
+/** Preço efetivo (promo se ativa) */
+export function effectiveNullpassPrice(p: NullpassProduct): number | null {
+  if (
+    p.promoActive &&
+    typeof p.promoPrice === "number" &&
+    Number.isFinite(p.promoPrice) &&
+    p.promoPrice >= 0
+  ) {
+    return p.promoPrice;
   }
+  if (typeof p.price === "number" && Number.isFinite(p.price) && p.price >= 0) {
+    return p.price;
+  }
+  return null;
+}
+
+/** Label principal de preço na vitrine */
+export function formatNullpassPrice(p: NullpassProduct): string {
+  const eff = effectiveNullpassPrice(p);
+  if (eff != null) return formatBRL(eff);
   return (p.priceLabel || "Custo membro").trim() || "Custo membro";
+}
+
+/** Preço cheio riscado quando há promo */
+export function formatNullpassCompareAt(p: NullpassProduct): string | null {
+  if (
+    !p.promoActive ||
+    typeof p.promoPrice !== "number" ||
+    typeof p.price !== "number"
+  ) {
+    return null;
+  }
+  if (p.promoPrice >= p.price) return null;
+  return formatBRL(p.price);
 }
 
 export function nullpassCategories(products: NullpassProduct[]) {

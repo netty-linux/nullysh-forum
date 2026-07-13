@@ -11,23 +11,30 @@ import {
   monogramFromTitle,
   type NullpassBadge,
   type NullpassProduct,
+  type NullpassProductKind,
 } from "./nullpass-catalog";
 import { uid } from "./utils";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 
 export type NullpassUpsertInput = {
   title: string;
   tagline: string;
   category: string;
   badge?: NullpassBadge;
+  kind?: NullpassProductKind;
+  bundleIds?: string[];
+  orderBumpIds?: string[];
+  isOrderBump?: boolean;
   posterGradient: string;
   coverUrl?: string | null;
   monogram?: string;
   description: string;
   price?: number | null;
+  promoPrice?: number | null;
+  promoActive?: boolean;
   priceLabel: string;
   priceHint?: string;
   features: string[];
@@ -43,18 +50,29 @@ function normalizeBadge(raw: unknown): NullpassBadge {
   return null;
 }
 
+function normalizeKind(raw: unknown): NullpassProductKind {
+  return raw === "combo" ? "combo" : "single";
+}
+
+function normalizeIdList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(String).filter(Boolean);
+}
+
+function normalizeMoney(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return Math.max(0, raw);
+  }
+  return null;
+}
+
 function normalizeProduct(
   raw: Partial<NullpassProduct> & { id: string }
 ): NullpassProduct | null {
   if (!raw.id) return null;
   const title = (raw.title || "").trim();
   if (!title) return null;
-  const price =
-    typeof raw.price === "number" && Number.isFinite(raw.price)
-      ? Math.max(0, raw.price)
-      : raw.price === null
-        ? null
-        : null;
 
   return {
     id: raw.id,
@@ -62,13 +80,18 @@ function normalizeProduct(
     tagline: (raw.tagline || "").trim(),
     category: (raw.category || "").trim() || "Outros",
     badge: normalizeBadge(raw.badge),
+    kind: normalizeKind(raw.kind),
+    bundleIds: normalizeIdList(raw.bundleIds),
+    orderBumpIds: normalizeIdList(raw.orderBumpIds),
+    isOrderBump: !!raw.isOrderBump,
     posterGradient:
       (raw.posterGradient || "").trim() || NULLPASS_GRADIENTS[0],
     coverUrl: raw.coverUrl?.trim() || null,
-    monogram:
-      (raw.monogram || "").trim() || monogramFromTitle(title),
+    monogram: (raw.monogram || "").trim() || monogramFromTitle(title),
     description: (raw.description || "").trim(),
-    price,
+    price: normalizeMoney(raw.price),
+    promoPrice: normalizeMoney(raw.promoPrice),
+    promoActive: !!raw.promoActive,
     priceLabel: (raw.priceLabel || "").trim() || "Custo membro",
     priceHint: raw.priceHint?.trim() || undefined,
     features: Array.isArray(raw.features)
@@ -104,7 +127,8 @@ interface NullpassState {
 }
 
 function validateInput(
-  input: NullpassUpsertInput
+  input: NullpassUpsertInput,
+  selfId?: string
 ): { ok: true } | { ok: false; error: string } {
   const title = input.title.trim();
   if (title.length < 2) {
@@ -125,23 +149,79 @@ function validateInput(
   ) {
     return { ok: false, error: "Preço inválido." };
   }
+  if (
+    input.promoPrice != null &&
+    (!Number.isFinite(input.promoPrice) || input.promoPrice < 0)
+  ) {
+    return { ok: false, error: "Preço promocional inválido." };
+  }
+  if (
+    input.promoActive &&
+    input.promoPrice != null &&
+    input.price != null &&
+    input.promoPrice > input.price
+  ) {
+    return {
+      ok: false,
+      error: "Preço promocional deve ser menor ou igual ao preço cheio.",
+    };
+  }
+  if (input.kind === "combo") {
+    const ids = (input.bundleIds || []).filter((id) => id !== selfId);
+    if (ids.length < 2) {
+      return {
+        ok: false,
+        error: "Combo precisa de pelo menos 2 produtos inclusos.",
+      };
+    }
+  }
   if (input.coverUrl) {
     const u = input.coverUrl.trim();
-    if (
-      !u.startsWith("data:image/") &&
-      !/^https?:\/\//i.test(u)
-    ) {
+    if (!u.startsWith("data:image/") && !/^https?:\/\//i.test(u)) {
       return {
         ok: false,
         error: "Capa deve ser URL https ou imagem enviada.",
       };
     }
-    // limita data URL (~1.2MB chars ~)
     if (u.startsWith("data:") && u.length > 1_600_000) {
       return { ok: false, error: "Imagem da capa muito grande. Comprima." };
     }
   }
   return { ok: true };
+}
+
+function toProduct(
+  id: string,
+  input: NullpassUpsertInput,
+  prev?: NullpassProduct
+): NullpassProduct | null {
+  const now = new Date().toISOString();
+  return normalizeProduct({
+    id,
+    title: input.title,
+    tagline: input.tagline,
+    category: input.category,
+    badge: input.badge ?? null,
+    kind: input.kind || "single",
+    bundleIds: (input.bundleIds || []).filter((x) => x !== id),
+    orderBumpIds: (input.orderBumpIds || []).filter((x) => x !== id),
+    isOrderBump: !!input.isOrderBump,
+    posterGradient: input.posterGradient,
+    coverUrl: input.coverUrl ?? null,
+    monogram: input.monogram || monogramFromTitle(input.title),
+    description: input.description,
+    price: input.price ?? null,
+    promoPrice: input.promoPrice ?? null,
+    promoActive: !!input.promoActive,
+    priceLabel: input.priceLabel,
+    priceHint: input.priceHint,
+    features: input.features,
+    vipFulfillmentNote: input.vipFulfillmentNote,
+    active: input.active !== false,
+    sortOrder: input.sortOrder ?? prev?.sortOrder ?? 100,
+    createdAt: prev?.createdAt || now,
+    updatedAt: now,
+  });
 }
 
 export const useNullpassStore = create<NullpassState>()(
@@ -160,6 +240,12 @@ export const useNullpassStore = create<NullpassState>()(
         const seed = NULLPASS_SEED.map((p) =>
           normalizeProduct({
             ...p,
+            kind: "single",
+            bundleIds: [],
+            orderBumpIds: [],
+            isOrderBump: false,
+            promoPrice: null,
+            promoActive: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           })
@@ -191,27 +277,7 @@ export const useNullpassStore = create<NullpassState>()(
       createProduct: (input) => {
         const v = validateInput(input);
         if (!v.ok) return v;
-        const now = new Date().toISOString();
-        const product = normalizeProduct({
-          id: uid("np"),
-          title: input.title,
-          tagline: input.tagline,
-          category: input.category,
-          badge: input.badge ?? null,
-          posterGradient: input.posterGradient,
-          coverUrl: input.coverUrl ?? null,
-          monogram: input.monogram || monogramFromTitle(input.title),
-          description: input.description,
-          price: input.price ?? null,
-          priceLabel: input.priceLabel,
-          priceHint: input.priceHint,
-          features: input.features,
-          vipFulfillmentNote: input.vipFulfillmentNote,
-          active: input.active !== false,
-          sortOrder: input.sortOrder ?? 100,
-          createdAt: now,
-          updatedAt: now,
-        });
+        const product = toProduct(uid("np"), input);
         if (!product) {
           return { ok: false, error: "Não foi possível criar o produto." };
         }
@@ -220,29 +286,11 @@ export const useNullpassStore = create<NullpassState>()(
       },
 
       updateProduct: (id, input) => {
-        const v = validateInput(input);
+        const v = validateInput(input, id);
         if (!v.ok) return v;
         const prev = get().products.find((p) => p.id === id);
         if (!prev) return { ok: false, error: "Produto não encontrado." };
-        const product = normalizeProduct({
-          ...prev,
-          title: input.title,
-          tagline: input.tagline,
-          category: input.category,
-          badge: input.badge ?? null,
-          posterGradient: input.posterGradient,
-          coverUrl: input.coverUrl ?? null,
-          monogram: input.monogram || monogramFromTitle(input.title),
-          description: input.description,
-          price: input.price ?? null,
-          priceLabel: input.priceLabel,
-          priceHint: input.priceHint,
-          features: input.features,
-          vipFulfillmentNote: input.vipFulfillmentNote,
-          active: input.active !== false,
-          sortOrder: input.sortOrder ?? prev.sortOrder ?? 100,
-          updatedAt: new Date().toISOString(),
-        });
+        const product = toProduct(id, input, prev);
         if (!product) {
           return { ok: false, error: "Dados inválidos." };
         }
@@ -256,8 +304,15 @@ export const useNullpassStore = create<NullpassState>()(
         if (!get().products.some((p) => p.id === id)) {
           return { ok: false, error: "Produto não encontrado." };
         }
+        // limpa referências em combos/bumps
         set((s) => ({
-          products: s.products.filter((p) => p.id !== id),
+          products: s.products
+            .filter((p) => p.id !== id)
+            .map((p) => ({
+              ...p,
+              bundleIds: (p.bundleIds || []).filter((x) => x !== id),
+              orderBumpIds: (p.orderBumpIds || []).filter((x) => x !== id),
+            })),
         }));
         return { ok: true };
       },
@@ -266,6 +321,12 @@ export const useNullpassStore = create<NullpassState>()(
         const seed = NULLPASS_SEED.map((p) =>
           normalizeProduct({
             ...p,
+            kind: "single",
+            bundleIds: [],
+            orderBumpIds: [],
+            isOrderBump: false,
+            promoPrice: null,
+            promoActive: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           })
@@ -276,12 +337,26 @@ export const useNullpassStore = create<NullpassState>()(
     {
       name: "nullysh-nullpass-v1",
       version: STORAGE_VERSION,
+      migrate: (persisted) => {
+        const p = persisted as {
+          products?: Partial<NullpassProduct>[];
+          seeded?: boolean;
+        } | null;
+        if (!p) return { products: [], seeded: false };
+        const products = (p.products || [])
+          .map((raw) =>
+            raw?.id
+              ? normalizeProduct(raw as Partial<NullpassProduct> & { id: string })
+              : null
+          )
+          .filter(Boolean) as NullpassProduct[];
+        return { products, seeded: !!p.seeded };
+      },
       partialize: (s) => ({
         products: s.products,
         seeded: s.seeded,
       }),
       onRehydrateStorage: () => (state) => {
-        // Se store vazio após rehydrate, seed
         if (state && (!state.products || state.products.length === 0)) {
           state.ensureSeed();
         }

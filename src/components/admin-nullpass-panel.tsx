@@ -5,29 +5,33 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   NULLPASS_CATEGORIES,
+  NULLPASS_COVER_RECOMMENDED,
   NULLPASS_GRADIENTS,
   formatNullpassPrice,
   monogramFromTitle,
   type NullpassBadge,
   type NullpassProduct,
+  type NullpassProductKind,
 } from "@/lib/nullpass-catalog";
-import { useNullpassStore } from "@/lib/nullpass-store";
 import {
   compressImageDataUrl,
   fileToDataUrl,
   validateImageFile,
 } from "@/lib/image";
+import { useNullpassStore, type NullpassUpsertInput } from "@/lib/nullpass-store";
 import { cn } from "@/lib/utils";
 import {
   Eye,
   EyeSlash,
   Image as ImageIcon,
+  Package,
   PencilSimple,
   Plus,
+  Stack,
   Trash,
   Vault,
 } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Props = {
   adminId: string;
@@ -42,6 +46,36 @@ const BADGES: { value: NullpassBadge; label: string }[] = [
   { value: "limitado", label: "Vagas limitadas" },
 ];
 
+function productToInput(
+  p: NullpassProduct,
+  overrides?: Partial<NullpassUpsertInput>
+): NullpassUpsertInput {
+  return {
+    title: p.title,
+    tagline: p.tagline,
+    category: p.category,
+    badge: p.badge ?? null,
+    kind: p.kind || "single",
+    bundleIds: p.bundleIds || [],
+    orderBumpIds: p.orderBumpIds || [],
+    isOrderBump: !!p.isOrderBump,
+    posterGradient: p.posterGradient,
+    coverUrl: p.coverUrl,
+    monogram: p.monogram,
+    description: p.description,
+    price: p.price ?? null,
+    promoPrice: p.promoPrice ?? null,
+    promoActive: !!p.promoActive,
+    priceLabel: p.priceLabel,
+    priceHint: p.priceHint,
+    features: p.features,
+    vipFulfillmentNote: p.vipFulfillmentNote,
+    active: p.active !== false,
+    sortOrder: p.sortOrder,
+    ...overrides,
+  };
+}
+
 /**
  * CRUD NullPass — só no Painel ADM.
  */
@@ -53,10 +87,14 @@ export function AdminNullpassPanel({ onToast }: Props) {
   const deleteProduct = useNullpassStore((s) => s.deleteProduct);
   const resetToSeed = useNullpassStore((s) => s.resetToSeed);
 
-  const products = [...rawProducts].sort(
-    (a, b) =>
-      (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
-      a.title.localeCompare(b.title, "pt-BR")
+  const products = useMemo(
+    () =>
+      [...rawProducts].sort(
+        (a, b) =>
+          (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
+          a.title.localeCompare(b.title, "pt-BR")
+      ),
+    [rawProducts]
   );
 
   const [formMode, setFormMode] = useState<"new" | string | null>(null);
@@ -64,6 +102,10 @@ export function AdminNullpassPanel({ onToast }: Props) {
   const [tagline, setTagline] = useState("");
   const [category, setCategory] = useState<string>(NULLPASS_CATEGORIES[0]);
   const [badge, setBadge] = useState<NullpassBadge>(null);
+  const [kind, setKind] = useState<NullpassProductKind>("single");
+  const [bundleIds, setBundleIds] = useState<string[]>([]);
+  const [orderBumpIds, setOrderBumpIds] = useState<string[]>([]);
+  const [isOrderBump, setIsOrderBump] = useState(false);
   const [posterGradient, setPosterGradient] = useState<string>(
     NULLPASS_GRADIENTS[0]
   );
@@ -71,6 +113,8 @@ export function AdminNullpassPanel({ onToast }: Props) {
   const [monogram, setMonogram] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [promoPrice, setPromoPrice] = useState("");
+  const [promoActive, setPromoActive] = useState(false);
   const [priceLabel, setPriceLabel] = useState("Custo membro");
   const [priceHint, setPriceHint] = useState("");
   const [featuresText, setFeaturesText] = useState("");
@@ -84,6 +128,17 @@ export function AdminNullpassPanel({ onToast }: Props) {
 
   const isEditing = !!formMode && formMode !== "new";
   const showForm = formMode !== null;
+  const editingId = isEditing ? formMode : null;
+
+  /** Outros produtos (não o que está em edição) */
+  const otherProducts = useMemo(
+    () => products.filter((p) => p.id !== editingId),
+    [products, editingId]
+  );
+  const bumpCandidates = useMemo(
+    () => otherProducts.filter((p) => p.isOrderBump || p.kind !== "combo"),
+    [otherProducts]
+  );
 
   useEffect(() => {
     ensureSeed();
@@ -94,6 +149,10 @@ export function AdminNullpassPanel({ onToast }: Props) {
     setTagline("");
     setCategory(NULLPASS_CATEGORIES[0]);
     setBadge(null);
+    setKind("single");
+    setBundleIds([]);
+    setOrderBumpIds([]);
+    setIsOrderBump(false);
     setPosterGradient(
       NULLPASS_GRADIENTS[
         Math.floor(Math.random() * NULLPASS_GRADIENTS.length)
@@ -103,6 +162,8 @@ export function AdminNullpassPanel({ onToast }: Props) {
     setMonogram("");
     setDescription("");
     setPrice("");
+    setPromoPrice("");
+    setPromoActive(false);
     setPriceLabel("Custo membro");
     setPriceHint("");
     setFeaturesText("");
@@ -136,6 +197,10 @@ export function AdminNullpassPanel({ onToast }: Props) {
     setTagline(p.tagline || "");
     setCategory(p.category || NULLPASS_CATEGORIES[0]);
     setBadge(p.badge ?? null);
+    setKind(p.kind === "combo" ? "combo" : "single");
+    setBundleIds(p.bundleIds || []);
+    setOrderBumpIds(p.orderBumpIds || []);
+    setIsOrderBump(!!p.isOrderBump);
     setPosterGradient(p.posterGradient || NULLPASS_GRADIENTS[0]);
     setCoverUrl(p.coverUrl || null);
     setMonogram(p.monogram || "");
@@ -145,6 +210,12 @@ export function AdminNullpassPanel({ onToast }: Props) {
         ? String(p.price)
         : ""
     );
+    setPromoPrice(
+      typeof p.promoPrice === "number" && Number.isFinite(p.promoPrice)
+        ? String(p.promoPrice)
+        : ""
+    );
+    setPromoActive(!!p.promoActive);
     setPriceLabel(p.priceLabel || "Custo membro");
     setPriceHint(p.priceHint || "");
     setFeaturesText((p.features || []).join("\n"));
@@ -181,20 +252,29 @@ export function AdminNullpassPanel({ onToast }: Props) {
     }
   }
 
-  function buildPayload() {
-    const priceNum = price.trim()
-      ? Number(price.replace(",", "."))
-      : null;
+  function parseMoney(raw: string): number | null {
+    if (!raw.trim()) return null;
+    const n = Number(raw.replace(",", "."));
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function buildPayload(): NullpassUpsertInput {
     return {
       title,
       tagline,
       category,
       badge,
+      kind,
+      bundleIds: kind === "combo" ? bundleIds : [],
+      orderBumpIds,
+      isOrderBump: kind === "combo" ? false : isOrderBump,
       posterGradient,
       coverUrl,
       monogram: monogram.trim() || monogramFromTitle(title),
       description,
-      price: priceNum,
+      price: parseMoney(price),
+      promoPrice: parseMoney(promoPrice),
+      promoActive,
       priceLabel: priceLabel.trim() || "Custo membro",
       priceHint: priceHint.trim() || undefined,
       features: featuresText
@@ -213,6 +293,20 @@ export function AdminNullpassPanel({ onToast }: Props) {
     setSaving(true);
     try {
       const payload = buildPayload();
+      if (
+        payload.price != null &&
+        Number.isNaN(payload.price)
+      ) {
+        setError("Preço inválido.");
+        return;
+      }
+      if (
+        payload.promoPrice != null &&
+        Number.isNaN(payload.promoPrice)
+      ) {
+        setError("Preço promocional inválido.");
+        return;
+      }
       if (isEditing && formMode) {
         const res = updateProduct(formMode, payload);
         if (!res.ok) {
@@ -253,23 +347,10 @@ export function AdminNullpassPanel({ onToast }: Props) {
   }
 
   function onToggleActive(p: NullpassProduct) {
-    const res = updateProduct(p.id, {
-      title: p.title,
-      tagline: p.tagline,
-      category: p.category,
-      badge: p.badge ?? null,
-      posterGradient: p.posterGradient,
-      coverUrl: p.coverUrl,
-      monogram: p.monogram,
-      description: p.description,
-      price: p.price ?? null,
-      priceLabel: p.priceLabel,
-      priceHint: p.priceHint,
-      features: p.features,
-      vipFulfillmentNote: p.vipFulfillmentNote,
-      active: p.active === false,
-      sortOrder: p.sortOrder,
-    });
+    const res = updateProduct(
+      p.id,
+      productToInput(p, { active: p.active === false })
+    );
     if (!res.ok) {
       onToast(res.error);
       return;
@@ -281,6 +362,15 @@ export function AdminNullpassPanel({ onToast }: Props) {
     );
   }
 
+  function toggleId(
+    list: string[],
+    id: string,
+    setList: (v: string[]) => void
+  ) {
+    if (list.includes(id)) setList(list.filter((x) => x !== id));
+    else setList([...list, id]);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 rounded-2xl border border-neutral-200/90 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -290,9 +380,9 @@ export function AdminNullpassPanel({ onToast }: Props) {
             NullPass · catálogo
           </p>
           <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
-            Abasteça a vitrine VIP: capa, título, descrição, preço e texto de
-            liberação. Só o que estiver <strong className="font-medium">ativo</strong>{" "}
-            aparece em /app/nullpass.
+            Abasteça a vitrine VIP: capa, preços, combos, order bumps e
+            promoção. Pagamentos via <strong className="font-medium">Nullysh Pay</strong>{" "}
+            (Asaas).
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -340,6 +430,39 @@ export function AdminNullpassPanel({ onToast }: Props) {
             </button>
           </div>
 
+          {/* Tipo: single / combo */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setKind("single")}
+              className={cn(
+                "inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold ring-1 transition",
+                kind === "single"
+                  ? "bg-[#1f1f1f] text-white ring-[#1f1f1f]"
+                  : "bg-white text-neutral-600 ring-neutral-200 hover:text-[#1f1f1f]"
+              )}
+            >
+              <Package size={14} weight="bold" />
+              Produto único
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setKind("combo");
+                setIsOrderBump(false);
+              }}
+              className={cn(
+                "inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold ring-1 transition",
+                kind === "combo"
+                  ? "bg-[#1f1f1f] text-white ring-[#1f1f1f]"
+                  : "bg-white text-neutral-600 ring-neutral-200 hover:text-[#1f1f1f]"
+              )}
+            >
+              <Stack size={14} weight="bold" />
+              Combo
+            </button>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <Input
               label="Título"
@@ -352,7 +475,7 @@ export function AdminNullpassPanel({ onToast }: Props) {
               label="Subtítulo / tagline"
               value={tagline}
               onChange={(e) => setTagline(e.target.value)}
-              placeholder="Uma linha de destaque"
+              placeholder="Ex.: 30 DIAS · ou frase de destaque"
             />
           </div>
 
@@ -392,9 +515,7 @@ export function AdminNullpassPanel({ onToast }: Props) {
               <select
                 value={badge ?? ""}
                 onChange={(e) =>
-                  setBadge(
-                    (e.target.value || null) as NullpassBadge
-                  )
+                  setBadge((e.target.value || null) as NullpassBadge)
                 }
                 className="h-10 w-full rounded-[var(--radius-md)] border border-neutral-200 bg-white px-3 text-[14px] outline-none focus:border-[#1f1f1f]"
               >
@@ -413,28 +534,149 @@ export function AdminNullpassPanel({ onToast }: Props) {
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Input
-              label="Preço (R$)"
-              type="text"
-              inputMode="decimal"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="Ex.: 19.90 — vazio = só rótulo"
-            />
-            <Input
-              label="Rótulo do preço"
-              value={priceLabel}
-              onChange={(e) => setPriceLabel(e.target.value)}
-              placeholder="Custo membro"
-            />
-            <Input
-              label="Dica de preço"
-              value={priceHint}
-              onChange={(e) => setPriceHint(e.target.value)}
-              placeholder="Opcional"
-            />
+          {/* Preços */}
+          <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3 sm:p-4">
+            <p className="mb-3 text-[12px] font-semibold uppercase tracking-wide text-neutral-500">
+              Preços · Nullysh Pay
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Input
+                label="Preço cheio (R$)"
+                type="text"
+                inputMode="decimal"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="Ex.: 29.90"
+              />
+              <Input
+                label="Preço promocional (R$)"
+                type="text"
+                inputMode="decimal"
+                value={promoPrice}
+                onChange={(e) => setPromoPrice(e.target.value)}
+                placeholder="Ex.: 9.99"
+              />
+              <label className="flex items-end gap-2 pb-1 text-[13px] font-medium text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={promoActive}
+                  onChange={(e) => setPromoActive(e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300"
+                />
+                Ativar promoção
+              </label>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Rótulo do preço"
+                value={priceLabel}
+                onChange={(e) => setPriceLabel(e.target.value)}
+                placeholder="Custo membro"
+              />
+              <Input
+                label="Dica de preço"
+                value={priceHint}
+                onChange={(e) => setPriceHint(e.target.value)}
+                placeholder="Opcional · ex.: 30 dias"
+              />
+            </div>
+            <p className="mt-2 text-[11px] text-neutral-400">
+              Com promoção ativa, a vitrine mostra o preço promo e o cheio
+              riscado. Checkout futuro via Nullysh Pay (Asaas).
+            </p>
           </div>
+
+          {/* Combo items */}
+          {kind === "combo" && (
+            <div className="rounded-2xl border border-neutral-200 bg-white p-3 sm:p-4">
+              <p className="mb-1 text-[12px] font-semibold text-[#1f1f1f]">
+                Itens do combo
+              </p>
+              <p className="mb-3 text-[11px] text-neutral-500">
+                Selecione ao menos 2 produtos inclusos neste pacote.
+              </p>
+              {otherProducts.length === 0 ? (
+                <p className="text-[13px] text-neutral-400">
+                  Cadastre produtos únicos antes de montar o combo.
+                </p>
+              ) : (
+                <ul className="max-h-48 space-y-1.5 overflow-y-auto thin-scroll">
+                  {otherProducts.map((p) => (
+                    <li key={p.id}>
+                      <label className="flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1.5 text-[13px] hover:bg-neutral-50">
+                        <input
+                          type="checkbox"
+                          checked={bundleIds.includes(p.id)}
+                          onChange={() =>
+                            toggleId(bundleIds, p.id, setBundleIds)
+                          }
+                          className="h-4 w-4 rounded border-neutral-300"
+                        />
+                        <span className="min-w-0 flex-1 truncate font-medium text-[#1f1f1f]">
+                          {p.title}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-neutral-400">
+                          {formatNullpassPrice(p)}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Order bumps */}
+          {kind === "single" && (
+            <div className="rounded-2xl border border-neutral-200 bg-white p-3 sm:p-4">
+              <p className="mb-1 text-[12px] font-semibold text-[#1f1f1f]">
+                Order bumps neste produto
+              </p>
+              <p className="mb-3 text-[11px] text-neutral-500">
+                Ofertas extras no checkout (Nullysh Pay). Marque produtos que
+                também estejam elegíveis como bump.
+              </p>
+              <label className="mb-3 flex cursor-pointer items-center gap-2 text-[13px] font-medium text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={isOrderBump}
+                  onChange={(e) => setIsOrderBump(e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300"
+                />
+                Este produto pode ser order bump de outros
+              </label>
+              {bumpCandidates.length === 0 ? (
+                <p className="text-[13px] text-neutral-400">
+                  Nenhum outro produto disponível ainda.
+                </p>
+              ) : (
+                <ul className="max-h-40 space-y-1.5 overflow-y-auto thin-scroll">
+                  {bumpCandidates.map((p) => (
+                    <li key={p.id}>
+                      <label className="flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1.5 text-[13px] hover:bg-neutral-50">
+                        <input
+                          type="checkbox"
+                          checked={orderBumpIds.includes(p.id)}
+                          onChange={() =>
+                            toggleId(orderBumpIds, p.id, setOrderBumpIds)
+                          }
+                          className="h-4 w-4 rounded border-neutral-300"
+                        />
+                        <span className="min-w-0 flex-1 truncate">
+                          {p.title}
+                          {p.isOrderBump && (
+                            <span className="ml-1 text-[10px] font-semibold uppercase text-amber-600">
+                              bump
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
             <Input
@@ -455,18 +697,23 @@ export function AdminNullpassPanel({ onToast }: Props) {
             </label>
           </div>
 
-          {/* Capa */}
+          {/* Capa + tamanho recomendado */}
           <div className="space-y-2">
             <p className="text-[12px] font-medium text-neutral-600">
               Capa do card
             </p>
+            <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[12px] leading-relaxed text-sky-900">
+              <strong className="font-semibold">Tamanho recomendado:</strong>{" "}
+              {NULLPASS_COVER_RECOMMENDED.label}
+              <span className="mt-0.5 block text-sky-800/80">
+                {NULLPASS_COVER_RECOMMENDED.hint}
+              </span>
+            </div>
             <div className="flex flex-wrap items-start gap-3">
               <div
-                className="relative h-28 w-20 overflow-hidden rounded-xl border border-neutral-200 shadow-sm"
+                className="relative h-[135px] w-[90px] overflow-hidden rounded-xl border border-neutral-200 shadow-sm"
                 style={{
-                  background: coverUrl
-                    ? undefined
-                    : posterGradient,
+                  background: coverUrl ? undefined : posterGradient,
                 }}
               >
                 {coverUrl ? (
@@ -527,7 +774,7 @@ export function AdminNullpassPanel({ onToast }: Props) {
                       className={cn(
                         "h-7 w-7 rounded-full border-2 transition",
                         posterGradient === g
-                          ? "border-[#1f1f1f] scale-110"
+                          ? "scale-110 border-[#1f1f1f]"
                           : "border-transparent opacity-80 hover:opacity-100"
                       )}
                       style={{ background: g }}
@@ -613,6 +860,21 @@ export function AdminNullpassPanel({ onToast }: Props) {
                   <p className="text-sm font-semibold text-[#1f1f1f]">
                     {p.title}
                   </p>
+                  {p.kind === "combo" && (
+                    <span className="rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
+                      Combo
+                    </span>
+                  )}
+                  {p.isOrderBump && (
+                    <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800">
+                      Bump
+                    </span>
+                  )}
+                  {p.promoActive && (
+                    <span className="rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-rose-700">
+                      Promo
+                    </span>
+                  )}
                   {p.active === false && (
                     <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-neutral-500">
                       Oculto
@@ -625,6 +887,12 @@ export function AdminNullpassPanel({ onToast }: Props) {
                 <p className="truncate text-[12px] text-neutral-400">
                   {p.category}
                   {p.tagline ? ` · ${p.tagline}` : ""}
+                  {(p.orderBumpIds?.length || 0) > 0
+                    ? ` · ${p.orderBumpIds!.length} bump(s)`
+                    : ""}
+                  {p.kind === "combo" && (p.bundleIds?.length || 0) > 0
+                    ? ` · ${p.bundleIds!.length} itens`
+                    : ""}
                 </p>
               </div>
               <div className="flex flex-wrap gap-1.5 sm:justify-end">
