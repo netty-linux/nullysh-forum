@@ -2,12 +2,11 @@
  * NullPass — cofre de benefícios VIP (tom Vault).
  *
  * Linguagem consciente:
- * - São benefícios do clube / acessos gerenciados, não "contas piratas".
- * - Entrega real é operacional (staff); o catálogo é a vitrine.
- * - Free nunca vê notas de fulfillment.
+ * - Benefícios do clube / acessos gerenciados (não "contas piratas").
+ * - Catálogo seed + store admin (localStorage) abastecem a vitrine.
  */
 
-export type NullpassBadge = "novo" | "custo-membro" | "limitado";
+export type NullpassBadge = "novo" | "custo-membro" | "limitado" | null;
 
 export type NullpassProduct = {
   id: string;
@@ -15,29 +14,37 @@ export type NullpassProduct = {
   tagline: string;
   category: string;
   badge?: NullpassBadge;
-  /** Gradiente CSS da capa (estilo poster Netflix) */
+  /** Gradiente CSS de fallback se não houver capa */
   posterGradient: string;
-  /** Inicial / monograma na capa */
+  /** Capa (URL https ou data URL) — opcional */
+  coverUrl?: string | null;
   monogram: string;
   description: string;
-  /** Ex.: "Custo membro" */
+  /**
+   * Preço em BRL (ex.: 19.9). Null = só usa priceLabel.
+   */
+  price?: number | null;
+  /** Ex.: "Custo membro" — se vazio e price set, formata R$ */
   priceLabel: string;
   priceHint?: string;
   features: string[];
-  /**
-   * Instrução pós-solicitação (só VIP).
-   * Nunca colocar senhas/links sensíveis aqui no código-fonte.
-   */
   vipFulfillmentNote: string;
+  /** false = oculto na vitrine (só admin vê no painel) */
+  active?: boolean;
+  sortOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
-export const NULLPASS_BADGE_LABEL: Record<NullpassBadge, string> = {
+export const NULLPASS_BADGE_LABEL: Record<
+  Exclude<NullpassBadge, null>,
+  string
+> = {
   novo: "Novo",
   "custo-membro": "Custo membro",
   limitado: "Vagas limitadas",
 };
 
-/** Categorias na ordem das fileiras Netflix */
 export const NULLPASS_ROW_ORDER = [
   "Design & criativo",
   "Produtividade",
@@ -45,22 +52,36 @@ export const NULLPASS_ROW_ORDER = [
   "Marketing",
 ] as const;
 
-/**
- * Catálogo seed — edite aqui até existir painel admin.
- * Capas usam gradientes (sem asset externo) para performance e branding.
- */
-export const NULLPASS_CATALOG: NullpassProduct[] = [
+export const NULLPASS_CATEGORIES = [
+  ...NULLPASS_ROW_ORDER,
+  "Outros",
+] as const;
+
+export const NULLPASS_GRADIENTS = [
+  "linear-gradient(145deg, #0f766e 0%, #115e59 40%, #042f2e 100%)",
+  "linear-gradient(160deg, #4c1d95 0%, #6d28d9 45%, #1e1b4b 100%)",
+  "linear-gradient(150deg, #171717 0%, #404040 50%, #0a0a0a 100%)",
+  "linear-gradient(135deg, #ea580c 0%, #c2410c 40%, #431407 100%)",
+  "linear-gradient(145deg, #065f46 0%, #10b981 35%, #022c22 100%)",
+  "linear-gradient(160deg, #1e3a8a 0%, #3b82f6 40%, #0c1445 100%)",
+  "linear-gradient(150deg, #9a3412 0%, #ea580c 45%, #431407 100%)",
+  "linear-gradient(145deg, #334155 0%, #64748b 40%, #0f172a 100%)",
+  "linear-gradient(155deg, #7c3aed 0%, #a78bfa 40%, #2e1065 100%)",
+] as const;
+
+/** Seed inicial (primeira visita / store vazio). */
+export const NULLPASS_SEED: NullpassProduct[] = [
   {
     id: "canva-pro",
     title: "Canva Pro",
     tagline: "Design sem freio para o dia a dia",
     category: "Design & criativo",
     badge: "custo-membro",
-    posterGradient:
-      "linear-gradient(145deg, #0f766e 0%, #115e59 40%, #042f2e 100%)",
+    posterGradient: NULLPASS_GRADIENTS[0],
     monogram: "C",
     description:
       "Benefício do clube para criação de peças, posts e apresentações com recursos Pro. Acesso gerenciado pela equipe Nullysh — sem links públicos.",
+    price: null,
     priceLabel: "Custo membro",
     priceHint: "Abaixo do valor de prateleira",
     features: [
@@ -70,6 +91,8 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     ],
     vipFulfillmentNote:
       "Abra o bate-papo com o staff (DM) e informe o ID do benefício. A liberação é feita de forma gerenciada — nunca compartilhe senhas em canais públicos.",
+    active: true,
+    sortOrder: 10,
   },
   {
     id: "capcut-pro",
@@ -77,11 +100,11 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     tagline: "Edição rápida para reels e shorts",
     category: "Design & criativo",
     badge: "novo",
-    posterGradient:
-      "linear-gradient(160deg, #4c1d95 0%, #6d28d9 45%, #1e1b4b 100%)",
+    posterGradient: NULLPASS_GRADIENTS[1],
     monogram: "CC",
     description:
       "Pacote de edição para quem produz vídeo curto. Acesso como benefício VIP, com orientação de uso responsável dentro das políticas da ferramenta.",
+    price: null,
     priceLabel: "Custo membro",
     features: [
       "Export e efeitos pro fluxo de short-form",
@@ -90,6 +113,8 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     ],
     vipFulfillmentNote:
       "Solicite no DM do staff com o nome do benefício. Prazo típico em dias úteis, conforme fila.",
+    active: true,
+    sortOrder: 20,
   },
   {
     id: "notion-plus",
@@ -97,11 +122,11 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     tagline: "Workspace organizado para o time",
     category: "Produtividade",
     badge: "custo-membro",
-    posterGradient:
-      "linear-gradient(150deg, #171717 0%, #404040 50%, #0a0a0a 100%)",
+    posterGradient: NULLPASS_GRADIENTS[2],
     monogram: "N",
     description:
-      "Espaço de notas e docs para operar projetos com mais clareza. Benefício estruturado para membros VIP — uso pessoal/profissional conforme regras do plano.",
+      "Espaço de notas e docs para operar projetos com mais clareza. Benefício estruturado para membros VIP.",
+    price: null,
     priceLabel: "Custo membro",
     features: [
       "Docs, bases e templates de operação",
@@ -110,6 +135,8 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     ],
     vipFulfillmentNote:
       "Peça no bate-papo VIP/staff citando «Notion Plus». Você receberá o próximo passo de ativação no privado.",
+    active: true,
+    sortOrder: 30,
   },
   {
     id: "figma-seat",
@@ -117,11 +144,11 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     tagline: "UI/UX com colaborações leves",
     category: "Design & criativo",
     badge: "limitado",
-    posterGradient:
-      "linear-gradient(135deg, #ea580c 0%, #c2410c 40%, #431407 100%)",
+    posterGradient: NULLPASS_GRADIENTS[3],
     monogram: "F",
     description:
-      "Seat gerenciado para prototipação e handoff. Vagas limitadas por ciclo — prioridade a quem está em trilha ou mentoria ativa.",
+      "Seat gerenciado para prototipação e handoff. Vagas limitadas por ciclo.",
+    price: null,
     priceLabel: "Custo membro",
     priceHint: "Sujeito a disponibilidade",
     features: [
@@ -130,7 +157,9 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
       "Confirmação manual do staff",
     ],
     vipFulfillmentNote:
-      "Vagas limitadas. Envie DM ao staff com uso pretendido (projeto/estudo). Sem vaga na fila, você entra em waitlist.",
+      "Vagas limitadas. Envie DM ao staff com uso pretendido. Sem vaga na fila, você entra em waitlist.",
+    active: true,
+    sortOrder: 40,
   },
   {
     id: "chatgpt-plus",
@@ -138,11 +167,11 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     tagline: "IA no ritmo da produção",
     category: "IA & automação",
     badge: "custo-membro",
-    posterGradient:
-      "linear-gradient(145deg, #065f46 0%, #10b981 35%, #022c22 100%)",
+    posterGradient: NULLPASS_GRADIENTS[4],
     monogram: "AI",
     description:
-      "Acesso como benefício do Vault para acelerar copy, código e pesquisa. Uso responsável e alinhado às políticas da OpenAI — o Nullysh gerencia a liberação, não revende “contas soltas” em público.",
+      "Acesso como benefício do Vault para acelerar copy, código e pesquisa. Uso responsável — o Nullysh gerencia a liberação.",
+    price: null,
     priceLabel: "Custo membro",
     features: [
       "Modelos avançados no fluxo de trabalho",
@@ -150,7 +179,9 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
       "Liberação sob processo VIP",
     ],
     vipFulfillmentNote:
-      "Solicite no DM staff com «ChatGPT Plus». Mantenha o uso dentro das regras da plataforma; abuso pode suspender o benefício.",
+      "Solicite no DM staff com «ChatGPT Plus». Mantenha o uso dentro das regras da plataforma.",
+    active: true,
+    sortOrder: 50,
   },
   {
     id: "midjourney",
@@ -158,11 +189,11 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     tagline: "Imagens e referências visuais",
     category: "IA & automação",
     badge: "novo",
-    posterGradient:
-      "linear-gradient(160deg, #1e3a8a 0%, #3b82f6 40%, #0c1445 100%)",
+    posterGradient: NULLPASS_GRADIENTS[5],
     monogram: "MJ",
     description:
-      "Geração de imagens para moodboards e campanhas. Benefício VIP com orientação de uso ético (sem deepfake malicioso / conteúdo proibido).",
+      "Geração de imagens para moodboards e campanhas. Benefício VIP com orientação de uso ético.",
+    price: null,
     priceLabel: "Custo membro",
     features: [
       "Exploração visual rápida",
@@ -170,7 +201,9 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
       "Acesso gerenciado",
     ],
     vipFulfillmentNote:
-      "DM ao staff com o benefício e o caso de uso. Entrega conforme fila e política da ferramenta.",
+      "DM ao staff com o benefício e o caso de uso. Entrega conforme fila.",
+    active: true,
+    sortOrder: 60,
   },
   {
     id: "semrush-lite",
@@ -178,11 +211,11 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     tagline: "Pesquisa e concorrência",
     category: "Marketing",
     badge: "custo-membro",
-    posterGradient:
-      "linear-gradient(150deg, #9a3412 0%, #ea580c 45%, #431407 100%)",
+    posterGradient: NULLPASS_GRADIENTS[6],
     monogram: "SEO",
     description:
-      "Ferramentas de pesquisa de palavras e análise de presença digital, empacotadas como benefício do clube. Ideal para quem opera conteúdo e aquisição.",
+      "Ferramentas de pesquisa de palavras e análise de presença digital, empacotadas como benefício do clube.",
+    price: null,
     priceLabel: "Custo membro",
     features: [
       "Keywords e overview de mercado",
@@ -191,6 +224,8 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     ],
     vipFulfillmentNote:
       "Peça no privado citando «SEO Toolkit». O staff confirma o plano disponível no ciclo atual.",
+    active: true,
+    sortOrder: 70,
   },
   {
     id: "mail-warmup",
@@ -198,11 +233,11 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     tagline: "Envio e deliverability básica",
     category: "Marketing",
     badge: "limitado",
-    posterGradient:
-      "linear-gradient(145deg, #334155 0%, #64748b 40%, #0f172a 100%)",
+    posterGradient: NULLPASS_GRADIENTS[7],
     monogram: "EM",
     description:
-      "Kit de ferramentas de e-mail para quem valida ofertas e nutre leads. Benefício com vagas controladas — não é bulk spam; uso alinhado a boas práticas.",
+      "Kit de ferramentas de e-mail para quem valida ofertas e nutre leads. Uso alinhado a boas práticas.",
+    price: null,
     priceLabel: "Custo membro",
     features: [
       "Fluxo de envio responsável",
@@ -210,7 +245,9 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
       "Onboarding com o staff",
     ],
     vipFulfillmentNote:
-      "DM staff + objetivo da campanha. Benefício pode exigir checklist anti-spam antes da liberação.",
+      "DM staff + objetivo da campanha. Benefício pode exigir checklist antes da liberação.",
+    active: true,
+    sortOrder: 80,
   },
   {
     id: "loom-business",
@@ -218,11 +255,11 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
     tagline: "Vídeos assíncronos de mentoria",
     category: "Produtividade",
     badge: "novo",
-    posterGradient:
-      "linear-gradient(155deg, #7c3aed 0%, #a78bfa 40%, #2e1065 100%)",
+    posterGradient: NULLPASS_GRADIENTS[8],
     monogram: "L",
     description:
-      "Gravação rápida de telas e feedbacks — combina com mentorias e handoff de tarefas no fórum.",
+      "Gravação rápida de telas e feedbacks — combina com mentorias e handoff no fórum.",
+    price: null,
     priceLabel: "Custo membro",
     features: [
       "Gravação e compartilhamento ágil",
@@ -230,26 +267,66 @@ export const NULLPASS_CATALOG: NullpassProduct[] = [
       "Liberação VIP assistida",
     ],
     vipFulfillmentNote:
-      "Solicite no DM com «Loom Business». Você recebe o passo a passo de ativação no privado.",
+      "Solicite no DM com «Loom Business». Você recebe o passo a passo no privado.",
+    active: true,
+    sortOrder: 90,
   },
 ];
 
-export function nullpassCategories(products: NullpassProduct[] = NULLPASS_CATALOG) {
-  const present = new Set(products.map((p) => p.category));
-  const ordered = NULLPASS_ROW_ORDER.filter((c) => present.has(c));
-  const extras = Array.from(present).filter(
-    (c) => !NULLPASS_ROW_ORDER.includes(c as (typeof NULLPASS_ROW_ORDER)[number])
+/** @deprecated use NULLPASS_SEED — mantido para imports legados */
+export const NULLPASS_CATALOG = NULLPASS_SEED;
+
+export function monogramFromTitle(title: string): string {
+  const t = title.trim();
+  if (!t) return "?";
+  const parts = t.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase().slice(0, 3);
+  }
+  return t.slice(0, 2).toUpperCase();
+}
+
+export function formatNullpassPrice(p: NullpassProduct): string {
+  if (typeof p.price === "number" && Number.isFinite(p.price) && p.price >= 0) {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(p.price);
+  }
+  return (p.priceLabel || "Custo membro").trim() || "Custo membro";
+}
+
+export function nullpassCategories(products: NullpassProduct[]) {
+  const present = new Set(
+    products.filter((p) => p.active !== false).map((p) => p.category)
   );
-  return [...ordered, ...extras.sort()];
+  const ordered = NULLPASS_ROW_ORDER.filter((c) => present.has(c));
+  const extras = Array.from(present)
+    .filter(
+      (c) =>
+        !NULLPASS_ROW_ORDER.includes(c as (typeof NULLPASS_ROW_ORDER)[number])
+    )
+    .sort();
+  return [...ordered, ...extras];
 }
 
 export function nullpassByCategory(
   category: string,
-  products: NullpassProduct[] = NULLPASS_CATALOG
+  products: NullpassProduct[]
 ) {
-  return products.filter((p) => p.category === category);
+  return products
+    .filter((p) => p.active !== false && p.category === category)
+    .sort(
+      (a, b) =>
+        (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
+        a.title.localeCompare(b.title, "pt-BR")
+    );
 }
 
-export function getNullpassProduct(id: string) {
-  return NULLPASS_CATALOG.find((p) => p.id === id) ?? null;
+export function sortNullpassProducts(products: NullpassProduct[]) {
+  return [...products].sort(
+    (a, b) =>
+      (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
+      a.title.localeCompare(b.title, "pt-BR")
+  );
 }

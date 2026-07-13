@@ -2,6 +2,7 @@
 
 import { AdminEventsPanel } from "@/components/admin-events-panel";
 import { AdminMaterialsPanel } from "@/components/admin-materials-panel";
+import { AdminNullpassPanel } from "@/components/admin-nullpass-panel";
 import { AdminTrailsPanel } from "@/components/admin-trails-panel";
 import { AdminVideosPanel } from "@/components/admin-videos-panel";
 import { Avatar } from "@/components/ui/avatar";
@@ -13,6 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/lib/auth-store";
 import { useEventStore } from "@/lib/event-store";
 import { useMaterialStore } from "@/lib/material-store";
+import { useNullpassStore } from "@/lib/nullpass-store";
 import { useTrailStore } from "@/lib/trail-store";
 import { useVerificationStore } from "@/lib/verification-store";
 import type { VerificationRequest } from "@/lib/types";
@@ -28,15 +30,27 @@ import {
   Path,
   ShieldCheck,
   UsersThree,
+  Vault,
   XCircle,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
-export default function AdminPanelPage() {
+type AdminTab =
+  | "pending"
+  | "history"
+  | "users"
+  | "trails"
+  | "videos"
+  | "materials"
+  | "events"
+  | "nullpass";
+
+function AdminPanelInner() {
   const { user, hydrated } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const users = useAuthStore((s) => s.users);
   const setVerified = useAuthStore((s) => s.setVerified);
   const setVip = useAuthStore((s) => s.setVip);
@@ -45,16 +59,10 @@ export default function AdminPanelPage() {
   const trailsCount = useTrailStore((s) => s.trails.length);
   const materialsCount = useMaterialStore((s) => s.materials.length);
   const eventsCount = useEventStore((s) => s.events.length);
+  const nullpassCount = useNullpassStore((s) => s.products.length);
+  const ensureNullpassSeed = useNullpassStore((s) => s.ensureSeed);
 
-  const [tab, setTab] = useState<
-    | "pending"
-    | "history"
-    | "users"
-    | "trails"
-    | "videos"
-    | "materials"
-    | "events"
-  >("pending");
+  const [tab, setTab] = useState<AdminTab>("pending");
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [toast, setToast] = useState("");
   const [videosCount, setVideosCount] = useState(0);
@@ -68,6 +76,27 @@ export default function AdminPanelPage() {
       router.replace("/app");
     }
   }, [hydrated, user, isAdmin, router]);
+
+  useEffect(() => {
+    ensureNullpassSeed();
+  }, [ensureNullpassSeed]);
+
+  // Deep-link ?tab=nullpass
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (
+      t === "pending" ||
+      t === "history" ||
+      t === "users" ||
+      t === "trails" ||
+      t === "videos" ||
+      t === "materials" ||
+      t === "events" ||
+      t === "nullpass"
+    ) {
+      setTab(t);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -206,17 +235,19 @@ export default function AdminPanelPage() {
           </h1>
         </div>
         <p className="mt-2 text-sm text-neutral-500 sm:text-base">
-          Verificações, doar VIP, membros, trilhas, eventos, materiais e vídeos.
+          Verificações, VIP, NullPass, membros, trilhas, eventos, materiais e
+          vídeos.
         </p>
       </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-9">
         {[
           { label: "Pendentes", value: pending.length, icon: Clock },
           { label: "Verificados", value: verifiedCount, icon: CheckCircle },
           { label: "VIP", value: vipCount, icon: CrownSimple },
           { label: "Membros", value: users.length, icon: UsersThree },
+          { label: "NullPass", value: nullpassCount, icon: Vault },
           { label: "Trilhas", value: trailsCount, icon: Path },
           { label: "Eventos", value: eventsCount, icon: CalendarBlank },
           { label: "Materiais", value: materialsCount, icon: Books },
@@ -249,6 +280,7 @@ export default function AdminPanelPage() {
               ["pending", `Pendentes (${pending.length})`],
               ["history", "Histórico"],
               ["users", "Membros"],
+              ["nullpass", `NullPass (${nullpassCount})`],
               ["trails", `Trilhas (${trailsCount})`],
               ["events", `Eventos (${eventsCount})`],
               ["materials", `Materiais (${materialsCount})`],
@@ -586,6 +618,17 @@ export default function AdminPanelPage() {
         />
       )}
 
+      {tab === "nullpass" && user && (
+        <AdminNullpassPanel
+          adminId={user.id}
+          adminName={user.name}
+          onToast={(msg) => {
+            setToast(msg);
+            setTimeout(() => setToast(""), 2800);
+          }}
+        />
+      )}
+
       {tab === "videos" && user && (
         <AdminVideosPanel
           adminId={user.id}
@@ -597,5 +640,19 @@ export default function AdminPanelPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function AdminPanelPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] items-center justify-center text-sm text-neutral-400">
+          Carregando painel…
+        </div>
+      }
+    >
+      <AdminPanelInner />
+    </Suspense>
   );
 }

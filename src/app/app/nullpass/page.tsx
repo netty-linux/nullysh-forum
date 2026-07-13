@@ -12,12 +12,12 @@ import { VipBadge, VipGate } from "@/components/vip-gate";
 import { useAuth } from "@/hooks/use-auth";
 import {
   NULLPASS_BADGE_LABEL,
-  NULLPASS_CATALOG,
-  getNullpassProduct,
+  formatNullpassPrice,
   nullpassByCategory,
   nullpassCategories,
   type NullpassProduct,
 } from "@/lib/nullpass-catalog";
+import { useNullpassStore } from "@/lib/nullpass-store";
 import { cn } from "@/lib/utils";
 import {
   CaretRight,
@@ -43,7 +43,7 @@ import { createPortal } from "react-dom";
 function BadgePill({
   badge,
 }: {
-  badge: NonNullable<NullpassProduct["badge"]>;
+  badge: Exclude<NullpassProduct["badge"], null | undefined>;
 }) {
   return (
     <span
@@ -90,11 +90,20 @@ function PosterCard({
       )}
       aria-label={`${product.title}${locked ? " — exclusivo VIP" : ""}`}
     >
-      <div
-        className="absolute inset-0 transition duration-300 group-hover:scale-[1.03]"
-        style={{ background: product.posterGradient }}
-        aria-hidden
-      />
+      {product.coverUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={product.coverUrl}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+        />
+      ) : (
+        <div
+          className="absolute inset-0 transition duration-300 group-hover:scale-[1.03]"
+          style={{ background: product.posterGradient }}
+          aria-hidden
+        />
+      )}
       <div
         className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/5"
         aria-hidden
@@ -267,8 +276,20 @@ function ProductModal({
       >
         <div
           className="relative h-40 shrink-0 sm:h-48"
-          style={{ background: product.posterGradient }}
+          style={{
+            background: product.coverUrl
+              ? undefined
+              : product.posterGradient,
+          }}
         >
+          {product.coverUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={product.coverUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-black/10 dark:from-[#141414]" />
           <button
             type="button"
@@ -309,13 +330,20 @@ function ProductModal({
 
           <div className="mt-4 flex flex-wrap items-baseline gap-2">
             <span className="text-[15px] font-semibold text-[#1f1f1f] dark:text-zinc-100">
-              {product.priceLabel}
+              {formatNullpassPrice(product)}
             </span>
             {product.priceHint && (
               <span className="text-[12px] text-neutral-400">
                 {product.priceHint}
               </span>
             )}
+            {product.priceLabel &&
+              typeof product.price === "number" &&
+              product.priceLabel !== formatNullpassPrice(product) && (
+                <span className="text-[12px] text-neutral-400">
+                  · {product.priceLabel}
+                </span>
+              )}
             <VipBadge />
           </div>
 
@@ -399,21 +427,45 @@ function NullpassPageInner() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [toast, setToast] = useState("");
 
-  const categories = useMemo(() => nullpassCategories(), []);
-  const featured = useMemo(
+  const ensureSeed = useNullpassStore((s) => s.ensureSeed);
+  const getById = useNullpassStore((s) => s.getById);
+  const allProducts = useNullpassStore((s) => s.products);
+
+  useEffect(() => {
+    ensureSeed();
+  }, [ensureSeed]);
+
+  const products = useMemo(
     () =>
-      NULLPASS_CATALOG.filter(
-        (p) => p.badge === "novo" || p.badge === "custo-membro"
-      ).slice(0, 6),
-    []
+      allProducts
+        .filter((p) => p.active !== false)
+        .slice()
+        .sort(
+          (a, b) =>
+            (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
+            a.title.localeCompare(b.title, "pt-BR")
+        ),
+    [allProducts]
   );
 
-  const active = activeId ? getNullpassProduct(activeId) : null;
+  const categories = useMemo(
+    () => nullpassCategories(products),
+    [products]
+  );
+  const featured = useMemo(
+    () =>
+      products
+        .filter((p) => p.badge === "novo" || p.badge === "custo-membro")
+        .slice(0, 6),
+    [products]
+  );
+
+  const active = activeId ? getById(activeId) ?? null : null;
 
   useEffect(() => {
     if (!focusId) return;
-    if (getNullpassProduct(focusId)) setActiveId(focusId);
-  }, [focusId]);
+    if (getById(focusId)) setActiveId(focusId);
+  }, [focusId, getById]);
 
   const openProduct = useCallback((id: string) => {
     setActiveId(id);
@@ -436,18 +488,20 @@ function NullpassPageInner() {
 
   const catalogPreview = (
     <div className="space-y-8">
-      <NetflixRow
-        title="Em destaque no Vault"
-        products={featured}
-        locked={locked}
-        featured
-        onOpen={openProduct}
-      />
+      {featured.length > 0 && (
+        <NetflixRow
+          title="Em destaque no Vault"
+          products={featured}
+          locked={locked}
+          featured
+          onOpen={openProduct}
+        />
+      )}
       {categories.map((cat) => (
         <NetflixRow
           key={cat}
           title={cat}
-          products={nullpassByCategory(cat)}
+          products={nullpassByCategory(cat, products)}
           locked={locked}
           onOpen={openProduct}
         />
@@ -480,8 +534,16 @@ function NullpassPageInner() {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <VipBadge />
           <span className="text-[12px] text-neutral-400">
-            {NULLPASS_CATALOG.length} benefícios no catálogo
+            {products.length} benefícios no catálogo
           </span>
+          {user?.role === "admin" && (
+            <Link
+              href="/app/admin?tab=nullpass"
+              className="text-[12px] font-semibold text-sky-600 hover:underline"
+            >
+              Editar no Painel ADM
+            </Link>
+          )}
         </div>
       </header>
 
@@ -496,11 +558,22 @@ function NullpassPageInner() {
 
       {/* Painel branco com as fileiras Netflix */}
       <div className="rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-[0_1px_2px_rgb(0_0_0/0.04)] dark:border-zinc-800 dark:bg-[#141414] sm:p-6">
-        {NULLPASS_CATALOG.length === 0 ? (
+        {products.length === 0 ? (
           <EmptyState
             icon={<Vault size={28} weight="duotone" />}
             title="Vault vazio"
-            description="Em breve novos benefícios entram no NullPass."
+            description={
+              user?.role === "admin"
+                ? "Cadastre produtos no Painel ADM → aba NullPass."
+                : "Em breve novos benefícios entram no NullPass."
+            }
+            action={
+              user?.role === "admin" ? (
+                <Link href="/app/admin?tab=nullpass">
+                  <Button size="sm">Abrir Painel ADM</Button>
+                </Link>
+              ) : undefined
+            }
           />
         ) : locked ? (
           <VipGate
