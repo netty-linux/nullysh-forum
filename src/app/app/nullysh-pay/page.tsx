@@ -119,7 +119,7 @@ export default function NullyshPayBridgePage() {
               loading={loading}
               onClick={() => void continueWithForum()}
             >
-              Cadastrar-se com conta Nullysh Forum
+              Entrar / criar conta no Nullysh Pay
             </Button>
           ) : (
             <Link

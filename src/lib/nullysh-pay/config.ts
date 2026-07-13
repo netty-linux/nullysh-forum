@@ -10,6 +10,10 @@ export const NULLYSH_PAY_BRAND = {
   docsUrl: "https://docs.asaas.com",
 } as const;
 
+/** URL canônica de produção (fallback — nunca localhost em prod) */
+export const NULLYSH_PAY_DEFAULT_URL =
+  "https://nullysh-pay.ngdigitalsuporte.workers.dev";
+
 /** URL pública da plataforma externa (sem trailing slash) */
 export function getNullyshPayUrl(): string {
   const raw =
@@ -17,7 +21,7 @@ export function getNullyshPayUrl(): string {
       process.env.NEXT_PUBLIC_NULLYSH_PAY_URL?.trim()) ||
     (typeof process !== "undefined" && process.env.NULLYSH_PAY_URL?.trim()) ||
     "";
-  return raw.replace(/\/+$/, "") || "http://localhost:3100";
+  return raw.replace(/\/+$/, "") || NULLYSH_PAY_DEFAULT_URL;
 }
 
 /** Secret compartilhado Forum ↔ Pay (server only) */
