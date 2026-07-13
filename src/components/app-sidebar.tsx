@@ -23,6 +23,7 @@ import {
   SignOut,
   UserCircle,
   UsersThree,
+  Vault,
   X,
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -73,6 +74,13 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/app/materials", label: "Materiais", icon: Books },
       { href: "/app/videos", label: "Vídeos", icon: PlayCircle },
       { href: "/app/mentorship", label: "Mentorias", icon: Handshake },
+    ],
+  },
+  {
+    id: "vault",
+    label: "Vault",
+    items: [
+      { href: "/app/nullpass", label: "NullPass", icon: Vault },
     ],
   },
   {

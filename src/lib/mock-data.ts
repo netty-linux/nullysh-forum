@@ -16,6 +16,7 @@ export const VIP_PLAN = {
     "Acesso a todos os vídeos e tutoriais",
     "Assuntos exclusivos Nullysh",
     "Materiais, templates e checklists",
+    "NullPass — vault de benefícios e tools (custo membro)",
     "Cursos e metodologias",
     "Bate-papo VIP em tempo real",
     "Notícias e ferramentas de IA",
