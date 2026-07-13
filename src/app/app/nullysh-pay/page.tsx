@@ -325,10 +325,10 @@ export default function NullyshPayPage() {
             />
           </span>
           <div className="min-w-0">
-            <p className="font-display text-[13px] font-semibold tracking-[-0.01em] text-[#1f1f1f] dark:text-zinc-100">
+            <p className="font-display text-[20px] font-semibold leading-tight tracking-[-0.02em] text-[#1f1f1f] dark:text-zinc-100 sm:text-[24px]">
               {NULLYSH_PAY_BRAND.name}
             </p>
-            <p className="text-[12px] text-neutral-500 dark:text-zinc-500">
+            <p className="mt-0.5 text-[13px] text-neutral-500 dark:text-zinc-500">
               Painel do vendedor
             </p>
           </div>
