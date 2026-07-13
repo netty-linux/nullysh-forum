@@ -29,10 +29,8 @@ import {
   type NullyshPayProductStatus,
   type NullyshPayProductType,
 } from "@/lib/nullysh-pay/types";
-import { cn } from "@/lib/utils";
 import {
   ChartLineUp,
-  CreditCard,
   CurrencyCircleDollar,
   Package,
   PencilSimple,
@@ -43,6 +41,7 @@ import {
   Trash,
   TrendUp,
 } from "@phosphor-icons/react";
+import Image from "next/image";
 import { useMemo, useState } from "react";
 
 type DashTab = "overview" | "products" | "offers" | "sales";
@@ -309,23 +308,39 @@ export default function NullyshPayPage() {
     { id: "sales", label: `Vendas (${sales.length})` },
   ];
 
+  const firstName = user.name?.trim().split(/\s+/)[0] || "";
+
   return (
     <div className="app-page mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
       <header className="mb-6">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500 shadow-[0_1px_2px_rgb(0_0_0/0.04)]">
-          <CreditCard size={14} weight="fill" className="text-[#1f1f1f]" />
-          {NULLYSH_PAY_BRAND.name}
+        <div className="mb-4 flex items-center gap-3">
+          <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#0a0a0a] ring-1 ring-black/10 shadow-[0_1px_2px_rgb(0_0_0/0.06)] sm:h-14 sm:w-14">
+            <Image
+              src="/brand/nullysh-pay-logo.png"
+              alt={NULLYSH_PAY_BRAND.name}
+              width={56}
+              height={56}
+              className="h-full w-full object-contain p-1.5"
+              priority
+            />
+          </span>
+          <div className="min-w-0">
+            <p className="font-display text-[13px] font-semibold tracking-[-0.01em] text-[#1f1f1f] dark:text-zinc-100">
+              {NULLYSH_PAY_BRAND.name}
+            </p>
+            <p className="text-[12px] text-neutral-500 dark:text-zinc-500">
+              Painel do vendedor
+            </p>
+          </div>
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-black dark:text-zinc-50">
-          Seu gateway de pagamentos
+        <h1 className="font-display text-[28px] font-semibold leading-tight tracking-[-0.02em] text-black text-balance sm:text-[32px] dark:text-zinc-50">
+          {firstName
+            ? `Bem-vindo de volta, ${firstName}`
+            : "Bem-vindo ao Nullysh Pay"}
         </h1>
-        <p className="mt-2 max-w-2xl text-base leading-relaxed text-neutral-600 dark:text-zinc-400">
-          Comercialize produtos, infoprodutos, cursos e ofertas digitais com a
-          estética Nullysh. O processamento é feito pelo{" "}
-          <strong className="font-medium text-neutral-800 dark:text-zinc-200">
-            {NULLYSH_PAY_BRAND.processor}
-          </strong>{" "}
-          sob a marca Nullysh Pay — no estilo de gateways como Pagar.me.
+        <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-neutral-600 dark:text-zinc-400">
+          Gerencie produtos, ofertas e recebimentos em um só lugar. Monte sua
+          vitrine, lance campanhas e acompanhe cada venda com clareza.
         </p>
       </header>
 
@@ -392,15 +407,12 @@ export default function NullyshPayPage() {
             <div className="rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] dark:border-zinc-800 dark:bg-[#141414]">
               <p className="flex items-center gap-2 text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
                 <TrendUp size={18} weight="bold" />
-                Comece a vender
+                Primeiros passos
               </p>
               <ol className="mt-3 list-decimal space-y-2 pl-4 text-[13px] leading-relaxed text-neutral-600 dark:text-zinc-400">
-                <li>Cadastre um produto (curso, e-book, serviço…)</li>
-                <li>Crie uma oferta com preço e (opcional) promoção</li>
-                <li>
-                  Compartilhe o link da oferta quando o checkout Asaas estiver
-                  ligado
-                </li>
+                <li>Cadastre o que você vende — curso, e-book, mentoria…</li>
+                <li>Crie uma oferta com preço e, se quiser, promoção</li>
+                <li>Compartilhe o link e acompanhe os recebimentos aqui</li>
               </ol>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button
@@ -433,22 +445,17 @@ export default function NullyshPayPage() {
             <div className="rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] dark:border-zinc-800 dark:bg-[#141414]">
               <p className="flex items-center gap-2 text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
                 <Storefront size={18} weight="bold" />
-                Como funciona
+                Feito para quem vende
               </p>
               <ul className="mt-3 space-y-2 text-[13px] leading-relaxed text-neutral-600 dark:text-zinc-400">
                 <li>
-                  · <strong className="font-medium text-neutral-800 dark:text-zinc-200">Nullysh Pay</strong>{" "}
-                  é o gateway da comunidade (marca Nullysh).
+                  · Infoprodutos, cursos e serviços com checkout próprio
                 </li>
                 <li>
-                  · Processamento de cartão/PIX:{" "}
-                  <strong className="font-medium text-neutral-800 dark:text-zinc-200">
-                    Asaas
-                  </strong>{" "}
-                  (configurado pelo staff no Painel ADM).
+                  · Ofertas e campanhas com preço promocional em um clique
                 </li>
                 <li>
-                  · Ideal para infoprodutos, cursos, mentorias e serviços.
+                  · Visão clara de receita, pendências e histórico de vendas
                 </li>
               </ul>
               {products[0] && (
@@ -466,12 +473,12 @@ export default function NullyshPayPage() {
                         : products[0].price
                     );
                     if (res.ok) {
-                      flash("Venda demo registrada (até o Asaas ir ao ar).");
+                      flash("Venda de demonstração registrada.");
                       setTab("sales");
                     } else flash(res.error);
                   }}
                 >
-                  Simular venda demo
+                  Registrar venda demo
                 </Button>
               )}
             </div>
