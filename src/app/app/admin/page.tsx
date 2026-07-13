@@ -3,6 +3,7 @@
 import { AdminEventsPanel } from "@/components/admin-events-panel";
 import { AdminMaterialsPanel } from "@/components/admin-materials-panel";
 import { AdminNullpassPanel } from "@/components/admin-nullpass-panel";
+import { AdminNullyshPayPanel } from "@/components/admin-nullysh-pay-panel";
 import { AdminTrailsPanel } from "@/components/admin-trails-panel";
 import { AdminVideosPanel } from "@/components/admin-videos-panel";
 import { Avatar } from "@/components/ui/avatar";
@@ -24,6 +25,7 @@ import {
   CalendarBlank,
   CheckCircle,
   Clock,
+  CreditCard,
   CrownSimple,
   FilmStrip,
   MagnifyingGlass,
@@ -45,7 +47,8 @@ type AdminTab =
   | "videos"
   | "materials"
   | "events"
-  | "nullpass";
+  | "nullpass"
+  | "nullysh-pay";
 
 function AdminPanelInner() {
   const { user, hydrated } = useAuth();
@@ -81,7 +84,7 @@ function AdminPanelInner() {
     ensureNullpassSeed();
   }, [ensureNullpassSeed]);
 
-  // Deep-link ?tab=nullpass
+  // Deep-link ?tab=nullpass | nullysh-pay
   useEffect(() => {
     const t = searchParams.get("tab");
     if (
@@ -92,7 +95,8 @@ function AdminPanelInner() {
       t === "videos" ||
       t === "materials" ||
       t === "events" ||
-      t === "nullpass"
+      t === "nullpass" ||
+      t === "nullysh-pay"
     ) {
       setTab(t);
     }
@@ -241,7 +245,7 @@ function AdminPanelInner() {
       </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-9">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {[
           { label: "Pendentes", value: pending.length, icon: Clock },
           { label: "Verificados", value: verifiedCount, icon: CheckCircle },
@@ -252,6 +256,7 @@ function AdminPanelInner() {
           { label: "Eventos", value: eventsCount, icon: CalendarBlank },
           { label: "Materiais", value: materialsCount, icon: Books },
           { label: "Vídeos", value: videosCount, icon: FilmStrip },
+          { label: "Nullysh Pay", value: "Asaas", icon: CreditCard },
         ].map((s) => (
           <div
             key={s.label}
@@ -281,6 +286,7 @@ function AdminPanelInner() {
               ["history", "Histórico"],
               ["users", "Membros"],
               ["nullpass", `NullPass (${nullpassCount})`],
+              ["nullysh-pay", "Nullysh Pay"],
               ["trails", `Trilhas (${trailsCount})`],
               ["events", `Eventos (${eventsCount})`],
               ["materials", `Materiais (${materialsCount})`],
@@ -622,6 +628,15 @@ function AdminPanelInner() {
         <AdminNullpassPanel
           adminId={user.id}
           adminName={user.name}
+          onToast={(msg) => {
+            setToast(msg);
+            setTimeout(() => setToast(""), 2800);
+          }}
+        />
+      )}
+
+      {tab === "nullysh-pay" && (
+        <AdminNullyshPayPanel
           onToast={(msg) => {
             setToast(msg);
             setTimeout(() => setToast(""), 2800);
