@@ -1,5 +1,8 @@
 import { getNullyshPayUrl } from "@/lib/nullysh-pay/config";
-import { issueSsoCode } from "@/lib/nullysh-pay/sso";
+import {
+  checkSsoRateLimit,
+  issueSsoCode,
+} from "@/lib/nullysh-pay/sso";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSupabaseFromRequest } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
@@ -15,6 +18,7 @@ type Body = {
 
 /**
  * Emite code SSO one-time e retorna URL do Nullysh Pay.
+ * Não expõe o `code` cru no JSON — só `redirectUrl`.
  * Auth: sessão Supabase (cookie/Bearer) ou body em modo local (sem Supabase).
  */
 export async function POST(req: NextRequest) {
@@ -52,7 +56,6 @@ export async function POST(req: NextRequest) {
       }
 
       forumUserId = userId;
-      // perfil público
       if (supabase) {
         const { data: profile } = await supabase
           .from("profiles")
@@ -62,13 +65,19 @@ export async function POST(req: NextRequest) {
         if (profile) {
           name = (profile as { name?: string }).name || "";
           username = (profile as { username?: string }).username || "";
-          email =
-            (profile as { email?: string }).email || email || "";
+          email = (profile as { email?: string }).email || email || "";
         }
       }
       name = name || email.split("@")[0] || "Membro";
       username = username || forumUserId.slice(0, 8);
     } else {
+      // Apenas dev/local sem Supabase
+      if (process.env.NODE_ENV === "production") {
+        return NextResponse.json(
+          { ok: false, error: "Auth do fórum indisponível." },
+          { status: 503 }
+        );
+      }
       const body = (await req.json().catch(() => ({}))) as Body;
       if (!body.forumUserId || !body.email) {
         return NextResponse.json(
@@ -85,6 +94,11 @@ export async function POST(req: NextRequest) {
       username = body.username || forumUserId.slice(0, 8);
     }
 
+    const rl = await checkSsoRateLimit(forumUserId);
+    if (!rl.ok) {
+      return NextResponse.json({ ok: false, error: rl.error }, { status: 429 });
+    }
+
     const { code, exp } = await issueSsoCode({
       forumUserId,
       email,
@@ -95,13 +109,18 @@ export async function POST(req: NextRequest) {
     const base = getNullyshPayUrl();
     const redirectUrl = `${base}/auth/forum?code=${encodeURIComponent(code)}`;
 
-    return NextResponse.json({
-      ok: true,
-      code,
-      exp,
-      redirectUrl,
-      payUrl: base,
-    });
+    // Nunca retornar `code` solto (só embutido no redirectUrl)
+    return NextResponse.json(
+      {
+        ok: true,
+        exp,
+        redirectUrl,
+        payUrl: base,
+      },
+      {
+        headers: { "Cache-Control": "no-store" },
+      }
+    );
   } catch (e) {
     console.error("[nullysh-pay/sso]", e);
     return NextResponse.json(
