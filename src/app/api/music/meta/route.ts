@@ -2,6 +2,7 @@ import {
   buildEmbedUrl,
   buildSoundcloudEmbedUrl,
   detectMusicPlatform,
+  parseYoutubeId,
   splitTitleArtist,
   type MusicMetaResult,
   type MusicPlatform,
@@ -11,6 +12,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
+const OEMBED_TIMEOUT_MS = 3500;
+
 type OEmbed = {
   title?: string;
   author_name?: string;
@@ -19,16 +22,25 @@ type OEmbed = {
   provider_name?: string;
 };
 
+const MUSIC_FALLBACK_ARTIST: Record<MusicPlatform, string> = {
+  spotify: "Spotify",
+  youtube: "YouTube",
+  soundcloud: "SoundCloud",
+};
+
 function oembedEndpoint(platform: MusicPlatform, url: string): string {
-  const u = encodeURIComponent(url);
   if (platform === "youtube") {
-    return `https://www.youtube.com/oembed?url=${u}&format=json`;
+    return `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
   }
   if (platform === "spotify") {
-    return `https://open.spotify.com/oembed?url=${u}`;
+    // oEmbed prefere URL canônica sem /intl-xx/
+    const canonical = url.replace(
+      /open\.spotify\.com\/intl-[a-z]{2}\//i,
+      "open.spotify.com/"
+    );
+    return `https://open.spotify.com/oembed?url=${encodeURIComponent(canonical)}`;
   }
-  // soundcloud
-  return `https://soundcloud.com/oembed?format=json&url=${u}`;
+  return `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`;
 }
 
 function extractIframeSrc(html?: string): string | null {
@@ -37,25 +49,56 @@ function extractIframeSrc(html?: string): string | null {
   return m?.[1] ?? null;
 }
 
+function youtubeThumb(url: string): string | null {
+  const id = parseYoutubeId(url);
+  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null;
+}
+
+function localFallback(
+  platform: MusicPlatform,
+  url: string
+): MusicMetaResult | null {
+  const embedUrl = buildEmbedUrl(platform, url);
+  if (!embedUrl) return null;
+  return {
+    platform,
+    title: "Faixa",
+    artist: MUSIC_FALLBACK_ARTIST[platform],
+    thumbnailUrl: platform === "youtube" ? youtubeThumb(url) : null,
+    embedUrl,
+    canonicalUrl: url,
+  };
+}
+
+function jsonOk(data: MusicMetaResult) {
+  return NextResponse.json({ ok: true, data, ...data });
+}
+
 export async function GET(req: NextRequest) {
   const raw = req.nextUrl.searchParams.get("url")?.trim();
   if (!raw) {
-    return NextResponse.json({ error: "Informe a URL." }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Informe a URL." },
+      { status: 400 }
+    );
   }
 
   let url: string;
   try {
     url = normalizeUrl(raw);
-    // validate
     new URL(url);
   } catch {
-    return NextResponse.json({ error: "URL inválida." }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "URL inválida." },
+      { status: 400 }
+    );
   }
 
   const platform = detectMusicPlatform(url);
   if (!platform) {
     return NextResponse.json(
       {
+        ok: false,
         error:
           "Plataforma não suportada. Use Spotify, YouTube ou SoundCloud.",
       },
@@ -63,34 +106,34 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const fallback = localFallback(platform, url);
+
   try {
     const endpoint = oembedEndpoint(platform, url);
-    const res = await fetch(endpoint, {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "NullyshForum/1.0 (music-meta)",
-      },
-      next: { revalidate: 3600 },
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OEMBED_TIMEOUT_MS);
+
+    let res: Response;
+    try {
+      res = await fetch(endpoint, {
+        headers: {
+          Accept: "application/json",
+          "User-Agent":
+            "Mozilla/5.0 (compatible; NullyshForum/1.0; +https://nullysh.com)",
+        },
+        signal: controller.signal,
+        cache: "no-store",
+      });
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (!res.ok) {
-      // Fallback: ainda monta embed sem oEmbed
-      const embedUrl = buildEmbedUrl(platform, url);
-      if (!embedUrl) {
-        return NextResponse.json(
-          { error: "Não encontramos essa faixa. Verifique o link." },
-          { status: 404 }
-        );
-      }
-      const fallback: MusicMetaResult = {
-        platform,
-        title: "Faixa",
-        artist: MUSIC_FALLBACK_ARTIST[platform],
-        thumbnailUrl: null,
-        embedUrl,
-        canonicalUrl: url,
-      };
-      return NextResponse.json(fallback);
+      if (fallback) return jsonOk(fallback);
+      return NextResponse.json(
+        { ok: false, error: "Não encontramos essa faixa. Verifique o link." },
+        { status: 404 }
+      );
     }
 
     const data = (await res.json()) as OEmbed;
@@ -98,12 +141,9 @@ export async function GET(req: NextRequest) {
     let embedUrl =
       extractIframeSrc(data.html) || buildEmbedUrl(platform, url);
 
-    // SoundCloud oEmbed às vezes devolve player; normaliza visual compacto
     if (platform === "soundcloud") {
       embedUrl = buildSoundcloudEmbedUrl(url);
     }
-
-    // Spotify: prefer our compact embed builder
     if (platform === "spotify") {
       embedUrl = buildEmbedUrl("spotify", url) || embedUrl;
     }
@@ -115,22 +155,19 @@ export async function GET(req: NextRequest) {
         split.artist ||
         data.author_name ||
         MUSIC_FALLBACK_ARTIST[platform],
-      thumbnailUrl: data.thumbnail_url || null,
-      embedUrl: embedUrl || null,
+      thumbnailUrl:
+        data.thumbnail_url ||
+        (platform === "youtube" ? youtubeThumb(url) : null),
+      embedUrl: embedUrl || fallback?.embedUrl || null,
       canonicalUrl: url,
     };
 
-    return NextResponse.json(result);
+    return jsonOk(result);
   } catch {
+    if (fallback) return jsonOk(fallback);
     return NextResponse.json(
-      { error: "Falha ao consultar a plataforma de música." },
+      { ok: false, error: "Falha ao consultar a plataforma de música." },
       { status: 502 }
     );
   }
 }
-
-const MUSIC_FALLBACK_ARTIST: Record<MusicPlatform, string> = {
-  spotify: "Spotify",
-  youtube: "YouTube",
-  soundcloud: "SoundCloud",
-};

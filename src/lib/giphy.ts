@@ -1,13 +1,18 @@
 /**
  * Cliente de GIFs — busca via /api/gifs (Tenor + Giphy).
  * Pesquisa por nome em toda a rede de GIFs (não só catálogo local).
+ *
+ * `url` = variante LEVE para o feed (nunca original giphy.gif).
  */
+
+import { lightenGifUrl } from "@/lib/gif-optimize";
 
 export type GifItem = {
   id: string;
   title: string;
   previewUrl: string;
   url: string;
+  mp4Url?: string | null;
   width: number;
   height: number;
 };
@@ -16,52 +21,67 @@ const FALLBACK_GIFS: GifItem[] = [
   {
     id: "fallback-this-is-fine",
     title: "This is fine",
-    previewUrl: "https://media.giphy.com/media/NTur7XlVDUdqM/200w.gif",
-    url: "https://media.giphy.com/media/NTur7XlVDUdqM/giphy.gif",
-    width: 480,
-    height: 269,
+    previewUrl: "https://media.giphy.com/media/NTur7XlVDUdqM/100w.webp",
+    url: "https://media.giphy.com/media/NTur7XlVDUdqM/200w.webp",
+    mp4Url: "https://media.giphy.com/media/NTur7XlVDUdqM/200w.mp4",
+    width: 200,
+    height: 112,
   },
   {
     id: "fallback-mind-blown",
     title: "Mind blown",
-    previewUrl: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/200w.gif",
-    url: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif",
-    width: 480,
-    height: 270,
+    previewUrl: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/100w.webp",
+    url: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/200w.webp",
+    mp4Url: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/200w.mp4",
+    width: 200,
+    height: 112,
   },
   {
     id: "fallback-thumbs-up",
     title: "Thumbs up",
-    previewUrl: "https://media.giphy.com/media/111ebonMs90YLu/200w.gif",
-    url: "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif",
-    width: 372,
-    height: 480,
+    previewUrl: "https://media.giphy.com/media/111ebonMs90YLu/100w.webp",
+    url: "https://media.giphy.com/media/111ebonMs90YLu/200w.webp",
+    mp4Url: "https://media.giphy.com/media/111ebonMs90YLu/200w.mp4",
+    width: 200,
+    height: 258,
   },
   {
     id: "fallback-clap",
     title: "Clap",
-    previewUrl: "https://media.giphy.com/media/7rj2ZgttXaw3e/200w.gif",
-    url: "https://media.giphy.com/media/7rj2ZgttXaw3e/giphy.gif",
-    width: 480,
-    height: 270,
+    previewUrl: "https://media.giphy.com/media/7rj2ZgttXaw3e/100w.webp",
+    url: "https://media.giphy.com/media/7rj2ZgttXaw3e/200w.webp",
+    mp4Url: "https://media.giphy.com/media/7rj2ZgttXaw3e/200w.mp4",
+    width: 200,
+    height: 112,
   },
   {
     id: "fallback-cat-type",
     title: "Cat typing",
-    previewUrl: "https://media.giphy.com/media/JIX9t2j0ZTN9S/200w.gif",
-    url: "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif",
-    width: 480,
-    height: 480,
+    previewUrl: "https://media.giphy.com/media/JIX9t2j0ZTN9S/100w.webp",
+    url: "https://media.giphy.com/media/JIX9t2j0ZTN9S/200w.webp",
+    mp4Url: "https://media.giphy.com/media/JIX9t2j0ZTN9S/200w.mp4",
+    width: 200,
+    height: 200,
   },
   {
     id: "fallback-popcorn",
     title: "Popcorn",
-    previewUrl: "https://media.giphy.com/media/tXL4FHPSnVJ0A/200w.gif",
-    url: "https://media.giphy.com/media/tXL4FHPSnVJ0A/giphy.gif",
-    width: 480,
-    height: 270,
+    previewUrl: "https://media.giphy.com/media/tXL4FHPSnVJ0A/100w.webp",
+    url: "https://media.giphy.com/media/tXL4FHPSnVJ0A/200w.webp",
+    mp4Url: "https://media.giphy.com/media/tXL4FHPSnVJ0A/200w.mp4",
+    width: 200,
+    height: 112,
   },
 ];
+
+function normalizeGifItem(g: GifItem): GifItem {
+  return {
+    ...g,
+    // garante que posts novos nunca guardem original pesado
+    url: lightenGifUrl(g.url),
+    previewUrl: lightenGifUrl(g.previewUrl || g.url),
+  };
+}
 
 async function fetchFromApi(
   query: string,
@@ -81,7 +101,7 @@ async function fetchFromApi(
     source?: string;
   };
   return {
-    gifs: data.gifs || [],
+    gifs: (data.gifs || []).map(normalizeGifItem),
     source: data.source || "none",
   };
 }
@@ -106,7 +126,6 @@ export async function searchGifs(
     const { gifs } = await fetchFromApi(q, limit);
     if (gifs.length) return gifs;
 
-    // fallback local se API falhar
     const lower = q.toLowerCase();
     const local = FALLBACK_GIFS.filter((g) =>
       g.title.toLowerCase().includes(lower)
@@ -115,4 +134,9 @@ export async function searchGifs(
   } catch {
     return FALLBACK_GIFS;
   }
+}
+
+/** URL leve para persistir em posts/comentários. */
+export function pickGifPostUrl(g: GifItem): string {
+  return lightenGifUrl(g.url || g.previewUrl);
 }

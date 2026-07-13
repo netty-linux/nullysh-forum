@@ -90,9 +90,23 @@ function ChatPageInner() {
     kind: "channel",
     id: chatChannels[0].id,
   });
+  const [reactionError, setReactionError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+
+  // Erro de reação (RPC/sessão/migration)
+  useEffect(() => {
+    function onErr(e: Event) {
+      const detail = (e as CustomEvent<{ error?: string }>).detail;
+      const msg = detail?.error || "Não foi possível reagir.";
+      setReactionError(msg);
+      window.setTimeout(() => setReactionError(""), 4200);
+    }
+    window.addEventListener("nullysh:chat-reaction-error", onErr);
+    return () =>
+      window.removeEventListener("nullysh:chat-reaction-error", onErr);
+  }, []);
 
   // Abre sala quando vem de ?channel=ch1 (ex.: notif de reação no lobby)
   useEffect(() => {
@@ -337,6 +351,14 @@ function ChatPageInner() {
 
   return (
     <div className="app-page mx-auto flex h-[calc(100dvh-3.5rem)] max-w-5xl flex-col px-0 sm:h-[100dvh] sm:px-6 sm:py-6 lg:h-[100dvh]">
+      {reactionError && (
+        <div
+          role="alert"
+          className="mx-3 mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700 sm:mx-0 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+        >
+          {reactionError}
+        </div>
+      )}
       <div className="flex min-h-0 flex-1 overflow-hidden border-2 border-black bg-white sm:rounded-2xl dark:border-zinc-700 dark:bg-[#141414]">
         {/* Sidebar */}
         <aside className="hidden w-60 shrink-0 border-r-2 border-black dark:border-zinc-700 md:flex md:flex-col">

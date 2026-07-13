@@ -16,7 +16,12 @@ import {
 import { validatePostHashtags } from "@/lib/community-hashtags";
 import { useCommunityStore } from "@/lib/community-store";
 import { useForumStore } from "@/lib/forum-store";
-import { fetchTrendingGifs, searchGifs, type GifItem } from "@/lib/giphy";
+import {
+  fetchTrendingGifs,
+  pickGifPostUrl,
+  searchGifs,
+  type GifItem,
+} from "@/lib/giphy";
 import { fileToObjectUrl, revokeObjectUrl } from "@/lib/image";
 import { maxPostChars } from "@/lib/post-limits";
 import { consumeRateLimit } from "@/lib/rate-limit";
@@ -282,8 +287,9 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     releaseCropSource();
     setCropOpen(false);
     if (fileRef.current) fileRef.current.value = "";
-    setGifUrl(g.url);
-    setGifPreview(g.previewUrl || g.url);
+    // Sempre variante leve (WebP ~200w) — nunca original giphy.gif
+    setGifUrl(pickGifPostUrl(g));
+    setGifPreview(g.previewUrl || pickGifPostUrl(g));
     setShowGif(false);
     setShowEmoji(false);
     setError("");

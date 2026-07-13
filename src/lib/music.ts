@@ -243,29 +243,85 @@ export function normalizeFavoriteTracks(raw: unknown): FavoriteTrack[] {
     });
 }
 
-/** Client: busca metadados via API interna */
+/** Monta meta mínimo só com o link (sem oEmbed) — sempre funciona offline. */
+export function buildLocalMusicMeta(url: string): MusicMetaResult | null {
+  const normalized = normalizeUrl(url.trim());
+  const platform = detectMusicPlatform(normalized);
+  if (!platform) return null;
+  const embedUrl = buildEmbedUrl(platform, normalized);
+  if (!embedUrl) return null;
+  const ytId = platform === "youtube" ? parseYoutubeId(normalized) : null;
+  return {
+    platform,
+    title: "Faixa",
+    artist:
+      platform === "spotify"
+        ? "Spotify"
+        : platform === "youtube"
+          ? "YouTube"
+          : "SoundCloud",
+    thumbnailUrl: ytId
+      ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`
+      : null,
+    embedUrl,
+    canonicalUrl: normalized,
+  };
+}
+
+/** Client: busca metadados via API interna + fallback local se API falhar. */
 export async function fetchMusicMeta(
   url: string
 ): Promise<
   { ok: true; data: MusicMetaResult } | { ok: false; error: string }
 > {
+  const normalized = normalizeUrl(url.trim());
+  const local = buildLocalMusicMeta(normalized);
+
   try {
-    const res = await fetch(
-      `/api/music/meta?url=${encodeURIComponent(normalizeUrl(url))}`
-    );
-    const json = (await res.json()) as
-      | MusicMetaResult
-      | { error?: string };
-    if (!res.ok) {
-      return {
-        ok: false,
-        error:
-          ("error" in json && json.error) ||
-          "Não foi possível obter os dados da música.",
-      };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    let res: Response;
+    try {
+      res = await fetch(
+        `/api/music/meta?url=${encodeURIComponent(normalized)}`,
+        { signal: controller.signal, cache: "no-store" }
+      );
+    } finally {
+      clearTimeout(timer);
     }
-    return { ok: true, data: json as MusicMetaResult };
+
+    const json = (await res.json()) as MusicMetaResult & {
+      ok?: boolean;
+      error?: string;
+      data?: MusicMetaResult;
+    };
+
+    if (res.ok) {
+      const meta: MusicMetaResult | null =
+        json.data && typeof json.data === "object" && "platform" in json.data
+          ? json.data
+          : json.platform && (json.canonicalUrl || json.embedUrl)
+            ? {
+                platform: json.platform,
+                title: json.title || "Faixa",
+                artist: json.artist || "",
+                thumbnailUrl: json.thumbnailUrl ?? null,
+                embedUrl: json.embedUrl ?? local?.embedUrl ?? null,
+                canonicalUrl: json.canonicalUrl || normalized,
+              }
+            : null;
+      if (meta) return { ok: true, data: meta };
+    }
+
+    // API falhou — anexa mesmo assim com dados locais
+    if (local) return { ok: true, data: local };
+
+    return {
+      ok: false,
+      error: json.error || "Não foi possível obter os dados da música.",
+    };
   } catch {
+    if (local) return { ok: true, data: local };
     return {
       ok: false,
       error: "Falha de rede ao buscar a música.",

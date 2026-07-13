@@ -4,6 +4,7 @@ import { EmojiPicker } from "@/components/emoji-picker";
 import { HashtagSuggestMenu } from "@/components/hashtag-suggest-menu";
 import { ImageCropEditor } from "@/components/image-crop-editor";
 import { PostCard } from "@/components/post-card";
+import { PostMusicAttach } from "@/components/post-music-attach";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -18,10 +19,16 @@ import {
   type PlaceSuggestion,
 } from "@/lib/geocode";
 import { useForumStore } from "@/lib/forum-store";
-import { fetchTrendingGifs, searchGifs, type GifItem } from "@/lib/giphy";
+import {
+  fetchTrendingGifs,
+  pickGifPostUrl,
+  searchGifs,
+  type GifItem,
+} from "@/lib/giphy";
 import { fileToObjectUrl, revokeObjectUrl } from "@/lib/image";
 import { maxPostChars } from "@/lib/post-limits";
 import { consumeRateLimit } from "@/lib/rate-limit";
+import type { PostMusic } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
   Crop as CropIcon,
@@ -29,6 +36,7 @@ import {
   Image as ImageIcon,
   MagnifyingGlass,
   MapPin,
+  MusicNotes,
   NavigationArrow,
   Smiley,
   SpinnerGap,
@@ -80,6 +88,8 @@ export default function FeedPage() {
   const [showLocation, setShowLocation] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showGif, setShowGif] = useState(false);
+  const [showMusic, setShowMusic] = useState(false);
+  const [music, setMusic] = useState<PostMusic | null>(null);
   const [gifQ, setGifQ] = useState("");
   const [gifs, setGifs] = useState<GifItem[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
@@ -462,8 +472,8 @@ export default function FeedPage() {
     releaseCropSource();
     setCropOpen(false);
     if (fileRef.current) fileRef.current.value = "";
-    setGifUrl(g.url);
-    setGifPreview(g.previewUrl || g.url);
+    setGifUrl(pickGifPostUrl(g));
+    setGifPreview(g.previewUrl || pickGifPostUrl(g));
     setShowGif(false);
     setShowEmoji(false);
     setError("");
@@ -473,7 +483,7 @@ export default function FeedPage() {
     e.preventDefault();
     if (!user) return;
     const text = content.trim();
-    if (!text && !imageUrl && !gifUrl) return;
+    if (!text && !imageUrl && !gifUrl && !music) return;
 
     const rl = consumeRateLimit(user.id, "post", {
       isVip: !!isVip || user.role === "vip",
@@ -512,6 +522,7 @@ export default function FeedPage() {
         imageUrl: gifUrl ? null : imageUrl,
         gifUrl: gifUrl || null,
         location: location.trim() || null,
+        music: music || null,
         type: "discussion",
         communityId: primary?.id,
         communityName: primary?.name,
@@ -527,6 +538,8 @@ export default function FeedPage() {
       clearLocation();
       setShowEmoji(false);
       setShowGif(false);
+      setShowMusic(false);
+      setMusic(null);
       setError("");
       if (fileRef.current) fileRef.current.value = "";
     } catch (err) {
@@ -540,7 +553,7 @@ export default function FeedPage() {
 
   const canPost =
     !!user &&
-    (content.trim().length > 0 || !!imageUrl || !!gifUrl) &&
+    (content.trim().length > 0 || !!imageUrl || !!gifUrl || !!music) &&
     content.length <= maxChars;
 
   return (
@@ -667,6 +680,12 @@ export default function FeedPage() {
                 >
                   <X size={16} weight="bold" />
                 </button>
+              </div>
+            )}
+
+            {(showMusic || music) && (
+              <div className="mt-3">
+                <PostMusicAttach value={music} onChange={setMusic} />
               </div>
             )}
 
@@ -805,6 +824,7 @@ export default function FeedPage() {
                   onClick={() => {
                     setShowEmoji(false);
                     setShowGif(false);
+                    setShowMusic(false);
                     fileRef.current?.click();
                   }}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-full text-sky-500 transition hover:bg-sky-500/10"
@@ -819,6 +839,7 @@ export default function FeedPage() {
                   type="button"
                   onClick={() => {
                     setShowGif(false);
+                    setShowMusic(false);
                     setShowEmoji((v) => !v);
                   }}
                   className={cn(
@@ -839,6 +860,7 @@ export default function FeedPage() {
                   type="button"
                   onClick={() => {
                     setShowEmoji(false);
+                    setShowMusic(false);
                     setShowGif((v) => !v);
                   }}
                   className={cn(
@@ -859,6 +881,7 @@ export default function FeedPage() {
                   onClick={() => {
                     setShowEmoji(false);
                     setShowGif(false);
+                    setShowMusic(false);
                     setShowLocation((v) => {
                       if (v && !location) {
                         setLocationQuery("");
@@ -877,6 +900,27 @@ export default function FeedPage() {
                   aria-label="Adicionar localização"
                 >
                   <MapPin size={20} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEmoji(false);
+                    setShowGif(false);
+                    setShowLocation(false);
+                    setShowMusic((v) => !v);
+                  }}
+                  className={cn(
+                    "inline-flex h-9 w-9 items-center justify-center rounded-full transition",
+                    showMusic || music
+                      ? "bg-sky-500/10 text-sky-500"
+                      : "text-sky-500 hover:bg-sky-500/10"
+                  )}
+                  title="Música (estilo Instagram)"
+                  aria-label="Adicionar música"
+                  aria-expanded={showMusic}
+                >
+                  <MusicNotes size={20} weight={music ? "fill" : "regular"} />
                 </button>
               </div>
 

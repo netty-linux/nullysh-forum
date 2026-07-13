@@ -3,6 +3,7 @@
  * UI ainda usa o tipo `Post` / `Comment` do app; este módulo é a borda DB ↔ domínio.
  */
 
+import { lightenGifUrl } from "@/lib/gif-optimize";
 import { normalizePostMusic, postMusicToJson } from "@/lib/post-music";
 import type { Comment, Post, PostMusic } from "@/lib/types";
 import { initials } from "@/lib/utils";
@@ -43,7 +44,9 @@ function rowToPost(row: PostWithAuthorRow | PostRow & { gif_url?: string | null 
     !rawGif &&
     !!row.image_url &&
     /giphy\.com|tenor\.com|\.gif(\?|$)/i.test(row.image_url);
-  const gifUrl = rawGif || (imageLooksLikeGif ? row.image_url : null);
+  const gifUrlRaw = rawGif || (imageLooksLikeGif ? row.image_url : null);
+  // Posts antigos com /giphy.gif viram 200w.webp no client
+  const gifUrl = gifUrlRaw ? lightenGifUrl(gifUrlRaw) : null;
   const imageUrl = gifUrl ? null : row.image_url;
 
   const musicRaw =
@@ -198,7 +201,10 @@ export async function insertRemotePost(
   }
 
   const content = input.content.trim();
-  const gifUrl = input.gifUrl?.trim() || null;
+  // Nunca persistir original Giphy pesado — reescreve p/ 200w.webp
+  const gifUrl = input.gifUrl?.trim()
+    ? lightenGifUrl(input.gifUrl.trim())
+    : null;
   const imageUrl = input.imageUrl ?? null;
   const music = normalizePostMusic(input.music);
   if (!content && !gifUrl && !imageUrl && !music) {
@@ -257,6 +263,9 @@ export async function insertRemotePost(
         error?.code === "PGRST204" ||
         /column .*music/i.test(error?.message || ""))
     ) {
+      console.warn(
+        "[posts] coluna posts.music ausente — aplique supabase/migrations/20260712_p1i_post_music.sql. Publicando com música só no client."
+      );
       delete insert.music;
       const retryMusic = await supabase
         .from("posts")
@@ -268,7 +277,7 @@ export async function insertRemotePost(
           ok: true,
           post: {
             ...rowToPost(retryMusic.data as PostRow),
-            music, // client ainda vê a música localmente
+            music, // client ainda vê a música localmente até a migration
           },
         };
       }
@@ -314,7 +323,13 @@ export async function insertRemotePost(
     };
   }
 
-  return { ok: true, post: rowToPost(data as PostRow & { gif_url?: string }) };
+  const post = rowToPost(data as PostRow & { gif_url?: string });
+  // Garante música no objeto de retorno mesmo se o select omitir o campo
+  // (schema cache desatualizado) — o autor acabou de enviar.
+  if (music && !post.music) {
+    return { ok: true, post: { ...post, music } };
+  }
+  return { ok: true, post };
 }
 
 export function mapPostRow(row: PostRow): Post {
@@ -565,7 +580,9 @@ export async function insertRemoteComment(
   }
 
   const content = input.content.trim();
-  const gifUrl = input.gifUrl?.trim() || null;
+  const gifUrl = input.gifUrl?.trim()
+    ? lightenGifUrl(input.gifUrl.trim())
+    : null;
   if (!content && !gifUrl) {
     return { ok: false, error: "Comentário vazio" };
   }

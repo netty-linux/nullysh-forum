@@ -12,7 +12,12 @@ import {
   searchEmojis,
   type EmojiCategoryId,
 } from "@/lib/emoji-data";
-import { fetchTrendingGifs, searchGifs, type GifItem } from "@/lib/giphy";
+import {
+  fetchTrendingGifs,
+  pickGifPostUrl,
+  searchGifs,
+  type GifItem,
+} from "@/lib/giphy";
 import { chatMediaRef, mediaSet } from "@/lib/media-storage";
 import {
   STICKER_CATEGORIES,
@@ -283,7 +288,7 @@ export function ChatComposer({ placeholder, disabled, onSend }: Props) {
       // sem título/caption — só o GIF na bolha
       content: "",
       mediaKind: "gif",
-      mediaUrl: g.url,
+      mediaUrl: pickGifPostUrl(g),
       mediaWidth: g.width,
       mediaHeight: g.height,
     });

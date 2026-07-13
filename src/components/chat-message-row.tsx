@@ -70,6 +70,7 @@ export function ChatMessageRow({
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const [reactPos, setReactPos] = useState({ top: 0, left: 0 });
   const dotsRef = useRef<HTMLButtonElement>(null);
+  const sideRef = useRef<HTMLDivElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const reactPanelRef = useRef<HTMLDivElement>(null);
 
@@ -99,15 +100,15 @@ export function ChatMessageRow({
         const mh = menuPanelRef.current?.offsetHeight || 88;
         let left = mine ? r.left - mw - gap : r.right + gap;
         let top = r.bottom - mh;
-        // clamp viewport
         left = Math.min(Math.max(8, left), window.innerWidth - mw - 8);
         top = Math.min(Math.max(8, top), window.innerHeight - mh - 8);
         setMenuPos({ top, left });
       }
 
       if (reactOpen) {
-        const rw = reactPanelRef.current?.offsetWidth || 240;
-        const rh = reactPanelRef.current?.offsetHeight || 44;
+        // ancora no botão de ⋮ (ref); fallback viewport
+        const rw = reactPanelRef.current?.offsetWidth || 260;
+        const rh = reactPanelRef.current?.offsetHeight || 48;
         let left = r.left + r.width / 2 - rw / 2;
         let top = r.top - rh - gap;
         if (top < 8) top = r.bottom + gap;
@@ -117,10 +118,13 @@ export function ChatMessageRow({
     }
     place();
     const id = requestAnimationFrame(place);
+    // 2º frame: mede o painel já montado
+    const id2 = requestAnimationFrame(place);
     window.addEventListener("scroll", place, true);
     window.addEventListener("resize", place);
     return () => {
       cancelAnimationFrame(id);
+      cancelAnimationFrame(id2);
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
@@ -130,6 +134,8 @@ export function ChatMessageRow({
     if (!menuOpen && !reactOpen) return;
     function onDoc(e: globalThis.MouseEvent) {
       const t = e.target as Node;
+      // botões laterais (😊 / ⋮), menus em portal
+      if (sideRef.current?.contains(t)) return;
       if (dotsRef.current?.contains(t)) return;
       if (menuPanelRef.current?.contains(t)) return;
       if (reactPanelRef.current?.contains(t)) return;
@@ -178,33 +184,51 @@ export function ChatMessageRow({
 
   const sideActions = (
     <div
+      ref={sideRef}
       className={cn(
         // sticky no meio da bolha: alinha com o topo do conteúdo + offset
-        "relative mt-6 flex shrink-0 items-center justify-center self-start",
-        "opacity-0 transition-opacity duration-150",
-        "group-hover/msg:opacity-100 focus-within:opacity-100",
-        (menuOpen || reactOpen) && "opacity-100"
+        "relative mt-6 flex shrink-0 items-center justify-center gap-0.5 self-start",
+        // mobile: sempre visível (sem hover); desktop: no hover/focus
+        "opacity-100 transition-opacity duration-150",
+        "sm:opacity-0 sm:group-hover/msg:opacity-100 sm:focus-within:opacity-100",
+        (menuOpen || reactOpen) && "sm:opacity-100"
       )}
     >
+      <button
+        type="button"
+        title="Reagir"
+        aria-label="Reagir à mensagem"
+        aria-expanded={reactOpen}
+        onClick={(e) => {
+          e.stopPropagation();
+          setMenuOpen(false);
+          setReactOpen((v) => !v);
+        }}
+        className={cn(
+          "inline-flex h-8 w-8 items-center justify-center rounded-full",
+          "text-neutral-400 transition hover:bg-neutral-100 hover:text-[#1f1f1f]",
+          "dark:hover:bg-zinc-800 dark:hover:text-zinc-100",
+          reactOpen && "bg-neutral-100 text-[#1f1f1f] dark:bg-zinc-800"
+        )}
+      >
+        <Smiley size={18} weight={myReaction ? "fill" : "regular"} />
+      </button>
       <button
         ref={dotsRef}
         type="button"
         title="Mais opções"
         aria-label="Mais opções da mensagem"
-        aria-expanded={menuOpen || reactOpen}
-        onClick={() => {
-          if (reactOpen) {
-            setReactOpen(false);
-            return;
-          }
+        aria-expanded={menuOpen}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (reactOpen) setReactOpen(false);
           setMenuOpen((v) => !v);
         }}
         className={cn(
           "inline-flex h-8 w-8 items-center justify-center rounded-full",
           "text-neutral-400 transition hover:bg-neutral-100 hover:text-[#1f1f1f]",
           "dark:hover:bg-zinc-800 dark:hover:text-zinc-100",
-          (menuOpen || reactOpen) &&
-            "bg-neutral-100 text-[#1f1f1f] dark:bg-zinc-800"
+          menuOpen && "bg-neutral-100 text-[#1f1f1f] dark:bg-zinc-800"
         )}
       >
         <DotsThree size={20} weight="bold" />
@@ -275,7 +299,10 @@ export function ChatMessageRow({
                   key={emoji}
                   type="button"
                   title={emoji}
-                  onClick={() => {
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     if (!currentUserId) return;
                     onReact(m.id, emoji);
                     setReactOpen(false);
@@ -306,7 +333,17 @@ export function ChatMessageRow({
           isDm && mine && "flex-row-reverse"
         )}
       >
-        <ProfileHoverCard userId={m.authorId} className="shrink-0 self-start">
+        <ProfileHoverCard
+          userId={m.authorId}
+          className="shrink-0 self-start"
+          fallback={{
+            name: m.authorName,
+            avatarUrl: author?.avatarUrl,
+            isVerified: author?.isVerified,
+            isVip: author?.isVip,
+            avatarFrame: author?.avatarFrame as never,
+          }}
+        >
           <Link href={`/app/u/${m.authorId}`} className="shrink-0">
             <Avatar
               name={m.authorName}
@@ -330,7 +367,16 @@ export function ChatMessageRow({
               isDm && mine && "justify-end"
             )}
           >
-            <ProfileHoverCard userId={m.authorId}>
+            <ProfileHoverCard
+              userId={m.authorId}
+              fallback={{
+                name: m.authorName,
+                avatarUrl: author?.avatarUrl,
+                isVerified: author?.isVerified,
+                isVip: author?.isVip,
+                avatarFrame: author?.avatarFrame as never,
+              }}
+            >
               <Link
                 href={`/app/u/${m.authorId}`}
                 className="inline-flex items-center gap-1 text-sm font-semibold text-[#1f1f1f] hover:underline dark:text-zinc-100"

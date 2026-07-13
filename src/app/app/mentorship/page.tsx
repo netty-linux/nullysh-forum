@@ -1,5 +1,6 @@
 "use client";
 
+import { ProfileHoverCard } from "@/components/profile-hover-card";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -119,23 +120,52 @@ export default function MentorshipPage() {
             key={m.user.id}
             className="card-interactive flex flex-col gap-4 rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:flex-row sm:items-center"
           >
-            <Link href={`/app/u/${m.user.id}`} className="avatar-link shrink-0">
-              <Avatar
-                name={m.user.name}
-                src={m.user.avatarUrl}
-                size="lg"
-                frame={m.user.isVip ? m.user.avatarFrame : null}
-              />
-            </Link>
+            <ProfileHoverCard
+              userId={m.user.id}
+              fallback={{
+                name: m.user.name,
+                avatarUrl: m.user.avatarUrl,
+                isVerified: m.user.isVerified,
+                isVip: m.user.isVip,
+                avatarFrame: m.user.avatarFrame,
+                username: m.user.username,
+                bio: m.user.bio,
+              }}
+            >
+              <Link
+                href={`/app/u/${m.user.id}`}
+                className="avatar-link shrink-0"
+              >
+                <Avatar
+                  name={m.user.name}
+                  src={m.user.avatarUrl}
+                  size="lg"
+                  frame={m.user.isVip ? m.user.avatarFrame : null}
+                />
+              </Link>
+            </ProfileHoverCard>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-1.5">
-                <Link
-                  href={`/app/u/${m.user.id}`}
-                  className="inline-flex items-center gap-1 text-base font-semibold text-[#1f1f1f] hover:underline"
+                <ProfileHoverCard
+                  userId={m.user.id}
+                  fallback={{
+                    name: m.user.name,
+                    avatarUrl: m.user.avatarUrl,
+                    isVerified: m.user.isVerified,
+                    isVip: m.user.isVip,
+                    avatarFrame: m.user.avatarFrame,
+                    username: m.user.username,
+                    bio: m.user.bio,
+                  }}
                 >
-                  {m.user.name}
-                  {m.user.isVerified && <VerifiedBadge size={15} />}
-                </Link>
+                  <Link
+                    href={`/app/u/${m.user.id}`}
+                    className="inline-flex items-center gap-1 text-base font-semibold text-[#1f1f1f] hover:underline"
+                  >
+                    {m.user.name}
+                    {m.user.isVerified && <VerifiedBadge size={15} />}
+                  </Link>
+                </ProfileHoverCard>
                 {m.role === "mentor" && (
                   <Badge variant="vip">Mentor</Badge>
                 )}

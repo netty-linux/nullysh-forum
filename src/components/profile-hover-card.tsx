@@ -8,24 +8,43 @@ import { VipBadge } from "@/components/vip-gate";
 import { useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/lib/auth-store";
 import { isMediaRef, mediaGet } from "@/lib/media-storage";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { useSocialStore } from "@/lib/social-store";
-import { cn, displayUsername } from "@/lib/utils";
-import { UserPlus, UserMinus } from "@phosphor-icons/react";
+import type { AvatarFrameId } from "@/lib/avatar-frames";
+import type { UserPublic } from "@/lib/types";
+import { cn, displayUsername, initials } from "@/lib/utils";
+import { SpinnerGap, UserMinus, UserPlus } from "@phosphor-icons/react";
 import Link from "next/link";
 import {
   useCallback,
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 
-const OPEN_DELAY_MS = 650;
+const OPEN_DELAY_MS = 450;
 const CLOSE_DELAY_MS = 220;
 const CARD_W = 300;
+
+/** Evita N fetches do mesmo user ao hover em vários triggers */
+const inflight = new Map<string, Promise<UserPublic | null>>();
+const fetchedOk = new Set<string>();
+
+export type ProfileHoverFallback = {
+  name?: string;
+  avatar?: string;
+  avatarUrl?: string | null;
+  isVerified?: boolean;
+  isVip?: boolean;
+  avatarFrame?: AvatarFrameId | null;
+  username?: string;
+  bio?: string;
+};
 
 type Props = {
   userId: string;
@@ -33,20 +52,63 @@ type Props = {
   className?: string;
   /** Desliga o preview (ex.: no próprio hover card) */
   disabled?: boolean;
+  /**
+   * Dados mínimos do post/lista quando o user ainda não está no catálogo.
+   * Garante preview para TODOS (não só quem já veio em fetchAllProfiles).
+   */
+  fallback?: ProfileHoverFallback;
 };
 
+function buildStub(
+  userId: string,
+  fb?: ProfileHoverFallback
+): UserPublic | null {
+  if (!userId) return null;
+  const name = (fb?.name || "Membro").trim() || "Membro";
+  return {
+    id: userId,
+    email: "",
+    username: (fb?.username || "").trim() || "membro",
+    name,
+    bio: fb?.bio || "",
+    avatar: fb?.avatar || initials(name) || "U",
+    avatarUrl: fb?.avatarUrl ?? null,
+    bannerUrl: null,
+    bannerFit: null,
+    avatarFrame: fb?.avatarFrame ?? null,
+    role: "member",
+    isVip: !!fb?.isVip,
+    isVerified: !!fb?.isVerified,
+    interests: [],
+    goals: [],
+    seekingMentorship: false,
+    offeringMentorship: false,
+    mentorTopics: [],
+    links: [],
+    favoriteTracks: [],
+    badgesUnlocked: [],
+    badgeEquipped: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 /**
- * Preview de perfil ao pairar o mouse ~0,65s sobre o nome/avatar
- * (estilo X/Twitter): banner + foto + bio.
+ * Preview de perfil ao pairar o mouse sobre nome/avatar (estilo X/Twitter).
+ * Funciona para TODOS os membros — busca no Supabase se não estiver no store.
  */
 export function ProfileHoverCard({
   userId,
   children,
   className,
   disabled,
+  fallback,
 }: Props) {
   const { user: me } = useAuth();
-  const profile = useAuthStore((s) => s.users.find((u) => u.id === userId));
+  const storeProfile = useAuthStore((s) =>
+    s.users.find((u) => u.id === userId)
+  );
+  const mergePublicUsers = useAuthStore((s) => s.mergePublicUsers);
   const follow = useSocialStore((s) => s.follow);
   const unfollow = useSocialStore((s) => s.unfollow);
   const isFollowing = useSocialStore((s) => s.isFollowing);
@@ -59,9 +121,30 @@ export function ProfileHoverCard({
   const cardId = useId();
 
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [remote, setRemote] = useState<UserPublic | null>(null);
   const [pos, setPos] = useState({ top: 0, left: 0, placeAbove: false });
   const [bannerSrc, setBannerSrc] = useState<string | null>(null);
   const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
+
+  const stub = useMemo(
+    () => buildStub(userId, fallback),
+    // fallback fields used for display
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      userId,
+      fallback?.name,
+      fallback?.avatarUrl,
+      fallback?.avatar,
+      fallback?.isVerified,
+      fallback?.isVip,
+      fallback?.username,
+      fallback?.bio,
+    ]
+  );
+
+  /** Perfil efetivo: store > remoto fetch > stub do post */
+  const profile = storeProfile || remote || stub;
 
   const clearOpen = useCallback(() => {
     if (openTimer.current != null) {
@@ -77,12 +160,49 @@ export function ProfileHoverCard({
     }
   }, []);
 
+  const ensureProfile = useCallback(async () => {
+    if (!userId) return;
+    if (storeProfile && storeProfile.name !== "Membro") {
+      fetchedOk.add(userId);
+      return;
+    }
+    if (!isSupabaseConfigured()) return;
+    if (fetchedOk.has(userId) && storeProfile) return;
+
+    setLoading(true);
+    try {
+      let p = inflight.get(userId);
+      if (!p) {
+        p = (async () => {
+          const { fetchProfileById } = await import(
+            "@/lib/supabase/auth-service"
+          );
+          return fetchProfileById(userId);
+        })();
+        inflight.set(userId, p);
+      }
+      const result = await p;
+      inflight.delete(userId);
+      if (result) {
+        fetchedOk.add(userId);
+        setRemote(result);
+        mergePublicUsers([result]);
+      }
+    } catch {
+      inflight.delete(userId);
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, storeProfile, mergePublicUsers]);
+
   const scheduleOpen = useCallback(() => {
-    if (disabled || !profile) return;
+    if (disabled || !userId) return;
     clearClose();
     clearOpen();
+    // Prefetch assim que o mouse entra (antes do delay do card)
+    void ensureProfile();
     openTimer.current = window.setTimeout(() => setOpen(true), OPEN_DELAY_MS);
-  }, [disabled, profile, clearClose, clearOpen]);
+  }, [disabled, userId, clearClose, clearOpen, ensureProfile]);
 
   const scheduleClose = useCallback(() => {
     clearOpen();
@@ -117,13 +237,13 @@ export function ProfileHoverCard({
       ]);
       if (cancelled) return;
       setBannerSrc(b);
-      setAvatarSrc(a);
+      setAvatarSrc(a ?? fallback?.avatarUrl ?? null);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [open, profile]);
+  }, [open, profile, fallback?.avatarUrl]);
 
   // Posiciona o card sob/acima do trigger
   useLayoutEffect(() => {
@@ -139,14 +259,9 @@ export function ProfileHoverCard({
       const placeAbove = spaceBelow < cardH + gap && r.top > spaceBelow;
 
       let left = r.left;
-      left = Math.min(
-        Math.max(8, left),
-        window.innerWidth - CARD_W - 8
-      );
+      left = Math.min(Math.max(8, left), window.innerWidth - CARD_W - 8);
 
-      const top = placeAbove
-        ? r.top - cardH - gap
-        : r.bottom + gap;
+      const top = placeAbove ? r.top - cardH - gap : r.bottom + gap;
 
       setPos({
         top: Math.max(8, top),
@@ -156,7 +271,6 @@ export function ProfileHoverCard({
     }
 
     place();
-    // re-mede após paint (altura do card)
     const t = window.requestAnimationFrame(place);
     window.addEventListener("scroll", place, true);
     window.addEventListener("resize", place);
@@ -165,7 +279,7 @@ export function ProfileHoverCard({
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
-  }, [open, profile?.id, bannerSrc]);
+  }, [open, profile?.id, bannerSrc, loading]);
 
   if (disabled || !userId) {
     return <>{children}</>;
@@ -182,9 +296,17 @@ export function ProfileHoverCard({
     else follow(me.id, userId);
   }
 
-  const name = profile?.name || "Usuário";
-  const handle = profile ? displayUsername(profile) : "user";
-  const bio = (profile?.bio || "").trim();
+  const name = profile?.name || fallback?.name || "Usuário";
+  const handle = profile
+    ? displayUsername(profile)
+    : fallback?.username || "user";
+  const bio = (profile?.bio || fallback?.bio || "").trim();
+  const isVerified = !!(profile?.isVerified || fallback?.isVerified);
+  const isVip = !!(profile?.isVip || fallback?.isVip);
+  const frame =
+    (profile?.isVip || fallback?.isVip
+      ? profile?.avatarFrame ?? fallback?.avatarFrame
+      : null) ?? null;
 
   return (
     <>
@@ -201,7 +323,6 @@ export function ProfileHoverCard({
       </span>
 
       {open &&
-        profile &&
         typeof document !== "undefined" &&
         createPortal(
           <div
@@ -225,14 +346,24 @@ export function ProfileHoverCard({
             {/* Banner */}
             <div className="relative h-[88px] overflow-hidden bg-neutral-100 dark:bg-zinc-900">
               {bannerSrc ? (
-                <BannerImage src={bannerSrc} fit={profile.bannerFit} />
+                <BannerImage
+                  src={bannerSrc}
+                  fit={profile?.bannerFit ?? null}
+                />
               ) : (
                 <div className="absolute inset-0 bg-gradient-to-br from-neutral-200 via-neutral-100 to-neutral-200 dark:from-zinc-800 dark:via-zinc-900 dark:to-zinc-800" />
+              )}
+              {loading && !storeProfile && !remote && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                  <SpinnerGap
+                    size={18}
+                    className="animate-spin text-white drop-shadow"
+                  />
+                </div>
               )}
             </div>
 
             <div className="relative px-3.5 pb-3.5 pt-0">
-              {/* Avatar sobreposto */}
               <div className="-mt-8 mb-2 flex items-end justify-between gap-2">
                 <Link
                   href={`/app/u/${userId}`}
@@ -243,7 +374,7 @@ export function ProfileHoverCard({
                     name={name}
                     src={avatarSrc}
                     size="lg"
-                    frame={profile.isVip ? profile.avatarFrame : null}
+                    frame={frame}
                   />
                 </Link>
                 {!isOwn && me && (
@@ -281,8 +412,8 @@ export function ProfileHoverCard({
                   <span className="truncate text-[15px] font-semibold tracking-tight text-[#1f1f1f] group-hover/name:underline dark:text-zinc-50">
                     {name}
                   </span>
-                  {profile.isVerified && <VerifiedBadge size={14} />}
-                  {profile.isVip && <VipBadge />}
+                  {isVerified && <VerifiedBadge size={14} />}
+                  {isVip && <VipBadge />}
                 </span>
                 <span className="mt-0.5 block truncate text-[13px] text-neutral-500 dark:text-zinc-400">
                   @{handle}
@@ -291,11 +422,11 @@ export function ProfileHoverCard({
 
               {bio ? (
                 <p className="mt-2 line-clamp-3 text-[13px] leading-snug text-neutral-700 dark:text-zinc-300">
-                  {bio}
+                  <RichText text={bio} emojiSize={16} />
                 </p>
               ) : (
                 <p className="mt-2 text-[12px] italic text-neutral-400">
-                  Sem biografia
+                  {loading ? "Carregando perfil…" : "Sem biografia"}
                 </p>
               )}
 

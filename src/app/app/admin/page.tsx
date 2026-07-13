@@ -22,7 +22,9 @@ import {
   CalendarBlank,
   CheckCircle,
   Clock,
+  CrownSimple,
   FilmStrip,
+  MagnifyingGlass,
   Path,
   ShieldCheck,
   UsersThree,
@@ -37,6 +39,7 @@ export default function AdminPanelPage() {
   const router = useRouter();
   const users = useAuthStore((s) => s.users);
   const setVerified = useAuthStore((s) => s.setVerified);
+  const setVip = useAuthStore((s) => s.setVip);
   const requests = useVerificationStore((s) => s.requests);
   const reviewRequest = useVerificationStore((s) => s.reviewRequest);
   const trailsCount = useTrailStore((s) => s.trails.length);
@@ -55,6 +58,8 @@ export default function AdminPanelPage() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [toast, setToast] = useState("");
   const [videosCount, setVideosCount] = useState(0);
+  const [memberQuery, setMemberQuery] = useState("");
+  const [vipBusyId, setVipBusyId] = useState<string | null>(null);
 
   const isAdmin = user?.role === "admin";
 
@@ -105,6 +110,31 @@ export default function AdminPanelPage() {
   );
 
   const verifiedCount = users.filter((u) => u.isVerified).length;
+  const vipCount = users.filter((u) => u.isVip || u.role === "vip").length;
+
+  const filteredMembers = useMemo(() => {
+    const q = memberQuery.trim().toLowerCase();
+    const list = [...users].sort((a, b) => {
+      // VIP e admin no topo da lista
+      const score = (u: (typeof users)[0]) =>
+        (u.role === "admin" ? 2 : 0) + (u.isVip || u.role === "vip" ? 1 : 0);
+      const d = score(b) - score(a);
+      if (d !== 0) return d;
+      return a.name.localeCompare(b.name, "pt-BR");
+    });
+    if (!q) return list;
+    return list.filter(
+      (u) =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.username || "").toLowerCase().includes(q)
+    );
+  }, [users, memberQuery]);
+
+  function flashToast(msg: string) {
+    setToast(msg);
+    window.setTimeout(() => setToast(""), 2800);
+  }
 
   function handleReview(
     req: VerificationRequest,
@@ -113,16 +143,35 @@ export default function AdminPanelPage() {
     if (!user) return;
     const result = reviewRequest(req.id, status, user.id, notes[req.id] || "");
     if (!result.ok) {
-      setToast(result.error);
+      flashToast(result.error);
       return;
     }
     if (status === "approved") {
       setVerified(req.userId, true);
-      setToast(`${req.userName} foi verificado.`);
+      flashToast(`${req.userName} foi verificado.`);
     } else {
-      setToast(`Solicitação de ${req.userName} rejeitada.`);
+      flashToast(`Solicitação de ${req.userName} rejeitada.`);
     }
-    setTimeout(() => setToast(""), 2800);
+  }
+
+  async function handleToggleVip(memberId: string, currentlyVip: boolean, name: string) {
+    if (vipBusyId) return;
+    setVipBusyId(memberId);
+    try {
+      const next = !currentlyVip;
+      const result = await setVip(memberId, next);
+      if (!result.ok) {
+        flashToast(result.error);
+        return;
+      }
+      flashToast(
+        next
+          ? `VIP doado para ${name}.`
+          : `VIP removido de ${name}.`
+      );
+    } finally {
+      setVipBusyId(null);
+    }
   }
 
   if (!hydrated || !user) {
@@ -157,15 +206,16 @@ export default function AdminPanelPage() {
           </h1>
         </div>
         <p className="mt-2 text-sm text-neutral-500 sm:text-base">
-          Verificações, membros, trilhas, eventos, materiais e vídeos.
+          Verificações, doar VIP, membros, trilhas, eventos, materiais e vídeos.
         </p>
       </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
         {[
           { label: "Pendentes", value: pending.length, icon: Clock },
           { label: "Verificados", value: verifiedCount, icon: CheckCircle },
+          { label: "VIP", value: vipCount, icon: CrownSimple },
           { label: "Membros", value: users.length, icon: UsersThree },
           { label: "Trilhas", value: trailsCount, icon: Path },
           { label: "Eventos", value: eventsCount, icon: CalendarBlank },
@@ -385,54 +435,121 @@ export default function AdminPanelPage() {
       )}
 
       {tab === "users" && (
-        <div className="space-y-2">
-          {users.map((u) => (
-            <div
-              key={u.id}
-              className="flex items-center gap-3 rounded-2xl border border-neutral-200/90 bg-white p-3 sm:p-4"
-            >
-              <Link href={`/app/u/${u.id}`} className="avatar-link">
-                <Avatar
-                  name={u.name}
-                  src={u.avatarUrl}
-                  size="sm"
-                  frame={u.isVip ? u.avatarFrame : null}
-                />
-              </Link>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <Link
-                    href={`/app/u/${u.id}`}
-                    className="text-sm font-semibold text-[#1f1f1f] hover:underline"
-                  >
-                    {u.name}
-                  </Link>
-                  {u.isVerified && <VerifiedBadge size={15} />}
-                  {u.role === "admin" && <Badge variant="outline">Admin</Badge>}
-                  {u.isVip && <Badge variant="vip">VIP</Badge>}
-                </div>
-                <p className="text-xs text-neutral-400">{u.email}</p>
-              </div>
-              {u.role !== "admin" && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={u.isVerified ? "outline" : "primary"}
-                  onClick={() => {
-                    setVerified(u.id, !u.isVerified);
-                    setToast(
-                      u.isVerified
-                        ? `Verificação removida de ${u.name}.`
-                        : `${u.name} marcado como verificado.`
-                    );
-                    setTimeout(() => setToast(""), 2500);
-                  }}
-                >
-                  {u.isVerified ? "Remover selo" : "Verificar"}
-                </Button>
-              )}
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-[13px] leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            <p className="flex items-center gap-1.5 font-semibold">
+              <CrownSimple size={15} weight="fill" className="text-amber-600" />
+              Doar VIP
+            </p>
+            <p className="mt-1 text-amber-900/80 dark:text-amber-100/80">
+              Use <strong className="font-semibold">Doar VIP</strong> para
+              liberar o plano em qualquer membro (materiais, vídeos, salas,
+              molduras). <strong className="font-semibold">Remover VIP</strong>{" "}
+              volta o membro para free. Contas admin não precisam de VIP.
+            </p>
+          </div>
+
+          <div className="relative">
+            <MagnifyingGlass
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
+            />
+            <input
+              type="search"
+              value={memberQuery}
+              onChange={(e) => setMemberQuery(e.target.value)}
+              placeholder="Buscar por nome, @ ou e-mail…"
+              className="h-11 w-full rounded-xl border border-neutral-200 bg-white py-2 pl-9 pr-3 text-[14px] text-[#1f1f1f] outline-none ring-0 placeholder:text-neutral-400 focus:border-[#1f1f1f] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            />
+          </div>
+
+          {filteredMembers.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-neutral-300 bg-white p-10 text-center text-sm text-neutral-500">
+              Nenhum membro encontrado.
             </div>
-          ))}
+          ) : (
+            filteredMembers.map((u) => {
+              const isVipMember = !!u.isVip || u.role === "vip";
+              const busy = vipBusyId === u.id;
+              return (
+                <div
+                  key={u.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-neutral-200/90 bg-white p-3 sm:flex-row sm:items-center sm:p-4"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <Link href={`/app/u/${u.id}`} className="avatar-link shrink-0">
+                      <Avatar
+                        name={u.name}
+                        src={u.avatarUrl}
+                        size="sm"
+                        frame={isVipMember ? u.avatarFrame : null}
+                      />
+                    </Link>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Link
+                          href={`/app/u/${u.id}`}
+                          className="text-sm font-semibold text-[#1f1f1f] hover:underline"
+                        >
+                          {u.name}
+                        </Link>
+                        {u.isVerified && <VerifiedBadge size={15} />}
+                        {u.role === "admin" && (
+                          <Badge variant="outline">Admin</Badge>
+                        )}
+                        {isVipMember && <Badge variant="vip">VIP</Badge>}
+                      </div>
+                      <p className="truncate text-xs text-neutral-400">
+                        {u.username ? `@${u.username}` : u.email}
+                        {u.username && u.email ? ` · ${u.email}` : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  {u.role !== "admin" && (
+                    <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isVipMember ? "outline" : "primary"}
+                        loading={busy}
+                        disabled={!!vipBusyId}
+                        onClick={() =>
+                          void handleToggleVip(u.id, isVipMember, u.name)
+                        }
+                        title={
+                          isVipMember
+                            ? "Revogar plano VIP"
+                            : "Doar plano VIP a este membro"
+                        }
+                      >
+                        <CrownSimple
+                          size={15}
+                          weight={isVipMember ? "regular" : "fill"}
+                        />
+                        {isVipMember ? "Remover VIP" : "Doar VIP"}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={u.isVerified ? "outline" : "secondary"}
+                        onClick={() => {
+                          void setVerified(u.id, !u.isVerified);
+                          flashToast(
+                            u.isVerified
+                              ? `Verificação removida de ${u.name}.`
+                              : `${u.name} marcado como verificado.`
+                          );
+                        }}
+                      >
+                        {u.isVerified ? "Remover selo" : "Verificar"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 

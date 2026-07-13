@@ -5,44 +5,90 @@ export const runtime = "nodejs";
 type GifItem = {
   id: string;
   title: string;
+  /** Miniatura do picker (bem leve) */
   previewUrl: string;
+  /** URL salva no post / feed (leve, nunca original) */
   url: string;
+  /** MP4 opcional p/ feed ainda mais barato */
+  mp4Url?: string | null;
   width: number;
   height: number;
+};
+
+type GiphyImage = {
+  url?: string;
+  webp?: string;
+  mp4?: string;
+  width?: string;
+  height?: string;
 };
 
 type GiphyGif = {
   id: string;
   title?: string;
   images?: {
-    fixed_width?: { url?: string; width?: string; height?: string };
-    fixed_width_downsampled?: { url?: string; width?: string; height?: string };
-    downsized?: { url?: string };
-    downsized_medium?: { url?: string };
-    original?: { url?: string; width?: string; height?: string };
+    fixed_width?: GiphyImage;
+    fixed_width_small?: GiphyImage;
+    fixed_width_downsampled?: GiphyImage;
+    preview_gif?: GiphyImage;
+    preview_webp?: GiphyImage;
+    downsized?: GiphyImage;
+    downsized_small?: GiphyImage;
+    downsized_medium?: GiphyImage;
+    original?: GiphyImage;
   };
 };
 
+/**
+ * Mapeia Giphy → sempre variantes leves.
+ * Nunca devolve original/giphy.gif no `url` (evita 5–15 MB no feed).
+ */
 function mapGiphy(g: GiphyGif): GifItem | null {
-  const preview =
-    g.images?.fixed_width?.url ||
-    g.images?.fixed_width_downsampled?.url ||
-    g.images?.downsized?.url ||
-    g.images?.original?.url;
-  const original =
-    g.images?.downsized_medium?.url ||
-    g.images?.downsized?.url ||
-    g.images?.original?.url ||
-    preview;
-  if (!preview || !original) return null;
+  const img = g.images || {};
+
+  // Picker: o menor possível
+  const previewUrl =
+    img.fixed_width_small?.webp ||
+    img.fixed_width_small?.url ||
+    img.preview_webp?.url ||
+    img.preview_gif?.url ||
+    img.fixed_width_downsampled?.url ||
+    img.fixed_width?.webp ||
+    img.fixed_width?.url;
+
+  // Feed: ~200px webp/gif — fluido no mobile
+  const displayUrl =
+    img.fixed_width?.webp ||
+    img.fixed_width?.url ||
+    img.downsized?.url ||
+    img.fixed_width_downsampled?.url ||
+    previewUrl;
+
+  const mp4Url =
+    img.fixed_width?.mp4 ||
+    img.downsized_small?.mp4 ||
+    img.original?.mp4 ||
+    null;
+
+  if (!previewUrl || !displayUrl) return null;
+
   return {
     id: `giphy-${g.id}`,
     title: g.title || "GIF",
-    previewUrl: preview,
-    url: original,
-    width: Number(g.images?.fixed_width?.width || g.images?.original?.width || 200),
+    previewUrl,
+    url: displayUrl,
+    mp4Url,
+    width: Number(
+      img.fixed_width?.width ||
+        img.fixed_width_small?.width ||
+        img.original?.width ||
+        200
+    ),
     height: Number(
-      g.images?.fixed_width?.height || g.images?.original?.height || 200
+      img.fixed_width?.height ||
+        img.fixed_width_small?.height ||
+        img.original?.height ||
+        200
     ),
   };
 }
@@ -64,7 +110,6 @@ export async function GET(req: NextRequest) {
     process.env.NEXT_PUBLIC_GIPHY_API_KEY?.trim() ||
     "";
 
-  // 1) Giphy oficial
   if (giphyKey) {
     try {
       const path = q
@@ -89,7 +134,6 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 2) Proxy público do Giphy.com (busca real sem API key)
   try {
     const term = q || "trending";
     const path = `https://giphy.com/api/v1/proxy-gif/search?q=${encodeURIComponent(term)}&limit=${limit}&offset=0`;

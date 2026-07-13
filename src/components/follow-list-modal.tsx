@@ -1,5 +1,6 @@
 "use client";
 
+import { ProfileHoverCard } from "@/components/profile-hover-card";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { VerifiedBadge } from "@/components/verified-badge";
@@ -396,31 +397,58 @@ export function FollowListModal({
                     return (
                       <li key={u.id}>
                         <div className="flex items-center gap-3 rounded-2xl px-3 py-2.5 transition hover:bg-neutral-50 dark:hover:bg-zinc-900/80">
-                          <Link
-                            href={`/app/u/${u.id}`}
-                            onClick={onClose}
-                            className="avatar-link shrink-0"
+                          <ProfileHoverCard
+                            userId={u.id}
+                            fallback={{
+                              name: u.name,
+                              avatarUrl: u.avatarUrl,
+                              isVerified: u.isVerified,
+                              isVip: u.isVip,
+                              avatarFrame: u.avatarFrame,
+                              username: u.username,
+                              bio: u.bio,
+                            }}
                           >
-                            <Avatar
-                              name={u.name}
-                              src={u.avatarUrl}
-                              size="md"
-                              frame={u.isVip ? u.avatarFrame : null}
-                            />
-                          </Link>
-                          <Link
-                            href={`/app/u/${u.id}`}
-                            onClick={onClose}
+                            <Link
+                              href={`/app/u/${u.id}`}
+                              onClick={onClose}
+                              className="avatar-link shrink-0"
+                            >
+                              <Avatar
+                                name={u.name}
+                                src={u.avatarUrl}
+                                size="md"
+                                frame={u.isVip ? u.avatarFrame : null}
+                              />
+                            </Link>
+                          </ProfileHoverCard>
+                          <ProfileHoverCard
+                            userId={u.id}
                             className="min-w-0 flex-1"
+                            fallback={{
+                              name: u.name,
+                              avatarUrl: u.avatarUrl,
+                              isVerified: u.isVerified,
+                              isVip: u.isVip,
+                              avatarFrame: u.avatarFrame,
+                              username: u.username,
+                              bio: u.bio,
+                            }}
                           >
-                            <p className="flex items-center gap-1 truncate text-[14px] font-semibold text-[#1f1f1f] dark:text-zinc-100">
-                              <span className="truncate">{u.name}</span>
-                              {u.isVerified && <VerifiedBadge size={14} />}
-                            </p>
-                            <p className="truncate text-[12px] text-neutral-400">
-                              {isStub ? "carregando perfil…" : `@${handle}`}
-                            </p>
-                          </Link>
+                            <Link
+                              href={`/app/u/${u.id}`}
+                              onClick={onClose}
+                              className="block min-w-0 w-full"
+                            >
+                              <p className="flex items-center gap-1 truncate text-[14px] font-semibold text-[#1f1f1f] dark:text-zinc-100">
+                                <span className="truncate">{u.name}</span>
+                                {u.isVerified && <VerifiedBadge size={14} />}
+                              </p>
+                              <p className="truncate text-[12px] text-neutral-400">
+                                {isStub ? "carregando perfil…" : `@${handle}`}
+                              </p>
+                            </Link>
+                          </ProfileHoverCard>
                           {me && !isMe ? (
                             <Button
                               type="button"

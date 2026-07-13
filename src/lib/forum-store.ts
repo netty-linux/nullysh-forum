@@ -300,14 +300,21 @@ export const useForumStore = create<ForumState>()(
       upsertPost: (post) => {
         const n = normalizePost(post);
         set((s) => {
-          const exists = s.posts.some((p) => p.id === n.id);
-          if (exists) {
+          const prev = s.posts.find((p) => p.id === n.id);
+          // Realtime/DB sem coluna music ainda não deve apagar o que o autor
+          // acabou de anexar no client (migration P1.i pendente).
+          const merged: Post = {
+            ...n,
+            music: n.music ?? prev?.music ?? null,
+            gifUrl: n.gifUrl ?? prev?.gifUrl ?? null,
+          };
+          if (prev) {
             return {
-              posts: s.posts.map((p) => (p.id === n.id ? n : p)),
+              posts: s.posts.map((p) => (p.id === merged.id ? merged : p)),
             };
           }
           return {
-            posts: [n, ...s.posts].sort(
+            posts: [merged, ...s.posts].sort(
               (a, b) =>
                 new Date(b.createdAt).getTime() -
                 new Date(a.createdAt).getTime()
@@ -1004,11 +1011,30 @@ export const useForumStore = create<ForumState>()(
 
       upsertMessage: (message) => {
         set((s) => {
-          const exists = s.messages.some((m) => m.id === message.id);
-          if (exists) {
+          const prev = s.messages.find((m) => m.id === message.id);
+          if (prev) {
+            // Merge: realtime/poll às vezes chega sem reactions ainda —
+            // não apagar o que o user acabou de reagir localmente.
+            const remoteR = message.reactions || {};
+            const localR = prev.reactions || {};
+            const remoteEmpty = Object.keys(remoteR).length === 0;
+            const localHas = Object.keys(localR).length > 0;
+            const merged = {
+              ...message,
+              reactions: remoteEmpty && localHas ? localR : remoteR,
+              deliveredTo:
+                (message.deliveredTo?.length || 0) >=
+                (prev.deliveredTo?.length || 0)
+                  ? message.deliveredTo
+                  : prev.deliveredTo,
+              readBy:
+                (message.readBy?.length || 0) >= (prev.readBy?.length || 0)
+                  ? message.readBy
+                  : prev.readBy,
+            };
             return {
               messages: s.messages.map((m) =>
-                m.id === message.id ? message : m
+                m.id === message.id ? merged : m
               ),
             };
           }
@@ -1200,6 +1226,14 @@ export const useForumStore = create<ForumState>()(
                     ),
                   }));
                   console.error("[toggleMessageReaction] remote", res.error);
+                  // Superfície erro p/ UI (event) — chat page pode ouvir
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(
+                      new CustomEvent("nullysh:chat-reaction-error", {
+                        detail: { messageId, error: res.error },
+                      })
+                    );
+                  }
                 }
               });
             }
@@ -1222,6 +1256,7 @@ export const useForumStore = create<ForumState>()(
             excerpt: before.content?.slice(0, 48),
           });
         }
+        void nextReactions;
       },
 
       getPostById: (postId) => {

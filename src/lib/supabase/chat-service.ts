@@ -42,11 +42,31 @@ function asMediaKind(v: unknown): ChatMediaKind | null {
   return null;
 }
 
+/** Normaliza JSONB de reações → Record<emoji, userId[]> */
+export function normalizeChatReactions(
+  raw: unknown
+): Record<string, string[]> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, string[]> = {};
+  for (const [emoji, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!emoji) continue;
+    if (Array.isArray(val)) {
+      const ids = val.map(String).filter(Boolean);
+      if (ids.length) out[emoji] = ids;
+      continue;
+    }
+    // alguns drivers devolvem objeto indexado
+    if (val && typeof val === "object") {
+      const ids = Object.values(val as Record<string, unknown>)
+        .map(String)
+        .filter(Boolean);
+      if (ids.length) out[emoji] = ids;
+    }
+  }
+  return out;
+}
+
 export function rowToChatMessage(row: ChatMessageRow): ChatMessage {
-  const reactions =
-    row.reactions && typeof row.reactions === "object"
-      ? (row.reactions as Record<string, string[]>)
-      : {};
   return {
     id: row.id,
     channelId: row.channel_id,
@@ -64,7 +84,7 @@ export function rowToChatMessage(row: ChatMessageRow): ChatMessage {
     mediaThumbUrl: row.media_thumb_url ?? null,
     mediaWidth: row.media_width ?? null,
     mediaHeight: row.media_height ?? null,
-    reactions,
+    reactions: normalizeChatReactions(row.reactions),
     deliveredTo: Array.isArray(row.delivered_to)
       ? row.delivered_to.map(String)
       : [],
@@ -262,22 +282,47 @@ export async function toggleRemoteChatReaction(
     return { ok: false, error: "Cliente Supabase indisponível" };
   }
 
+  // UUID de mensagem remota — local msg_* não passa por RPC
+  const id = String(messageId || "").trim();
+  if (!id || id.startsWith("msg")) {
+    return { ok: false, error: "Mensagem local — use store offline." };
+  }
+
+  // Garante JWT fresco (RPC security definer usa auth.uid())
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return {
+      ok: false,
+      error: "Sessão ausente. Entre de novo para reagir.",
+    };
+  }
+
   const { data, error } = await supabase.rpc("toggle_chat_reaction", {
-    p_message_id: messageId,
+    p_message_id: id,
     p_emoji: emoji,
   });
 
   if (error) {
     console.error("[chat] toggleRemoteChatReaction", error);
-    return { ok: false, error: error.message };
+    const msg = error.message || "Falha ao reagir";
+    // Dica se a migration P1.f / P1.j ainda não rodou
+    if (
+      /function .*toggle_chat_reaction/i.test(msg) ||
+      error.code === "PGRST202" ||
+      /could not find/i.test(msg)
+    ) {
+      return {
+        ok: false,
+        error:
+          "RPC de reação ausente. Aplique supabase/migrations/20260712_p1j_fix_chat_reactions.sql no Supabase.",
+      };
+    }
+    return { ok: false, error: msg };
   }
 
-  const reactions =
-    data && typeof data === "object" && !Array.isArray(data)
-      ? (data as Record<string, string[]>)
-      : {};
-
-  return { ok: true, reactions };
+  return { ok: true, reactions: normalizeChatReactions(data) };
 }
 
 /** @deprecated Preferir toggleRemoteChatReaction (RPC + notif). */

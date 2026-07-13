@@ -2,6 +2,7 @@
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ForwardPostModal } from "@/components/forward-post-modal";
+import { LazyGif } from "@/components/lazy-gif";
 import { PostFeedMusic } from "@/components/post-feed-music";
 import { ProfileHoverCard } from "@/components/profile-hover-card";
 import { ProtectedMedia } from "@/components/protected-media";
@@ -17,7 +18,12 @@ import {
   canDownloadPostAttachments,
   downloadPostAttachment,
 } from "@/lib/post-limits";
-import { fetchTrendingGifs, searchGifs, type GifItem } from "@/lib/giphy";
+import {
+  fetchTrendingGifs,
+  pickGifPostUrl,
+  searchGifs,
+  type GifItem,
+} from "@/lib/giphy";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import type { Post } from "@/lib/types";
 import { cn, formatRelative } from "@/lib/utils";
@@ -386,7 +392,7 @@ export function PostCard({
           authorAvatar: user.avatar,
           content: draft.trim(),
           replyToId,
-          gifUrl: g.url,
+          gifUrl: pickGifPostUrl(g),
         });
         setGifPanelOpen(false);
         setGifQ("");
@@ -463,7 +469,10 @@ export function PostCard({
         {repostMeta && (
           <p className="mb-2 flex items-center gap-1.5 pl-1 text-[12px] font-semibold text-neutral-500 dark:text-zinc-400">
             <Repeat size={13} weight="bold" className="shrink-0" />
-            <ProfileHoverCard userId={repostMeta.userId}>
+            <ProfileHoverCard
+              userId={repostMeta.userId}
+              fallback={{ name: repostMeta.userName }}
+            >
               <Link
                 href={`/app/u/${repostMeta.userId}`}
                 className="hover:underline"
@@ -476,7 +485,17 @@ export function PostCard({
           </p>
         )}
         <div className="flex items-start gap-3">
-          <ProfileHoverCard userId={post.authorId}>
+          <ProfileHoverCard
+            userId={post.authorId}
+            fallback={{
+              name: post.authorName,
+              avatar: post.authorAvatar,
+              avatarUrl: post.authorAvatarUrl ?? avatarSrc,
+              isVerified: author?.isVerified,
+              isVip: author?.isVip,
+              avatarFrame: author?.avatarFrame,
+            }}
+          >
             <Link
               href={`/app/u/${post.authorId}`}
               className="avatar-link shrink-0"
@@ -492,7 +511,17 @@ export function PostCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-                <ProfileHoverCard userId={post.authorId}>
+                <ProfileHoverCard
+                  userId={post.authorId}
+                  fallback={{
+                    name: post.authorName,
+                    avatar: post.authorAvatar,
+                    avatarUrl: post.authorAvatarUrl ?? avatarSrc,
+                    isVerified: author?.isVerified,
+                    isVip: author?.isVip,
+                    avatarFrame: author?.avatarFrame,
+                  }}
+                >
                   <Link
                     href={`/app/u/${post.authorId}`}
                     className="inline-flex items-center gap-1 text-sm font-semibold text-[#1f1f1f] transition-colors hover:text-neutral-600 dark:text-zinc-100"
@@ -607,23 +636,14 @@ export function PostCard({
               </p>
             )}
 
-            {/* Música do post (estilo IG) — autoplay quando centralizado */}
-            {post.music && !locked && (
-              <PostFeedMusic postId={post.id} music={post.music} />
-            )}
-
-            {/* GIF animado — NÃO usar ProtectedMedia (canvas congela frames) */}
+            {/* GIF — LazyGif (MP4/WebP leve + IO, sem original pesado) */}
             {post.gifUrl && !locked && (
               <div className="mt-3 flex justify-start">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <LazyGif
                   src={post.gifUrl}
                   alt="GIF"
-                  className={cn(
-                    "max-h-52 max-w-[min(100%,280px)] rounded-2xl object-cover",
-                    "ring-1 ring-black/5 dark:ring-white/10"
-                  )}
-                  loading="lazy"
+                  className="max-w-[min(100%,280px)] rounded-2xl ring-1 ring-black/5 dark:ring-white/10"
+                  maxHeightClass="max-h-52"
                 />
               </div>
             )}
@@ -682,6 +702,11 @@ export function PostCard({
                   ) : null}
                 </ProtectedMedia>
               </div>
+            )}
+
+            {/* Música — depois da mídia (legenda / GIF / imagem / combos) */}
+            {post.music && !locked && (
+              <PostFeedMusic postId={post.id} music={post.music} />
             )}
 
             {post.location && (
@@ -1241,7 +1266,16 @@ function CommentRow({
           "rounded-xl ring-2 ring-sky-300/80 ring-offset-1 dark:ring-sky-700"
       )}
     >
-      <ProfileHoverCard userId={c.authorId}>
+      <ProfileHoverCard
+        userId={c.authorId}
+        fallback={{
+          name: c.authorName,
+          avatarUrl: cUser?.avatarUrl,
+          isVerified: cUser?.isVerified,
+          isVip: cUser?.isVip,
+          avatarFrame: cUser?.avatarFrame as never,
+        }}
+      >
         <Link href={`/app/u/${c.authorId}`} className="avatar-link shrink-0">
           <Avatar
             name={c.authorName}
@@ -1261,7 +1295,16 @@ function CommentRow({
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <ProfileHoverCard userId={c.authorId}>
+            <ProfileHoverCard
+              userId={c.authorId}
+              fallback={{
+                name: c.authorName,
+                avatarUrl: cUser?.avatarUrl,
+                isVerified: cUser?.isVerified,
+                isVip: cUser?.isVip,
+                avatarFrame: cUser?.avatarFrame as never,
+              }}
+            >
               <Link
                 href={`/app/u/${c.authorId}`}
                 className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#1f1f1f] hover:underline dark:text-zinc-100"
@@ -1349,15 +1392,11 @@ function CommentRow({
           </p>
         )}
         {c.gifUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <LazyGif
             src={c.gifUrl}
             alt="GIF"
-            className={cn(
-              "mt-1.5 max-h-52 max-w-full rounded-xl object-cover",
-              "ring-1 ring-black/5 dark:ring-white/10"
-            )}
-            loading="lazy"
+            className="mt-1.5 max-w-full rounded-xl ring-1 ring-black/5 dark:ring-white/10"
+            maxHeightClass="max-h-52"
           />
         ) : null}
         {c.content?.trim() ? (

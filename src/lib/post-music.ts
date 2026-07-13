@@ -1,5 +1,14 @@
 /**
  * Helpers de música no post (validação, normalização, limites).
+ *
+ * Arquitetura anti-bloat (sem áudio no nosso storage):
+ * - Guardamos só JSON leve em posts.music (~0.5–2 KB): url, título, artista,
+ *   platform, embedUrl, thumbnailUrl (CDN da plataforma), startAt + clip.
+ * - O áudio toca via embed YouTube/Spotify/SoundCloud no client — zero MB
+ *   de áudio no Supabase/R2.
+ * - clipDurationSec max 60s; startAt max 600s.
+ * - Futuro se hospedarmos clip: R2 + AAC 96–128kbps, max 30s, hard cap 400KB,
+ *   geração server-side (ffmpeg), nunca data-URL no Postgres.
  */
 
 import type { PostMusic } from "@/lib/types";

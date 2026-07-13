@@ -3,13 +3,16 @@
 /**
  * Seletor de música no compose (estilo Instagram).
  * Cole link YouTube / Spotify / SoundCloud + define o início do trecho.
+ *
+ * Usa fetchMusicMeta (mesma borda do perfil VIP) — a API devolve o meta
+ * cru; o helper normaliza para { ok, data }.
  */
 
 import { MusicPlatformIcon } from "@/components/music-platform-icon";
 import {
   MUSIC_PLATFORM_META,
+  fetchMusicMeta,
   isValidMusicUrl,
-  type MusicMetaResult,
 } from "@/lib/music";
 import {
   POST_MUSIC_CLIP_DEFAULT,
@@ -33,6 +36,38 @@ type Props = {
   className?: string;
 };
 
+/** Resolve URL → PostMusic (compartilhado com publish auto-resolve). */
+export async function resolvePostMusicFromUrl(
+  rawUrl: string,
+  startAtSec = 0
+): Promise<{ ok: true; music: PostMusic } | { ok: false; error: string }> {
+  const raw = rawUrl.trim();
+  if (!raw) {
+    return { ok: false, error: "Cole o link da música." };
+  }
+  if (!isValidMusicUrl(raw)) {
+    return { ok: false, error: "Use Spotify, YouTube ou SoundCloud." };
+  }
+
+  const result = await fetchMusicMeta(raw);
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  const meta = result.data;
+  const music: PostMusic = {
+    title: meta.title || "Faixa",
+    artist: meta.artist || "",
+    url: meta.canonicalUrl || raw,
+    platform: meta.platform,
+    thumbnailUrl: meta.thumbnailUrl,
+    embedUrl: meta.embedUrl,
+    startAtSec: clampPostMusicStart(startAtSec),
+    clipDurationSec: POST_MUSIC_CLIP_DEFAULT,
+  };
+  return { ok: true, music };
+}
+
 export function PostMusicAttach({ value, onChange, className }: Props) {
   const [url, setUrl] = useState("");
   const [startAt, setStartAt] = useState(0);
@@ -43,41 +78,26 @@ export function PostMusicAttach({ value, onChange, className }: Props) {
     setError("");
     const raw = url.trim();
     if (!raw) {
-      setError("Cole o link da música.");
-      return;
-    }
-    if (!isValidMusicUrl(raw)) {
-      setError("Use Spotify, YouTube ou SoundCloud.");
+      setError("Cole o link da música (Spotify, YouTube ou SoundCloud).");
       return;
     }
     setLoading(true);
     try {
-      const res = await fetch(
-        `/api/music/meta?url=${encodeURIComponent(raw)}`
-      );
-      const data = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        data?: MusicMetaResult;
-      };
-      if (!res.ok || !data.ok || !data.data) {
-        throw new Error(data.error || "Não foi possível ler a faixa.");
+      const result = await resolvePostMusicFromUrl(raw, startAt);
+      if (!result.ok) {
+        setError(
+          result.error ||
+            "Não foi possível ler a faixa. Confira o link e tente de novo."
+        );
+        return;
       }
-      const meta = data.data;
-      const music: PostMusic = {
-        title: meta.title || "Faixa",
-        artist: meta.artist || "",
-        url: meta.canonicalUrl || raw,
-        platform: meta.platform,
-        thumbnailUrl: meta.thumbnailUrl,
-        embedUrl: meta.embedUrl,
-        startAtSec: clampPostMusicStart(startAt),
-        clipDurationSec: POST_MUSIC_CLIP_DEFAULT,
-      };
-      onChange(music);
+      onChange(result.music);
       setUrl("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao buscar música.");
+      setError("");
+    } catch {
+      setError(
+        "Falha ao buscar música. Verifique a conexão e tente novamente."
+      );
     } finally {
       setLoading(false);
     }
@@ -111,8 +131,10 @@ export function PostMusicAttach({ value, onChange, className }: Props) {
           </p>
           <p className="truncate text-[11px] text-neutral-500">
             {value.artist ||
-              (MUSIC_PLATFORM_META[value.platform as keyof typeof MUSIC_PLATFORM_META]
-                ?.label ?? "Música")}
+              (MUSIC_PLATFORM_META[
+                value.platform as keyof typeof MUSIC_PLATFORM_META
+              ]?.label ??
+                "Música")}
             {" · "}
             trecho {value.startAtSec}s · {value.clipDurationSec}s
           </p>
@@ -163,8 +185,10 @@ export function PostMusicAttach({ value, onChange, className }: Props) {
         Música do post
       </p>
       <p className="text-[11px] leading-snug text-neutral-500">
-        Cole um link do YouTube (melhor autoplay), Spotify ou SoundCloud. O
-        trecho toca quando o post está no centro da tela.
+        Cole um link do YouTube (melhor autoplay), Spotify ou SoundCloud e
+        clique em <strong className="font-semibold">Buscar</strong>. O trecho
+        toca quando o post está no centro da tela. Não enviamos áudio para o
+        servidor — só o link e o trecho.
       </p>
       <div className="flex gap-2">
         <input
@@ -183,7 +207,7 @@ export function PostMusicAttach({ value, onChange, className }: Props) {
         <button
           type="button"
           onClick={() => void resolve()}
-          disabled={loading}
+          disabled={loading || !url.trim()}
           className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-[#1f1f1f] px-3 text-[12px] font-semibold text-white disabled:opacity-50"
         >
           {loading ? (

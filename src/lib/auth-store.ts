@@ -25,6 +25,7 @@ import {
   supabaseLogout,
   supabaseRegister,
   supabaseSetVerified,
+  supabaseSetVip,
   supabaseUpdateProfile,
 } from "./supabase/auth-service";
 import {
@@ -380,6 +381,11 @@ interface AuthState {
     userId: string,
     verified: boolean
   ) => void | Promise<void>;
+  /** Admin: doa ou revoga VIP em outro membro */
+  setVip: (
+    userId: string,
+    vip: boolean
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   getCurrentUser: () => UserPublic | null;
   getUserById: (id: string) => UserPublic | null;
 }
@@ -809,6 +815,49 @@ export const useAuthStore = create<AuthState>()(
             };
           }),
         }));
+      },
+
+      setVip: async (userId, vip) => {
+        const target = get().users.find((u) => u.id === userId);
+        if (target?.role === "admin") {
+          return {
+            ok: false,
+            error: "Contas admin já têm acesso total.",
+          };
+        }
+
+        if (isSupabaseConfigured()) {
+          const result = await supabaseSetVip(userId, vip);
+          if (!result.ok) return result;
+          set((s) => ({
+            users: s.users.map((raw) => {
+              const u = normalizeUser(raw);
+              if (u.id !== userId) return u;
+              return publicToUser(result.user);
+            }),
+          }));
+          // se o catálogo local não tinha o user, injeta
+          if (!get().users.some((u) => u.id === userId)) {
+            get().mergePublicUsers([result.user]);
+          }
+          return { ok: true };
+        }
+
+        // Modo local / demo sem Supabase
+        set((s) => ({
+          users: s.users.map((raw) => {
+            const u = normalizeUser(raw);
+            if (u.id !== userId) return u;
+            if (u.role === "admin") return u;
+            return {
+              ...u,
+              isVip: vip,
+              role: vip ? "vip" : "member",
+              updatedAt: new Date().toISOString(),
+            };
+          }),
+        }));
+        return { ok: true };
       },
 
       getCurrentUser: () => {

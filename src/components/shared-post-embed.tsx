@@ -1,5 +1,6 @@
 "use client";
 
+import { LazyGif } from "@/components/lazy-gif";
 import { Avatar } from "@/components/ui/avatar";
 import { useAuthStore } from "@/lib/auth-store";
 import type { Post } from "@/lib/types";
@@ -67,26 +68,34 @@ export function SharedPostEmbed({
             post.gifUrl ? "max-h-36" : "aspect-[16/10]"
           )}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={mediaSrc!}
-            alt=""
-            className={cn(
-              "w-full transition duration-300 group-hover:scale-[1.02]",
-              post.gifUrl
-                ? "max-h-36 object-contain object-center"
-                : "h-full object-cover"
-            )}
-          />
-          <span
-            className={cn(
-              "absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold backdrop-blur-md",
-              "bg-black/55 text-white"
-            )}
-          >
-            <ImageIcon size={11} weight="bold" />
-            {post.gifUrl ? "GIF" : "Foto"}
-          </span>
+          {post.gifUrl ? (
+            <LazyGif
+              src={post.gifUrl}
+              alt=""
+              className="w-full"
+              maxHeightClass="max-h-36"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={mediaSrc!}
+              alt=""
+              className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+              loading="lazy"
+              decoding="async"
+            />
+          )}
+          {!post.gifUrl && (
+            <span
+              className={cn(
+                "absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold backdrop-blur-md",
+                "bg-black/55 text-white"
+              )}
+            >
+              <ImageIcon size={11} weight="bold" />
+              Foto
+            </span>
+          )}
         </div>
       ) : null}
 

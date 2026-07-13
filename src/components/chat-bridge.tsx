@@ -111,10 +111,14 @@ export function ChatBridge({ children }: { children: React.ReactNode }) {
           const messages = await fetchRemoteChatMessages(500);
           if (cancelled) return;
           const sig = messages
-            .map(
-              (m) =>
-                `${m.id}:${(m.deliveredTo ?? []).length}:${(m.readBy ?? []).length}:${Object.keys(m.reactions || {}).length}`
-            )
+            .map((m) => {
+              const r = m.reactions || {};
+              const rSig = Object.keys(r)
+                .sort()
+                .map((k) => `${k}:${(r[k] || []).length}`)
+                .join(",");
+              return `${m.id}:${(m.deliveredTo ?? []).length}:${(m.readBy ?? []).length}:{${rSig}}`;
+            })
             .join("|");
           if (sig === lastIdsRef.current) return;
           lastIdsRef.current = sig;

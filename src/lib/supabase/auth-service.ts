@@ -533,3 +533,76 @@ export async function supabaseSetVerified(
     };
   }
 }
+
+/**
+ * Admin doa / revoga VIP em outro membro.
+ * - is_vip = true/false
+ * - role: member ↔ vip (nunca mexe em admin)
+ * Protegido por RLS (update own or admin) + trigger de colunas privilegiadas.
+ */
+export async function supabaseSetVip(
+  userId: string,
+  vip: boolean
+): Promise<{ ok: true; user: UserPublic } | { ok: false; error: string }> {
+  try {
+    const supabase = requireSupabaseBrowser();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.user?.id) {
+      return { ok: false, error: "Não autenticado." };
+    }
+
+    const { data: me, error: meErr } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", session.user.id)
+      .maybeSingle();
+    if (meErr || !me || me.role !== "admin") {
+      return { ok: false, error: "Apenas admin pode doar ou revogar VIP." };
+    }
+
+    const target = await fetchProfileById(userId);
+    if (!target) {
+      return { ok: false, error: "Membro não encontrado." };
+    }
+    if (target.role === "admin") {
+      return {
+        ok: false,
+        error: "Contas admin já têm acesso total — não altere VIP nelas.",
+      };
+    }
+
+    // role vip alinhado ao plano; admin nunca é rebaixado aqui
+    const nextRole = vip ? "vip" : "member";
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        is_vip: vip,
+        role: nextRole,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+
+    if (error) return { ok: false, error: error.message };
+
+    const refreshed = await fetchProfileById(userId);
+    if (!refreshed) {
+      return {
+        ok: true,
+        user: {
+          ...target,
+          isVip: vip,
+          role: nextRole,
+        },
+      };
+    }
+    return { ok: true, user: refreshed };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Erro ao atualizar VIP.",
+    };
+  }
+}
