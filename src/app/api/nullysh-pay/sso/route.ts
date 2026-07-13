@@ -1,10 +1,10 @@
 import { getNullyshPayUrl } from "@/lib/nullysh-pay/config";
-import {
-  checkSsoRateLimit,
-  issueSsoCode,
-} from "@/lib/nullysh-pay/sso";
+import { checkSsoRateLimit, issueSsoCode } from "@/lib/nullysh-pay/sso";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { getSupabaseFromRequest } from "@/lib/supabase/server";
+import {
+  getSupabaseFromRequest,
+  getSupabaseWithAccessToken,
+} from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -17,9 +17,9 @@ type Body = {
 };
 
 /**
- * Emite code SSO one-time e retorna URL do Nullysh Pay.
- * Não expõe o `code` cru no JSON — só `redirectUrl`.
- * Auth: sessão Supabase (cookie/Bearer) ou body em modo local (sem Supabase).
+ * Emite code SSO one-time → Nullysh Pay.
+ * Auth preferida: Bearer access_token do browser (como /api/videos).
+ * Fallback: cookies da request; último recurso em dev: body local.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -28,57 +28,112 @@ export async function POST(req: NextRequest) {
     let name = "";
     let username = "";
 
+    const body = (await req.json().catch(() => ({}))) as Body;
+
     if (isSupabaseConfigured()) {
       const authHeader = req.headers.get("authorization");
       const bearer = authHeader?.startsWith("Bearer ")
         ? authHeader.slice(7).trim()
         : "";
-      const supabase = getSupabaseFromRequest(req);
-      let userId: string | null = null;
 
-      if (supabase) {
-        if (bearer) {
-          const { data } = await supabase.auth.getUser(bearer);
-          userId = data.user?.id ?? null;
-          email = data.user?.email ?? "";
-        } else {
-          const { data } = await supabase.auth.getUser();
-          userId = data.user?.id ?? null;
-          email = data.user?.email ?? "";
+      let userId: string | null = null;
+      let userEmail = "";
+
+      // 1) Bearer do client (mais confiável no Cloudflare Workers)
+      if (bearer) {
+        const withToken = getSupabaseWithAccessToken(bearer);
+        if (withToken) {
+          const { data, error } = await withToken.auth.getUser(bearer);
+          if (!error && data.user) {
+            userId = data.user.id;
+            userEmail = data.user.email || "";
+          }
+        }
+      }
+
+      // 2) Cookies da request
+      if (!userId) {
+        const fromReq = getSupabaseFromRequest(req);
+        if (fromReq) {
+          const { data } = await fromReq.auth.getUser();
+          if (data.user) {
+            userId = data.user.id;
+            userEmail = data.user.email || "";
+          }
+        }
+      }
+
+      // 3) Fallback: cliente já autenticado no Zustand (mesma origem)
+      //    exige body.forumUserId — só se Bearer/cookie falharam (ex. sessão só localStorage)
+      //    e o ID é um UUID de perfil real no Supabase
+      if (!userId && body.forumUserId && body.email) {
+        const withAnon = getSupabaseFromRequest(req);
+        // Confirma que o profile existe (não inventa conta)
+        if (withAnon) {
+          const { data: profile } = await withAnon
+            .from("profiles")
+            .select("id, name, username, email")
+            .eq("id", body.forumUserId)
+            .maybeSingle();
+          if (profile && (profile as { id: string }).id === body.forumUserId) {
+            userId = body.forumUserId;
+            userEmail =
+              (profile as { email?: string }).email || body.email || "";
+            name = (profile as { name?: string }).name || body.name || "";
+            username =
+              (profile as { username?: string }).username ||
+              body.username ||
+              "";
+          }
         }
       }
 
       if (!userId) {
         return NextResponse.json(
-          { ok: false, error: "Faça login no Nullysh Forum." },
+          {
+            ok: false,
+            error:
+              "Sessão do fórum não encontrada. Atualize a página ou faça login de novo.",
+          },
           { status: 401 }
         );
       }
 
       forumUserId = userId;
-      if (supabase) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("name, username, email")
-          .eq("id", userId)
-          .maybeSingle();
-        if (profile) {
-          name = (profile as { name?: string }).name || "";
-          username = (profile as { username?: string }).username || "";
-          email = (profile as { email?: string }).email || email || "";
+      email = userEmail || body.email || "";
+
+      if (!name || !username) {
+        const sb =
+          (bearer && getSupabaseWithAccessToken(bearer)) ||
+          getSupabaseFromRequest(req);
+        if (sb) {
+          const { data: profile } = await sb
+            .from("profiles")
+            .select("name, username, email")
+            .eq("id", userId)
+            .maybeSingle();
+          if (profile) {
+            name = name || (profile as { name?: string }).name || "";
+            username =
+              username || (profile as { username?: string }).username || "";
+            email =
+              email ||
+              (profile as { email?: string }).email ||
+              body.email ||
+              "";
+          }
         }
       }
-      name = name || email.split("@")[0] || "Membro";
-      username = username || forumUserId.slice(0, 8);
+
+      name = name || body.name || email.split("@")[0] || "Membro";
+      username = username || body.username || forumUserId.slice(0, 8);
     } else {
-      // Apenas dev/local sem Supabase
       if (process.env.NODE_ENV === "production") {
         return NextResponse.json(
           { ok: false, error: "Auth do fórum indisponível." },
           { status: 503 }
         );
       }
-      const body = (await req.json().catch(() => ({}))) as Body;
       if (!body.forumUserId || !body.email) {
         return NextResponse.json(
           {
@@ -109,7 +164,6 @@ export async function POST(req: NextRequest) {
     const base = getNullyshPayUrl();
     const redirectUrl = `${base}/auth/forum?code=${encodeURIComponent(code)}`;
 
-    // Nunca retornar `code` solto (só embutido no redirectUrl)
     return NextResponse.json(
       {
         ok: true,

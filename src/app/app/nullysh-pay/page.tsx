@@ -36,27 +36,38 @@ export default function NullyshPayBridgePage() {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
-      let body: string | undefined;
+
+      // Sempre manda identidade do user logado no app (fallback se cookie falhar)
+      const body = JSON.stringify({
+        forumUserId: user.id,
+        email: user.email,
+        name: user.name,
+        username: user.username,
+      });
 
       if (isSupabaseConfigured()) {
         const sb = getSupabaseBrowser();
-        const { data } = await sb?.auth.getSession() ?? { data: { session: null } };
-        const token = data.session?.access_token;
-        if (token) headers.Authorization = `Bearer ${token}`;
-      } else {
-        body = JSON.stringify({
-          forumUserId: user.id,
-          email: user.email,
-          name: user.name,
-          username: user.username,
-        });
+        if (sb) {
+          // Garante token fresco (Workers não leem bem só cookie às vezes)
+          try {
+            await sb.auth.refreshSession();
+          } catch {
+            /* ignore */
+          }
+          const { data } = await sb.auth.getSession();
+          const token = data.session?.access_token;
+          if (token) {
+            headers.Authorization = `Bearer ${token}`;
+          }
+        }
       }
 
       const res = await fetch("/api/nullysh-pay/sso", {
         method: "POST",
         headers,
-        body: body ?? (isSupabaseConfigured() ? "{}" : undefined),
+        body,
         cache: "no-store",
+        credentials: "same-origin",
       });
       const data = (await res.json()) as {
         ok?: boolean;
