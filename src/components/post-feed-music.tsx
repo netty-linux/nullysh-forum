@@ -473,8 +473,34 @@ export function PostFeedMusic({
       ? soundcloudSrc
       : null;
 
+  // Spotify / SoundCloud: só o player oficial (sem chip nem texto auxiliar)
+  if (!isYoutube && externalSrc) {
+    return (
+      <div
+        ref={rootRef}
+        className={cn(
+          "mt-3 overflow-hidden rounded-xl",
+          "ring-1 ring-black/5 dark:ring-white/10",
+          className
+        )}
+      >
+        <iframe
+          title={`${platform}-player`}
+          src={externalSrc}
+          className={cn(
+            "block w-full border-0",
+            isSpotify ? "h-[80px]" : "h-[120px]"
+          )}
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
   return (
-    <div ref={rootRef} className={cn("mt-3 space-y-2", className)}>
+    <div ref={rootRef} className={cn("mt-3", className)}>
       {/* Host YT offscreen — só o áudio; UI é o chip */}
       {isYoutube && videoId && (
         <div className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0">
@@ -531,24 +557,21 @@ export function PostFeedMusic({
               {title}
             </span>
           </span>
-          <span className="mt-0.5 block truncate text-[11px] text-neutral-500">
-            {artist ||
-              (isSpotify
-                ? "Spotify"
-                : isSoundcloud
-                  ? "SoundCloud"
-                  : "YouTube")}
-            {playing && isYoutube ? " · tocando" : ""}
-            {playing && isSpotify && showExternalPlayer
-              ? " · use o play no player"
-              : ""}
-            {!playing && (isSpotify || isSoundcloud)
-              ? " · toque para ouvir"
-              : ""}
-          </span>
+          {artist ? (
+            <span className="mt-0.5 block truncate text-[11px] text-neutral-500">
+              {artist}
+              {playing ? " · tocando" : ""}
+            </span>
+          ) : (
+            playing && (
+              <span className="mt-0.5 block text-[11px] text-neutral-500">
+                tocando
+              </span>
+            )
+          )}
         </span>
 
-        {playing && isYoutube && (
+        {playing && (
           <span
             className="post-music-bars flex h-4 items-end gap-0.5"
             aria-hidden
@@ -559,37 +582,6 @@ export function PostFeedMusic({
           </span>
         )}
       </button>
-
-      {/*
-        Spotify / SoundCloud: player oficial compacto VISÍVEL.
-        Sem isso o áudio não sai (política da plataforma + browser).
-      */}
-      {showExternalPlayer && externalSrc && (
-        <div
-          className={cn(
-            "overflow-hidden rounded-xl border border-neutral-200/90 bg-white",
-            "dark:border-zinc-700 dark:bg-zinc-900"
-          )}
-        >
-          <iframe
-            title={`${platform}-player`}
-            src={externalSrc}
-            className={cn(
-              "w-full border-0",
-              isSpotify ? "h-[80px]" : "h-[120px]"
-            )}
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            loading="eager"
-            // Spotify exige allow transparency em alguns browsers
-            allowFullScreen
-          />
-          <p className="px-2.5 pb-2 text-[11px] leading-snug text-neutral-500">
-            {isSpotify
-              ? "Clique em ▶ no player do Spotify para ouvir. Conta free pode ter preview de ~30s."
-              : "Clique em ▶ no player se o áudio não iniciar sozinho."}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
