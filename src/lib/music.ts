@@ -132,6 +132,8 @@ export function buildSpotifyEmbedUrl(url: string): string | null {
     if (typeIdx < 0 || !parts[typeIdx + 1]) return null;
     const type = parts[typeIdx];
     const id = parts[typeIdx + 1].split("?")[0];
+    // Embed oficial compacto (height 80 no client). Autoplay em iframe oculto
+    // NÃO funciona — o feed abre este player visível no clique.
     return `https://open.spotify.com/embed/${type}/${id}?utm_source=generator&theme=0`;
   } catch {
     return null;

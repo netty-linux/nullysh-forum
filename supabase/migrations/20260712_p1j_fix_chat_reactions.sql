@@ -19,7 +19,8 @@ as $$
 declare
   uid uuid := auth.uid();
   msg public.chat_messages;
-  reactions jsonb;
+  -- NÃO chamar de "reactions" (colide com a coluna → ambiguous)
+  v_reactions jsonb;
   key text;
   arr jsonb;
   cleaned jsonb;
@@ -70,27 +71,27 @@ begin
   end if;
   -- Canais públicos: qualquer autenticado pode reagir
 
-  reactions := coalesce(msg.reactions, '{}'::jsonb);
-  if jsonb_typeof(reactions) <> 'object' then
-    reactions := '{}'::jsonb;
+  v_reactions := coalesce(msg.reactions, '{}'::jsonb);
+  if jsonb_typeof(v_reactions) <> 'object' then
+    v_reactions := '{}'::jsonb;
   end if;
 
   -- Já tinha este emoji?
-  if reactions ? p_emoji then
+  if v_reactions ? p_emoji then
     select exists (
       select 1
-      from jsonb_array_elements_text(reactions -> p_emoji) as t(x)
+      from jsonb_array_elements_text(v_reactions -> p_emoji) as t(x)
       where t.x = uid::text
     ) into had;
   end if;
 
   -- Remove o usuário de TODOS os emojis
-  for key in select jsonb_object_keys(reactions)
+  for key in select jsonb_object_keys(v_reactions)
   loop
     select coalesce(
       (
         select jsonb_agg(to_jsonb(t.x))
-        from jsonb_array_elements_text(reactions -> key) as t(x)
+        from jsonb_array_elements_text(v_reactions -> key) as t(x)
         where t.x is distinct from uid::text
       ),
       '[]'::jsonb
@@ -98,24 +99,24 @@ begin
     into cleaned;
 
     if cleaned = '[]'::jsonb or cleaned is null then
-      reactions := reactions - key;
+      v_reactions := v_reactions - key;
     else
-      reactions := jsonb_set(reactions, array[key], cleaned, true);
+      v_reactions := jsonb_set(v_reactions, array[key], cleaned, true);
     end if;
   end loop;
 
   -- Toggle: se não tinha, adiciona
   if not had then
-    arr := coalesce(reactions -> p_emoji, '[]'::jsonb);
+    arr := coalesce(v_reactions -> p_emoji, '[]'::jsonb);
     if jsonb_typeof(arr) <> 'array' then
       arr := '[]'::jsonb;
     end if;
     arr := arr || to_jsonb(uid::text);
-    reactions := jsonb_set(reactions, array[p_emoji], arr, true);
+    v_reactions := jsonb_set(v_reactions, array[p_emoji], arr, true);
   end if;
 
   update public.chat_messages
-  set reactions = reactions
+  set reactions = v_reactions
   where id = p_message_id;
 
   -- Notifica o autor só ao ADICIONAR (nunca aborta a reação se notif falhar)
@@ -165,7 +166,7 @@ begin
     end;
   end if;
 
-  return reactions;
+  return v_reactions;
 end;
 $$;
 

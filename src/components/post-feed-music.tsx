@@ -1,18 +1,23 @@
 "use client";
 
 /**
- * Chip de música no post + autoplay estilo Instagram:
- * - Toca quando o card está centralizado no feed
- * - Pausa/mute ao rolar para fora
- * - Um post por vez (controller global)
- * - Trecho com startAtSec + loop clipDurationSec (YouTube)
+ * Chip de música no post + playback no feed.
+ *
+ * YouTube: IFrame API (autoplay no viewport após unlock; som no clique).
+ * Spotify / SoundCloud: player oficial VISÍVEL no clique — iframe 1px
+ * escondido NÃO toca (bloqueio das plataformas + política de autoplay).
  */
 
 import { MusicPlatformIcon } from "@/components/music-platform-icon";
-import { parseYoutubeId, type MusicPlatform } from "@/lib/music";
+import {
+  buildEmbedUrl,
+  parseYoutubeId,
+  type MusicPlatform,
+} from "@/lib/music";
 import {
   isPostMusicAudioUnlocked,
   reportPostMusicVisibility,
+  unlockPostMusicAudio,
   unregisterPostMusic,
 } from "@/lib/post-music-controller";
 import type { PostMusic } from "@/lib/types";
@@ -25,9 +30,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent,
 } from "react";
 
-/* ── YouTube IFrame API (tipos locais, sem re-declarar Window) ── */
+/* ── YouTube IFrame API ── */
 
 type YTPlayerLite = {
   playVideo: () => void;
@@ -81,11 +87,48 @@ function loadYouTubeApi(): Promise<YTAny> {
   return ytApiPromise;
 }
 
+function spotifyEmbedSrc(music: PostMusic): string | null {
+  const base =
+    music.embedUrl ||
+    buildEmbedUrl("spotify", music.url) ||
+    null;
+  if (!base) return null;
+  try {
+    const u = new URL(base);
+    // compact theme; t= só funciona bem em episódios, mas não atrapalha tracks
+    if (music.startAtSec > 0) {
+      u.searchParams.set("t", String(music.startAtSec));
+    }
+    u.searchParams.set("utm_source", "generator");
+    u.searchParams.set("theme", "0");
+    return u.toString();
+  } catch {
+    return base;
+  }
+}
+
+function soundcloudEmbedSrc(music: PostMusic): string | null {
+  const base =
+    music.embedUrl ||
+    buildEmbedUrl("soundcloud", music.url) ||
+    null;
+  if (!base) return null;
+  try {
+    const u = new URL(base);
+    u.searchParams.set("auto_play", "true");
+    u.searchParams.set("hide_related", "true");
+    u.searchParams.set("show_comments", "false");
+    u.searchParams.set("visual", "false");
+    return u.toString();
+  } catch {
+    return base;
+  }
+}
+
 type Props = {
   postId: string;
   music: PostMusic;
   className?: string;
-  /** Elemento raiz do card (observer) — se omitido, usa o chip */
   observeRoot?: HTMLElement | null;
 };
 
@@ -97,26 +140,41 @@ export function PostFeedMusic({
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayerLite | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const loopTimer = useRef<number | null>(null);
   const wantPlay = useRef(false);
+  /** clique manual → pode tocar com som / abrir embed Spotify */
+  const userGesture = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [hostKey, setHostKey] = useState(0);
+  const [showExternalPlayer, setShowExternalPlayer] = useState(false);
   const reactId = useId().replace(/:/g, "");
   const hostDomId = `post-yt-${postId.slice(0, 8)}-${reactId}`;
 
+  const isYoutube = music.platform === "youtube";
+  const isSpotify = music.platform === "spotify";
+  const isSoundcloud = music.platform === "soundcloud";
+
   const videoId = useMemo(() => {
-    if (music.platform !== "youtube") return null;
+    if (!isYoutube) return null;
     return (
       parseYoutubeId(music.url) ||
       parseYoutubeId(music.embedUrl || "") ||
       null
     );
-  }, [music.platform, music.url, music.embedUrl]);
+  }, [isYoutube, music.url, music.embedUrl]);
 
   const startAt = music.startAtSec || 0;
   const clipDur = music.clipDurationSec || 30;
+
+  const spotifySrc = useMemo(
+    () => (isSpotify ? spotifyEmbedSrc(music) : null),
+    [isSpotify, music]
+  );
+  const soundcloudSrc = useMemo(
+    () => (isSoundcloud ? soundcloudEmbedSrc(music) : null),
+    [isSoundcloud, music]
+  );
 
   const destroyYt = useCallback(() => {
     if (loopTimer.current) {
@@ -136,23 +194,29 @@ export function PostFeedMusic({
     wantPlay.current = false;
     setPlaying(false);
     setLoading(false);
+    setShowExternalPlayer(false);
     try {
       playerRef.current?.pauseVideo();
     } catch {
       /* ignore */
     }
-    // Spotify/SC: remove iframe autoplay
-    iframeRef.current = null;
   }, []);
 
   const playInternal = useCallback(() => {
+    // Autoplay por scroll: só YouTube (Spotify/SC precisam de clique + player visível)
+    if (!isYoutube && !userGesture.current) {
+      return;
+    }
     wantPlay.current = true;
     setPlaying(true);
-  }, []);
+    if (!isYoutube) {
+      setShowExternalPlayer(true);
+    }
+  }, [isYoutube]);
 
   // YouTube player lifecycle
   useEffect(() => {
-    if (music.platform !== "youtube" || !videoId) return;
+    if (!isYoutube || !videoId) return;
     if (!playing) {
       try {
         playerRef.current?.pauseVideo();
@@ -168,6 +232,8 @@ export function PostFeedMusic({
 
     let cancelled = false;
     setLoading(true);
+    const withSound =
+      isPostMusicAudioUnlocked() || userGesture.current;
 
     (async () => {
       const YT = await loadYouTubeApi();
@@ -176,9 +242,9 @@ export function PostFeedMusic({
       if (playerRef.current) {
         try {
           playerRef.current.seekTo(startAt, true);
-          if (isPostMusicAudioUnlocked()) {
+          if (withSound) {
             playerRef.current.unMute();
-            playerRef.current.setVolume(85);
+            playerRef.current.setVolume(90);
           } else {
             playerRef.current.mute();
           }
@@ -209,7 +275,8 @@ export function PostFeedMusic({
           modestbranding: 1,
           rel: 0,
           playsinline: 1,
-          mute: isPostMusicAudioUnlocked() ? 0 : 1,
+          // 0 = com som (após gesto); 1 = mudo (autoplay viewport)
+          mute: withSound ? 0 : 1,
           origin:
             typeof window !== "undefined" ? window.location.origin : undefined,
         },
@@ -218,9 +285,9 @@ export function PostFeedMusic({
             if (cancelled || !wantPlay.current) return;
             try {
               e.target.seekTo(startAt, true);
-              if (isPostMusicAudioUnlocked()) {
+              if (withSound) {
                 e.target.unMute();
-                e.target.setVolume(85);
+                e.target.setVolume(90);
               } else {
                 e.target.mute();
               }
@@ -236,6 +303,15 @@ export function PostFeedMusic({
             if (e.data === S.PLAYING) {
               setPlaying(true);
               setLoading(false);
+              // Se o user já liberou áudio, garante unmute
+              if (isPostMusicAudioUnlocked() || userGesture.current) {
+                try {
+                  e.target.unMute();
+                  e.target.setVolume(90);
+                } catch {
+                  /* ignore */
+                }
+              }
             } else if (e.data === S.ENDED) {
               try {
                 e.target.seekTo(startAt, true);
@@ -248,7 +324,6 @@ export function PostFeedMusic({
         },
       }) as YTPlayerLite;
 
-      // Loop do trecho (start → start+clip)
       if (loopTimer.current) window.clearInterval(loopTimer.current);
       loopTimer.current = window.setInterval(() => {
         const p = playerRef.current;
@@ -270,14 +345,13 @@ export function PostFeedMusic({
   }, [
     playing,
     videoId,
-    music.platform,
+    isYoutube,
     hostDomId,
     startAt,
     clipDur,
     destroyYt,
   ]);
 
-  // cleanup unmount
   useEffect(() => {
     return () => {
       destroyYt();
@@ -285,8 +359,10 @@ export function PostFeedMusic({
     };
   }, [destroyYt, postId]);
 
-  // IntersectionObserver → score de centralização
+  // Viewport autoplay — apenas YouTube
   useEffect(() => {
+    if (!isYoutube) return;
+
     const target =
       observeRoot ||
       (typeof document !== "undefined"
@@ -326,9 +402,7 @@ export function PostFeedMusic({
         const mid = root.top + root.height / 2;
         const r = entry.boundingClientRect;
         const postMid = r.top + r.height / 2;
-        // 0 no centro, 1 nas bordas
         const dist = Math.min(1, Math.abs(postMid - mid) / (root.height * 0.5));
-        // score: alto quando visível + perto do centro
         const score = ratio * (1 - dist * 0.85);
 
         reportPostMusicVisibility(postId, score, {
@@ -348,69 +422,63 @@ export function PostFeedMusic({
       io.disconnect();
       unregisterPostMusic(postId);
     };
-  }, [postId, observeRoot, playInternal, pauseInternal]);
+  }, [postId, observeRoot, playInternal, pauseInternal, isYoutube]);
 
-  // Spotify / SoundCloud embed when active
-  const externalEmbed = useMemo(() => {
-    if (!playing) return null;
-    if (music.platform === "youtube") return null;
-    if (!music.embedUrl) return null;
-    try {
-      const u = new URL(music.embedUrl);
-      if (music.platform === "spotify") {
-        // Spotify embed autoplay limitado — tenta
-        u.searchParams.set("utm_source", "generator");
-      }
-      if (music.platform === "soundcloud") {
-        u.searchParams.set("auto_play", "true");
-      }
-      return u.toString();
-    } catch {
-      return music.embedUrl;
-    }
-  }, [playing, music.platform, music.embedUrl]);
+  function toggleManual(e?: MouseEvent) {
+    e?.stopPropagation();
+    // Gesto do usuário → libera áudio no browser + YouTube unmute
+    unlockPostMusicAudio();
+    userGesture.current = true;
 
-  function toggleManual() {
     if (playing) {
       pauseInternal();
       unregisterPostMusic(postId);
-      // re-report 0 so controller doesn't restart immediately
       reportPostMusicVisibility(postId, 0, {
         play: playInternal,
         pause: pauseInternal,
       });
-    } else {
-      playInternal();
-      // força este post como ativo
+      return;
+    }
+
+    // Spotify / SC: abre player oficial visível (única forma confiável de ouvir)
+    if (!isYoutube) {
+      wantPlay.current = true;
+      setPlaying(true);
+      setShowExternalPlayer(true);
+      setLoading(false);
+      // Pausa outros posts YouTube via controller
       reportPostMusicVisibility(postId, 1, {
         play: playInternal,
         pause: pauseInternal,
       });
+      return;
     }
+
+    // YouTube: play com som
+    wantPlay.current = true;
+    setPlaying(true);
+    reportPostMusicVisibility(postId, 1, {
+      play: playInternal,
+      pause: pauseInternal,
+    });
   }
 
   const title = music.title?.trim() || "Faixa";
   const artist = music.artist?.trim() || "";
+  const platform = music.platform as MusicPlatform;
+
+  const externalSrc = isSpotify
+    ? spotifySrc
+    : isSoundcloud
+      ? soundcloudSrc
+      : null;
 
   return (
-    <div ref={rootRef} className={cn("mt-3", className)}>
-      {/* Host YT offscreen */}
-      {music.platform === "youtube" && videoId && (
+    <div ref={rootRef} className={cn("mt-3 space-y-2", className)}>
+      {/* Host YT offscreen — só o áudio; UI é o chip */}
+      {isYoutube && videoId && (
         <div className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0">
           <div key={hostKey} id={hostDomId} />
-        </div>
-      )}
-
-      {/* Embeds SC/Spotify hidden when playing */}
-      {externalEmbed && (
-        <div className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0">
-          <iframe
-            ref={iframeRef}
-            title="post-music"
-            src={externalEmbed}
-            allow="autoplay; encrypted-media"
-            className="h-px w-px border-0"
-          />
         </div>
       )}
 
@@ -423,22 +491,17 @@ export function PostFeedMusic({
           "shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition",
           "hover:border-neutral-300 hover:bg-white",
           "dark:border-zinc-700 dark:bg-zinc-900/80 dark:hover:bg-zinc-900",
-          playing && "border-[#1f1f1f]/20 bg-[#1f1f1f]/[0.04] dark:border-white/20"
+          playing &&
+            "border-[#1f1f1f]/20 bg-[#1f1f1f]/[0.04] dark:border-white/20"
         )}
         aria-label={playing ? "Pausar música" : "Tocar música"}
       >
-        {/* Disco / capa */}
         <span
           className={cn(
             "relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full",
             "bg-[#1f1f1f] text-white",
-            playing && "animate-[spin_8s_linear_infinite]"
+            playing && isYoutube && "animate-[spin_8s_linear_infinite]"
           )}
-          style={
-            playing
-              ? undefined
-              : { animationPlayState: "paused" }
-          }
         >
           {music.thumbnailUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -450,7 +513,7 @@ export function PostFeedMusic({
           ) : (
             <MusicNotes size={16} weight="fill" />
           )}
-          <span className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 transition group-hover/music:opacity-100">
+          <span className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 transition group-hover/music:opacity-100 sm:opacity-100 sm:bg-black/25">
             {loading ? (
               <SpinnerGap size={14} className="animate-spin" />
             ) : playing ? (
@@ -463,27 +526,29 @@ export function PostFeedMusic({
 
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
-            <MusicPlatformIcon platform={music.platform as MusicPlatform} size={12} />
+            <MusicPlatformIcon platform={platform} size={12} />
             <span className="truncate text-[13px] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
               {title}
             </span>
           </span>
-          {artist ? (
-            <span className="mt-0.5 block truncate text-[11px] text-neutral-500">
-              {artist}
-              {playing ? " · tocando" : ""}
-            </span>
-          ) : (
-            playing && (
-              <span className="mt-0.5 block text-[11px] text-neutral-500">
-                tocando
-              </span>
-            )
-          )}
+          <span className="mt-0.5 block truncate text-[11px] text-neutral-500">
+            {artist ||
+              (isSpotify
+                ? "Spotify"
+                : isSoundcloud
+                  ? "SoundCloud"
+                  : "YouTube")}
+            {playing && isYoutube ? " · tocando" : ""}
+            {playing && isSpotify && showExternalPlayer
+              ? " · use o play no player"
+              : ""}
+            {!playing && (isSpotify || isSoundcloud)
+              ? " · toque para ouvir"
+              : ""}
+          </span>
         </span>
 
-        {/* Barrinhas estilo IG quando tocando */}
-        {playing && (
+        {playing && isYoutube && (
           <span
             className="post-music-bars flex h-4 items-end gap-0.5"
             aria-hidden
@@ -495,6 +560,36 @@ export function PostFeedMusic({
         )}
       </button>
 
+      {/*
+        Spotify / SoundCloud: player oficial compacto VISÍVEL.
+        Sem isso o áudio não sai (política da plataforma + browser).
+      */}
+      {showExternalPlayer && externalSrc && (
+        <div
+          className={cn(
+            "overflow-hidden rounded-xl border border-neutral-200/90 bg-white",
+            "dark:border-zinc-700 dark:bg-zinc-900"
+          )}
+        >
+          <iframe
+            title={`${platform}-player`}
+            src={externalSrc}
+            className={cn(
+              "w-full border-0",
+              isSpotify ? "h-[80px]" : "h-[120px]"
+            )}
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="eager"
+            // Spotify exige allow transparency em alguns browsers
+            allowFullScreen
+          />
+          <p className="px-2.5 pb-2 text-[11px] leading-snug text-neutral-500">
+            {isSpotify
+              ? "Clique em ▶ no player do Spotify para ouvir. Conta free pode ter preview de ~30s."
+              : "Clique em ▶ no player se o áudio não iniciar sozinho."}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
