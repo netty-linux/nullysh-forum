@@ -42,6 +42,9 @@ interface NullyshKv {
 interface CloudflareEnv {
   VIDEOS_BUCKET?: VideosR2Bucket;
   NULLYSH_DATA: NullyshKv;
+  /** NullPass + dados do fórum (D1) */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  NULLYSH_FORUM_DB?: any;
   ASSETS: Fetcher;
   WORKER_SELF_REFERENCE: Fetcher;
   R2_ACCOUNT_ID?: string;

@@ -21,7 +21,9 @@ export async function PUT(req: NextRequest) {
 
   const key = req.nextUrl.searchParams.get("key")?.trim() || "";
   if (
-    (!key.startsWith("videos/") && !key.startsWith("thumbs/")) ||
+    (!key.startsWith("videos/") &&
+      !key.startsWith("thumbs/") &&
+      !key.startsWith("nullpass/")) ||
     key.includes("..")
   ) {
     return NextResponse.json(

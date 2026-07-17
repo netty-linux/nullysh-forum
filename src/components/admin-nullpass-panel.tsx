@@ -7,6 +7,7 @@ import {
   NULLPASS_CATEGORIES,
   NULLPASS_COVER_RECOMMENDED,
   NULLPASS_GRADIENTS,
+  compareNullpassProducts,
   formatNullpassPrice,
   monogramFromTitle,
   type NullpassBadge,
@@ -18,6 +19,7 @@ import {
   fileToDataUrl,
   validateImageFile,
 } from "@/lib/image";
+import { apiUploadNullpassCover } from "@/lib/nullpass/client";
 import { useNullpassStore, type NullpassUpsertInput } from "@/lib/nullpass-store";
 import { cn } from "@/lib/utils";
 import {
@@ -27,6 +29,8 @@ import {
   Package,
   PencilSimple,
   Plus,
+  PushPin,
+  PushPinSlash,
   Stack,
   Trash,
   Vault,
@@ -72,6 +76,7 @@ function productToInput(
     vipFulfillmentNote: p.vipFulfillmentNote,
     active: p.active !== false,
     sortOrder: p.sortOrder,
+    isPinned: !!p.isPinned,
     ...overrides,
   };
 }
@@ -80,20 +85,18 @@ function productToInput(
  * CRUD NullPass — só no Painel ADM.
  */
 export function AdminNullpassPanel({ onToast }: Props) {
-  const ensureSeed = useNullpassStore((s) => s.ensureSeed);
+  const loadAdmin = useNullpassStore((s) => s.loadAdmin);
   const rawProducts = useNullpassStore((s) => s.products);
   const createProduct = useNullpassStore((s) => s.createProduct);
   const updateProduct = useNullpassStore((s) => s.updateProduct);
   const deleteProduct = useNullpassStore((s) => s.deleteProduct);
   const resetToSeed = useNullpassStore((s) => s.resetToSeed);
+  const source = useNullpassStore((s) => s.source);
+  const lastError = useNullpassStore((s) => s.lastError);
+  const hasHydrated = useNullpassStore((s) => s.hasHydrated);
 
   const products = useMemo(
-    () =>
-      [...rawProducts].sort(
-        (a, b) =>
-          (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
-          a.title.localeCompare(b.title, "pt-BR")
-      ),
+    () => [...rawProducts].sort(compareNullpassProducts),
     [rawProducts]
   );
 
@@ -121,6 +124,7 @@ export function AdminNullpassPanel({ onToast }: Props) {
   const [fulfillment, setFulfillment] = useState("");
   const [active, setActive] = useState(true);
   const [sortOrder, setSortOrder] = useState("100");
+  const [isPinned, setIsPinned] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [coverBusy, setCoverBusy] = useState(false);
@@ -141,8 +145,8 @@ export function AdminNullpassPanel({ onToast }: Props) {
   );
 
   useEffect(() => {
-    ensureSeed();
-  }, [ensureSeed]);
+    void loadAdmin();
+  }, [loadAdmin]);
 
   function resetFormFields() {
     setTitle("");
@@ -172,6 +176,7 @@ export function AdminNullpassPanel({ onToast }: Props) {
     );
     setActive(true);
     setSortOrder("100");
+    setIsPinned(false);
     setError("");
     setSaving(false);
     if (fileRef.current) fileRef.current.value = "";
@@ -222,6 +227,7 @@ export function AdminNullpassPanel({ onToast }: Props) {
     setFulfillment(p.vipFulfillmentNote || "");
     setActive(p.active !== false);
     setSortOrder(String(p.sortOrder ?? 100));
+    setIsPinned(!!p.isPinned);
     setError("");
     setSaving(false);
     setFormMode(p.id);
@@ -242,13 +248,30 @@ export function AdminNullpassPanel({ onToast }: Props) {
     setCoverBusy(true);
     setError("");
     try {
+      // Comprime no browser → Blob → R2 (sem data URL no D1)
       const raw = await fileToDataUrl(file);
       const compressed = await compressImageDataUrl(raw, "post");
-      setCoverUrl(compressed);
+      const blob = await (await fetch(compressed)).blob();
+      const ext =
+        blob.type.includes("png")
+          ? "png"
+          : blob.type.includes("webp")
+            ? "webp"
+            : "jpg";
+      const up = await apiUploadNullpassCover(blob, `cover.${ext}`);
+      if (!up.ok || !up.publicUrl) {
+        setError(
+          up.error ||
+            "Falha no upload R2. Confirme o bucket e tente de novo."
+        );
+        return;
+      }
+      setCoverUrl(up.publicUrl);
     } catch {
-      setError("Falha ao processar a capa. Tente outra imagem.");
+      setError("Falha ao processar/enviar a capa. Tente outra imagem.");
     } finally {
       setCoverBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -284,10 +307,11 @@ export function AdminNullpassPanel({ onToast }: Props) {
       vipFulfillmentNote: fulfillment,
       active,
       sortOrder: Number(sortOrder) || 100,
+      isPinned,
     };
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setSaving(true);
@@ -308,7 +332,7 @@ export function AdminNullpassPanel({ onToast }: Props) {
         return;
       }
       if (isEditing && formMode) {
-        const res = updateProduct(formMode, payload);
+        const res = await updateProduct(formMode, payload);
         if (!res.ok) {
           setError(res.error);
           return;
@@ -317,7 +341,7 @@ export function AdminNullpassPanel({ onToast }: Props) {
         closeForm();
         return;
       }
-      const res = createProduct(payload);
+      const res = await createProduct(payload);
       if (!res.ok) {
         setError(res.error);
         return;
@@ -329,7 +353,7 @@ export function AdminNullpassPanel({ onToast }: Props) {
     }
   }
 
-  function onDelete(p: NullpassProduct) {
+  async function onDelete(p: NullpassProduct) {
     if (
       !window.confirm(
         `Remover “${p.title}” do NullPass? A vitrine pública deixa de exibir.`
@@ -337,7 +361,7 @@ export function AdminNullpassPanel({ onToast }: Props) {
     ) {
       return;
     }
-    const res = deleteProduct(p.id);
+    const res = await deleteProduct(p.id);
     if (!res.ok) {
       onToast(res.error);
       return;
@@ -346,8 +370,8 @@ export function AdminNullpassPanel({ onToast }: Props) {
     onToast(`“${p.title}” removido.`);
   }
 
-  function onToggleActive(p: NullpassProduct) {
-    const res = updateProduct(
+  async function onToggleActive(p: NullpassProduct) {
+    const res = await updateProduct(
       p.id,
       productToInput(p, { active: p.active === false })
     );
@@ -359,6 +383,23 @@ export function AdminNullpassPanel({ onToast }: Props) {
       res.product.active !== false
         ? `“${p.title}” visível na vitrine.`
         : `“${p.title}” oculto da vitrine.`
+    );
+  }
+
+  async function onTogglePinned(p: NullpassProduct) {
+    const next = !p.isPinned;
+    const res = await updateProduct(
+      p.id,
+      productToInput(p, { isPinned: next })
+    );
+    if (!res.ok) {
+      onToast(res.error);
+      return;
+    }
+    onToast(
+      next
+        ? `“${p.title}” fixado em Destaque.`
+        : `“${p.title}” removido do Destaque.`
     );
   }
 
@@ -381,9 +422,22 @@ export function AdminNullpassPanel({ onToast }: Props) {
           </p>
           <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
             Abasteça a vitrine VIP: capa, preços, combos, order bumps e
-            promoção. Pagamentos via <strong className="font-medium">Nullysh Pay</strong>{" "}
-            (Asaas).
+            promoção. Pagamentos via{" "}
+            <strong className="font-medium">Nullysh Pay</strong> (Asaas).
+            Fonte:{" "}
+            <strong className="font-medium text-[#1f1f1f]">
+              {source === "d1"
+                ? "D1 (produção, multi-dispositivo)"
+                : source === "local"
+                  ? "local (fallback dev)"
+                  : "carregando…"}
+            </strong>
           </p>
+          {lastError && source !== "d1" && (
+            <p className="mt-1 text-[12px] text-amber-700" role="status">
+              {lastError}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -392,14 +446,23 @@ export function AdminNullpassPanel({ onToast }: Props) {
             size="sm"
             onClick={() => {
               if (
-                window.confirm(
-                  "Restaurar catálogo seed padrão? Produtos atuais serão substituídos neste navegador."
+                !window.confirm(
+                  source === "d1"
+                    ? "Restaurar catálogo seed no servidor D1? Todos os produtos atuais serão substituídos."
+                    : "Restaurar catálogo seed padrão? Produtos atuais serão substituídos neste navegador."
                 )
               ) {
-                resetToSeed();
+                return;
+              }
+              void (async () => {
+                const res = await resetToSeed();
+                if (!res.ok) {
+                  onToast(res.error);
+                  return;
+                }
                 onToast("Catálogo seed restaurado.");
                 closeForm();
-              }
+              })();
             }}
           >
             Restaurar seed
@@ -533,6 +596,17 @@ export function AdminNullpassPanel({ onToast }: Props) {
               onChange={(e) => setSortOrder(e.target.value)}
             />
           </div>
+
+          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50/80 px-3 py-2.5 text-[13px] font-medium text-neutral-700">
+            <input
+              type="checkbox"
+              checked={isPinned}
+              onChange={(e) => setIsPinned(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-300"
+            />
+            <PushPin size={16} weight={isPinned ? "fill" : "regular"} />
+            Fixar no Destaque (row “Em destaque”, máx. 6)
+          </label>
 
           {/* Preços */}
           <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3 sm:p-4">
@@ -762,7 +836,9 @@ export function AdminNullpassPanel({ onToast }: Props) {
                   )}
                 </div>
                 <p className="text-[11px] text-neutral-400">
-                  JPG/PNG/WebP. Sem capa, o gradiente vira o poster.
+                  JPG/PNG/WebP · upload no R2 (URL pública). Sem capa, o
+                  gradiente vira o poster. Capas Base64 legadas ainda
+                  funcionam na vitrine.
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {NULLPASS_GRADIENTS.map((g) => (
@@ -820,7 +896,11 @@ export function AdminNullpassPanel({ onToast }: Props) {
 
       {/* Lista */}
       <div className="space-y-2">
-        {products.length === 0 ? (
+        {!hasHydrated ? (
+          <div className="rounded-2xl border border-neutral-200 bg-white p-10 text-center text-sm text-neutral-400">
+            Carregando catálogo…
+          </div>
+        ) : products.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-neutral-300 bg-white p-10 text-center text-sm text-neutral-500">
             Nenhum produto. Clique em <strong>Novo produto</strong> ou restaure
             o seed.
@@ -875,6 +955,11 @@ export function AdminNullpassPanel({ onToast }: Props) {
                       Promo
                     </span>
                   )}
+                  {p.isPinned && (
+                    <span className="rounded-md bg-[#1f1f1f] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-white">
+                      Fixado
+                    </span>
+                  )}
                   {p.active === false && (
                     <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-neutral-500">
                       Oculto
@@ -886,6 +971,7 @@ export function AdminNullpassPanel({ onToast }: Props) {
                 </div>
                 <p className="truncate text-[12px] text-neutral-400">
                   {p.category}
+                  {` · ordem ${p.sortOrder ?? 100}`}
                   {p.tagline ? ` · ${p.tagline}` : ""}
                   {(p.orderBumpIds?.length || 0) > 0
                     ? ` · ${p.orderBumpIds!.length} bump(s)`
@@ -896,6 +982,23 @@ export function AdminNullpassPanel({ onToast }: Props) {
                 </p>
               </div>
               <div className="flex flex-wrap gap-1.5 sm:justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={p.isPinned ? "primary" : "ghost"}
+                  title={
+                    p.isPinned
+                      ? "Remover do Destaque"
+                      : "Fixar no Destaque"
+                  }
+                  onClick={() => onTogglePinned(p)}
+                >
+                  {p.isPinned ? (
+                    <PushPin size={16} weight="fill" />
+                  ) : (
+                    <PushPinSlash size={16} weight="bold" />
+                  )}
+                </Button>
                 <Button
                   type="button"
                   size="sm"

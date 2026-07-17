@@ -1,9 +1,9 @@
 "use client";
 
 import { MarketingHeader } from "@/components/marketing-header";
+import { PlatformPaymentModal } from "@/components/platform-payment-modal";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { useAuthStore } from "@/lib/auth-store";
 import { VIP_PLAN } from "@/lib/mock-data";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { formatCurrency } from "@/lib/utils";
@@ -14,29 +14,23 @@ import { useState } from "react";
 
 export default function PricingPage() {
   const { user, isVip, hydrated } = useAuth();
-  const activateVip = useAuthStore((s) => s.activateVip);
   const router = useRouter();
-  const [done, setDone] = useState(false);
-
+  const [payOpen, setPayOpen] = useState(false);
   const [vipError, setVipError] = useState("");
 
-  async function handleSubscribe() {
+  function handleSubscribe() {
     if (!user) {
-      router.push("/register");
+      router.push("/register?next=/pricing");
       return;
     }
     setVipError("");
-    // Offline/demo: activateVip local. Com Supabase: bloqueado no servidor (AppSec).
-    await activateVip();
-    const stillFree = !useAuthStore.getState().getCurrentUser()?.isVip;
-    if (stillFree && isSupabaseConfigured()) {
+    if (!isSupabaseConfigured()) {
       setVipError(
-        "VIP real exige pagamento (webhook no servidor). Self-promote no cliente foi desativado por segurança."
+        "Configure o Supabase para assinar com PIX ou Bitcoin."
       );
       return;
     }
-    setDone(true);
-    setTimeout(() => router.push("/app"), 900);
+    setPayOpen(true);
   }
 
   return (
@@ -95,12 +89,10 @@ export default function PricingPage() {
             <div className="mt-10">
               {!hydrated ? (
                 <div className="h-12 animate-pulse rounded-xl bg-neutral-100" />
-              ) : isVip || done ? (
+              ) : isVip ? (
                 <div className="space-y-3 text-center">
                   <p className="text-sm font-semibold text-black">
-                    {done
-                      ? "VIP ativado. Indo para o forum..."
-                      : "Você já é VIP."}
+                    Você já é VIP.
                   </p>
                   <Link href="/app">
                     <Button size="lg" className="w-full sm:w-auto">
@@ -110,9 +102,7 @@ export default function PricingPage() {
                 </div>
               ) : (
                 <Button size="lg" className="w-full" onClick={handleSubscribe}>
-                  {user
-                    ? "Ativar Plano VIP (simulado)"
-                    : "Criar conta e assinar"}
+                  {user ? "Assinar agora" : "Criar conta e assinar"}
                 </Button>
               )}
             </div>
@@ -123,12 +113,24 @@ export default function PricingPage() {
               </p>
             )}
             <p className="mt-4 text-center text-xs text-neutral-500">
-              Pagamento real (Stripe / Hotmart / etc.) ativa VIP no servidor.
-              Self-promote no browser foi desativado (segurança).
+              Pague com PIX ou Bitcoin com 15% de desconto.
             </p>
           </div>
         </div>
       </main>
+
+      <PlatformPaymentModal
+        open={payOpen}
+        onClose={() => setPayOpen(false)}
+        kind="vip"
+        productKey="vip_monthly"
+        title={VIP_PLAN.name}
+        listPriceBrl={VIP_PLAN.price}
+        onPaid={() => {
+          setPayOpen(false);
+          router.push("/app");
+        }}
+      />
     </div>
   );
 }

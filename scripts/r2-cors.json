@@ -3,6 +3,8 @@
     {
       "allowed": {
         "origins": [
+          "https://nullysh.com",
+          "https://www.nullysh.com",
           "https://nullysh-forum.ngdigitalsuporte.workers.dev",
           "http://localhost:3000",
           "http://127.0.0.1:3000"

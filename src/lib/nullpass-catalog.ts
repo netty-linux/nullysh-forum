@@ -14,7 +14,7 @@ export const NULLPASS_COVER_RECOMMENDED = {
   height: 900,
   aspect: "2:3",
   label: "600 × 900 px (proporção 2:3)",
-  hint: "Poster vertical. JPG/PNG/WebP · ideal ~600×900. Featured usa o mesmo arquivo com crop visual.",
+  hint: "Poster vertical. JPG/PNG/WebP · ideal ~600×900. Upload grava no R2; a vitrine usa /api/nullpass/cover/…",
 } as const;
 
 export type NullpassProductKind = "single" | "combo";
@@ -57,6 +57,11 @@ export type NullpassProduct = {
   /** false = oculto na vitrine (só admin vê no painel) */
   active?: boolean;
   sortOrder?: number;
+  /**
+   * Fixado no carrossel "Em destaque" da vitrine.
+   * Independente de badge (novo / custo-membro / limitado).
+   */
+  isPinned?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -118,6 +123,7 @@ export const NULLPASS_SEED: NullpassProduct[] = [
       "Abra o bate-papo com o staff (DM) e informe o ID do benefício. A liberação é feita de forma gerenciada — nunca compartilhe senhas em canais públicos.",
     active: true,
     sortOrder: 10,
+    isPinned: true,
   },
   {
     id: "capcut-pro",
@@ -140,6 +146,7 @@ export const NULLPASS_SEED: NullpassProduct[] = [
       "Solicite no DM do staff com o nome do benefício. Prazo típico em dias úteis, conforme fila.",
     active: true,
     sortOrder: 20,
+    isPinned: true,
   },
   {
     id: "notion-plus",
@@ -207,6 +214,7 @@ export const NULLPASS_SEED: NullpassProduct[] = [
       "Solicite no DM staff com «ChatGPT Plus». Mantenha o uso dentro das regras da plataforma.",
     active: true,
     sortOrder: 50,
+    isPinned: true,
   },
   {
     id: "midjourney",
@@ -229,6 +237,7 @@ export const NULLPASS_SEED: NullpassProduct[] = [
       "DM ao staff com o benefício e o caso de uso. Entrega conforme fila.",
     active: true,
     sortOrder: 60,
+    isPinned: true,
   },
   {
     id: "semrush-lite",
@@ -368,23 +377,43 @@ export function nullpassCategories(products: NullpassProduct[]) {
   return [...ordered, ...extras];
 }
 
+/**
+ * Ordem canônica NullPass:
+ * 1) isPinned (true primeiro)
+ * 2) sortOrder ASC (menor primeiro)
+ * 3) título A–Z (pt-BR)
+ */
+export function compareNullpassProducts(
+  a: NullpassProduct,
+  b: NullpassProduct
+): number {
+  return (
+    Number(!!b.isPinned) - Number(!!a.isPinned) ||
+    (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
+    a.title.localeCompare(b.title, "pt-BR")
+  );
+}
+
 export function nullpassByCategory(
   category: string,
   products: NullpassProduct[]
 ) {
   return products
     .filter((p) => p.active !== false && p.category === category)
-    .sort(
-      (a, b) =>
-        (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
-        a.title.localeCompare(b.title, "pt-BR")
-    );
+    .sort(compareNullpassProducts);
 }
 
 export function sortNullpassProducts(products: NullpassProduct[]) {
-  return [...products].sort(
-    (a, b) =>
-      (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
-      a.title.localeCompare(b.title, "pt-BR")
-  );
+  return [...products].sort(compareNullpassProducts);
+}
+
+/** Itens fixados para a row "Em destaque" (máx. 6). */
+export function nullpassFeatured(
+  products: NullpassProduct[],
+  limit = 6
+): NullpassProduct[] {
+  return products
+    .filter((p) => p.active !== false && !!p.isPinned)
+    .sort(compareNullpassProducts)
+    .slice(0, limit);
 }

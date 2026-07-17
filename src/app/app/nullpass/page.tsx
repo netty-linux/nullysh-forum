@@ -4,18 +4,24 @@
  * NullPass — Vault VIP (UX Netflix em cards).
  * Visual alinhado ao resto do fórum: fundo claro, bordas arredondadas, surfaces brancas.
  * Free vê vitrine borrada + gate; VIP vê catálogo e solicita benefício.
+ *
+ * Fase A: thumbnails resilientes, isPinned, skeleton de hidratação.
  */
 
 import { EmptyState } from "@/components/empty-state";
+import { PlatformPaymentModal } from "@/components/platform-payment-modal";
 import { Button } from "@/components/ui/button";
 import { VipBadge, VipGate } from "@/components/vip-gate";
 import { useAuth } from "@/hooks/use-auth";
 import {
   NULLPASS_BADGE_LABEL,
+  compareNullpassProducts,
   formatNullpassCompareAt,
   formatNullpassPrice,
   nullpassByCategory,
   nullpassCategories,
+  nullpassFeatured,
+  effectiveNullpassPrice,
   type NullpassProduct,
 } from "@/lib/nullpass-catalog";
 import { useNullpassStore } from "@/lib/nullpass-store";
@@ -63,6 +69,65 @@ function BadgePill({
   );
 }
 
+/** Capa com fallback nativo (gradiente + monograma) se URL falhar / CORS. */
+function PosterMedia({
+  product,
+  featured,
+  showCover,
+  onImgError,
+  className,
+}: {
+  product: NullpassProduct;
+  featured?: boolean;
+  showCover: boolean;
+  onImgError: () => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("absolute inset-0 overflow-hidden", className)}>
+      {showCover ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={product.coverUrl!}
+          alt=""
+          draggable={false}
+          loading="lazy"
+          decoding="async"
+          onError={onImgError}
+          className="absolute inset-0 h-full w-full object-cover object-center"
+        />
+      ) : (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ background: product.posterGradient }}
+          aria-hidden
+        >
+          <span
+            className={cn(
+              "font-display font-semibold text-white/90",
+              featured ? "text-3xl" : "text-xl"
+            )}
+          >
+            {product.monogram}
+          </span>
+        </div>
+      )}
+      <div
+        className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/5"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.14]"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 30% 20%, white 0%, transparent 45%)",
+        }}
+        aria-hidden
+      />
+    </div>
+  );
+}
+
 function PosterCard({
   product,
   locked,
@@ -75,6 +140,13 @@ function PosterCard({
   featured?: boolean;
 }) {
   const reduce = useReducedMotion();
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [product.coverUrl, product.id]);
+
+  const showCover = Boolean(product.coverUrl) && !imgFailed;
 
   return (
     <motion.button
@@ -93,34 +165,19 @@ function PosterCard({
       )}
       aria-label={`${product.title}${locked ? " — exclusivo VIP" : ""}`}
     >
-      {product.coverUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={product.coverUrl}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-        />
-      ) : (
-        <div
-          className="absolute inset-0 transition duration-300 group-hover:scale-[1.03]"
-          style={{ background: product.posterGradient }}
-          aria-hidden
-        />
-      )}
-      <div
-        className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/5"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.14]"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 30% 20%, white 0%, transparent 45%)",
-        }}
-        aria-hidden
+      <PosterMedia
+        product={product}
+        featured={featured}
+        showCover={showCover}
+        onImgError={() => setImgFailed(true)}
       />
 
       <div className="absolute left-2.5 top-2.5 z-10 flex flex-wrap gap-1">
+        {product.isPinned && (
+          <span className="inline-flex items-center rounded-md bg-[#1f1f1f] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+            Fixado
+          </span>
+        )}
         {product.badge && <BadgePill badge={product.badge} />}
         {product.kind === "combo" && (
           <span className="inline-flex items-center rounded-md bg-violet-500 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
@@ -141,15 +198,18 @@ function PosterCard({
       )}
 
       <div className="absolute inset-x-0 bottom-0 z-10 p-3">
-        <span
-          className={cn(
-            "mb-2 flex items-center justify-center rounded-xl bg-white/15 font-display text-white backdrop-blur-sm ring-1 ring-white/20",
-            featured ? "h-12 w-12 text-lg" : "h-9 w-9 text-[13px]"
-          )}
-          aria-hidden
-        >
-          {product.monogram}
-        </span>
+        {/* Monograma no rodapé só com capa real; fallback já centraliza o monograma */}
+        {showCover && (
+          <span
+            className={cn(
+              "mb-2 flex items-center justify-center rounded-xl bg-white/15 font-display text-white backdrop-blur-sm ring-1 ring-white/20",
+              featured ? "h-12 w-12 text-lg" : "h-9 w-9 text-[13px]"
+            )}
+            aria-hidden
+          >
+            {product.monogram}
+          </span>
+        )}
         <p
           className={cn(
             "font-semibold tracking-tight text-white",
@@ -217,15 +277,16 @@ function NetflixRow({
       <h2 className="px-0.5 text-[15px] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100 sm:text-[16px]">
         {title}
       </h2>
+      {/* overflow-y-hidden + py generoso: scale do card não “vaza” cortando cantos */}
       <div
         className={cn(
-          "flex gap-3 overflow-x-auto pb-2 pt-1 thin-scroll",
+          "flex gap-3 overflow-x-auto overflow-y-hidden py-3 thin-scroll",
           "snap-x snap-mandatory",
           "-mx-1 px-1"
         )}
       >
         {products.map((p) => (
-          <div key={p.id} className="snap-start">
+          <div key={p.id} className="snap-start shrink-0">
             <PosterCard
               product={p}
               locked={locked}
@@ -236,6 +297,45 @@ function NetflixRow({
         ))}
       </div>
     </section>
+  );
+}
+
+function PosterSkeleton({ featured }: { featured?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "shrink-0 animate-pulse rounded-2xl border border-neutral-200/80 bg-neutral-100 dark:border-zinc-800 dark:bg-zinc-900",
+        featured
+          ? "aspect-[16/10] w-[min(100%,320px)] sm:w-[340px]"
+          : "aspect-[2/3] w-[132px] sm:w-[148px] md:w-[160px]"
+      )}
+      aria-hidden
+    />
+  );
+}
+
+function NullpassCatalogSkeleton() {
+  return (
+    <div className="space-y-8" aria-busy="true" aria-label="Carregando catálogo">
+      <section className="space-y-3">
+        <div className="h-4 w-40 animate-pulse rounded bg-neutral-200 dark:bg-zinc-800" />
+        <div className="flex gap-3 overflow-hidden py-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <PosterSkeleton key={`f-${i}`} featured />
+          ))}
+        </div>
+      </section>
+      {Array.from({ length: 2 }).map((_, row) => (
+        <section key={row} className="space-y-3">
+          <div className="h-4 w-32 animate-pulse rounded bg-neutral-200 dark:bg-zinc-800" />
+          <div className="flex gap-3 overflow-hidden py-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <PosterSkeleton key={`${row}-${i}`} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -255,6 +355,7 @@ function ProductModal({
   catalog: NullpassProduct[];
 }) {
   const reduce = useReducedMotion();
+  const [imgFailed, setImgFailed] = useState(false);
   const byId = (id: string) => catalog.find((p) => p.id === id);
   const bundleItems = (product.bundleIds || [])
     .map(byId)
@@ -263,6 +364,11 @@ function ProductModal({
     .map(byId)
     .filter(Boolean) as NullpassProduct[];
   const compareAt = formatNullpassCompareAt(product);
+  const showCover = Boolean(product.coverUrl) && !imgFailed;
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [product.coverUrl, product.id]);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -304,20 +410,29 @@ function ProductModal({
         )}
       >
         <div
-          className="relative h-40 shrink-0 sm:h-48"
+          className="relative h-40 shrink-0 overflow-hidden sm:h-48"
           style={{
-            background: product.coverUrl
-              ? undefined
-              : product.posterGradient,
+            background: showCover ? undefined : product.posterGradient,
           }}
         >
-          {product.coverUrl && (
+          {showCover ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={product.coverUrl}
+              src={product.coverUrl!}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover"
+              draggable={false}
+              onError={() => setImgFailed(true)}
+              className="absolute inset-0 h-full w-full object-cover object-center"
             />
+          ) : (
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              aria-hidden
+            >
+              <span className="font-display text-4xl font-semibold text-white/90">
+                {product.monogram}
+              </span>
+            </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-black/10 dark:from-[#141414]" />
           <button
@@ -391,7 +506,7 @@ function ProductModal({
                     key={b.id}
                     className="flex items-center justify-between gap-2 text-[13px] text-violet-950/80 dark:text-violet-100/80"
                   >
-                    <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="flex min-w-0 items-center gap-1.5">
                       <Package size={12} className="shrink-0" />
                       <span className="truncate">{b.title}</span>
                     </span>
@@ -488,7 +603,7 @@ function ProductModal({
               className="sm:min-w-[10rem]"
             >
               <Key size={15} weight="bold" />
-              Solicitar benefício
+              Comprar / solicitar
             </Button>
           )}
         </div>
@@ -500,32 +615,29 @@ function ProductModal({
 
 function NullpassPageInner() {
   const { isVip, user } = useAuth();
-  const vip =
-    !!isVip || user?.role === "admin" || user?.role === "vip";
+  const vip = !!isVip || user?.role === "admin" || user?.role === "vip";
   const locked = !vip;
   const searchParams = useSearchParams();
   const focusId = searchParams.get("id");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [toast, setToast] = useState("");
+  const [payOpen, setPayOpen] = useState(false);
 
-  const ensureSeed = useNullpassStore((s) => s.ensureSeed);
+  const loadPublic = useNullpassStore((s) => s.loadPublic);
   const getById = useNullpassStore((s) => s.getById);
   const allProducts = useNullpassStore((s) => s.products);
+  const hasHydrated = useNullpassStore((s) => s.hasHydrated);
 
   useEffect(() => {
-    ensureSeed();
-  }, [ensureSeed]);
+    void loadPublic();
+  }, [loadPublic]);
 
   const products = useMemo(
     () =>
       allProducts
         .filter((p) => p.active !== false)
         .slice()
-        .sort(
-          (a, b) =>
-            (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
-            a.title.localeCompare(b.title, "pt-BR")
-        ),
+        .sort(compareNullpassProducts),
     [allProducts]
   );
 
@@ -534,19 +646,16 @@ function NullpassPageInner() {
     [products]
   );
   const featured = useMemo(
-    () =>
-      products
-        .filter((p) => p.badge === "novo" || p.badge === "custo-membro")
-        .slice(0, 6),
+    () => nullpassFeatured(products, 6),
     [products]
   );
 
-  const active = activeId ? getById(activeId) ?? null : null;
+  const active = activeId ? (getById(activeId) ?? null) : null;
 
   useEffect(() => {
-    if (!focusId) return;
+    if (!focusId || !hasHydrated) return;
     if (getById(focusId)) setActiveId(focusId);
-  }, [focusId, getById]);
+  }, [focusId, getById, hasHydrated]);
 
   const openProduct = useCallback((id: string) => {
     setActiveId(id);
@@ -554,6 +663,11 @@ function NullpassPageInner() {
 
   async function handleRequest() {
     if (!active || locked) return;
+    const price = effectiveNullpassPrice(active);
+    if (price != null && price > 0) {
+      setPayOpen(true);
+      return;
+    }
     const text = `NullPass · solicito o benefício «${active.title}» (id: ${active.id})`;
     try {
       await navigator.clipboard.writeText(text);
@@ -566,6 +680,10 @@ function NullpassPageInner() {
     }, 600);
     setActiveId(null);
   }
+
+  const payPrice = active ? effectiveNullpassPrice(active) : null;
+  /** productKey canônico → Pay resolve preço no D1 do Forum (nullpass_{id}) */
+  const payProductKey = active ? `nullpass_${active.id}` : "nullpass_item";
 
   const catalogPreview = (
     <div className="space-y-8">
@@ -592,10 +710,13 @@ function NullpassPageInner() {
 
   return (
     <div className="app-page mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-      {/* Hero — mesmo padrão de Materiais / Vídeos */}
       <header className="mb-6">
         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500 shadow-[0_1px_2px_rgb(0_0_0/0.04)] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
-          <Vault size={14} weight="fill" className="text-[#1f1f1f] dark:text-zinc-200" />
+          <Vault
+            size={14}
+            weight="fill"
+            className="text-[#1f1f1f] dark:text-zinc-200"
+          />
           NullPass · Vault
         </div>
         <h1 className="text-3xl font-semibold tracking-tight text-black dark:text-zinc-50">
@@ -615,7 +736,9 @@ function NullpassPageInner() {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <VipBadge />
           <span className="text-[12px] text-neutral-400">
-            {products.length} benefícios no catálogo
+            {hasHydrated
+              ? `${products.length} benefícios no catálogo`
+              : "Carregando catálogo…"}
           </span>
           {user?.role === "admin" && (
             <Link
@@ -637,9 +760,10 @@ function NullpassPageInner() {
         </div>
       )}
 
-      {/* Painel branco com as fileiras Netflix */}
       <div className="rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-[0_1px_2px_rgb(0_0_0/0.04)] dark:border-zinc-800 dark:bg-[#141414] sm:p-6">
-        {products.length === 0 ? (
+        {!hasHydrated ? (
+          <NullpassCatalogSkeleton />
+        ) : products.length === 0 ? (
           <EmptyState
             icon={<Vault size={28} weight="duotone" />}
             title="Vault vazio"
@@ -688,6 +812,22 @@ function NullpassPageInner() {
           />
         )}
       </AnimatePresence>
+
+      {active && payPrice != null && payPrice > 0 && (
+        <PlatformPaymentModal
+          open={payOpen}
+          onClose={() => setPayOpen(false)}
+          kind="nullpass"
+          productKey={payProductKey}
+          title={active.title}
+          listPriceBrl={payPrice}
+          onPaid={() => {
+            setPayOpen(false);
+            setToast("Pagamento aprovado!");
+            setActiveId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -696,8 +836,11 @@ export default function NullpassPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[40vh] items-center justify-center text-sm text-neutral-400">
-          Abrindo NullPass…
+        <div className="app-page mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+          <div className="mb-6 h-8 w-64 animate-pulse rounded bg-neutral-200 dark:bg-zinc-800" />
+          <div className="rounded-2xl border border-neutral-200/90 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-[#141414]">
+            <NullpassCatalogSkeleton />
+          </div>
         </div>
       }
     >

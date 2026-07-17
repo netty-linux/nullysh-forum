@@ -1,4 +1,13 @@
-/** Configuração pública do Supabase (Nullysh Forum). */
+/**
+ * Configuração pública do Supabase (Nullysh Forum).
+ *
+ * Workers / OpenNext: usar SOMENTE a API REST via @supabase/supabase-js
+ * (HTTPS em *.supabase.co). NUNCA connection string Postgres porta 5432
+ * no Worker (esgota conexões e não é suportado de forma estável no edge).
+ *
+ * Se no futuro houver ORM/SQL direto: usar Supavisor pooler porta **6543**
+ * (transaction mode), nunca 5432 direto.
+ */
 
 export const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||

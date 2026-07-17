@@ -1,227 +1,123 @@
 "use client";
 
 /**
- * Catálogo NullPass editável pelo admin (persist local).
- * Seed = NULLPASS_SEED na primeira hidratação se a lista estiver vazia.
+ * Catálogo NullPass — cache de UI + fallback local.
+ *
+ * Produção: fonte da verdade = D1 via /api/nullpass*.
+ * Dev sem D1 (503): seed/localStorage (comportamento Fase A).
  */
 
 import {
-  NULLPASS_GRADIENTS,
   NULLPASS_SEED,
-  monogramFromTitle,
-  type NullpassBadge,
+  compareNullpassProducts,
   type NullpassProduct,
-  type NullpassProductKind,
 } from "./nullpass-catalog";
+import {
+  apiCreateNullpass,
+  apiDeleteNullpass,
+  apiResetNullpassSeed,
+  apiUpdateNullpass,
+  fetchNullpassAdmin,
+  fetchNullpassPublic,
+} from "./nullpass/client";
+import {
+  inputToProduct,
+  normalizeProduct,
+  validateNullpassInput,
+  type NullpassUpsertInput,
+} from "./nullpass/validate";
 import { uid } from "./utils";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-const STORAGE_VERSION = 2;
+export type { NullpassUpsertInput };
 
-export type NullpassUpsertInput = {
-  title: string;
-  tagline: string;
-  category: string;
-  badge?: NullpassBadge;
-  kind?: NullpassProductKind;
-  bundleIds?: string[];
-  orderBumpIds?: string[];
-  isOrderBump?: boolean;
-  posterGradient: string;
-  coverUrl?: string | null;
-  monogram?: string;
-  description: string;
-  price?: number | null;
-  promoPrice?: number | null;
-  promoActive?: boolean;
-  priceLabel: string;
-  priceHint?: string;
-  features: string[];
-  vipFulfillmentNote: string;
-  active?: boolean;
-  sortOrder?: number;
-};
+/** v4: source D1; products local só como fallback offline/dev */
+const STORAGE_VERSION = 4;
 
-function normalizeBadge(raw: unknown): NullpassBadge {
-  if (raw === "novo" || raw === "custo-membro" || raw === "limitado") {
-    return raw;
-  }
-  return null;
-}
+export type NullpassSource = "d1" | "local" | "unknown";
 
-function normalizeKind(raw: unknown): NullpassProductKind {
-  return raw === "combo" ? "combo" : "single";
-}
-
-function normalizeIdList(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map(String).filter(Boolean);
-}
-
-function normalizeMoney(raw: unknown): number | null {
-  if (raw === null || raw === undefined || raw === "") return null;
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return Math.max(0, raw);
-  }
-  return null;
-}
-
-function normalizeProduct(
-  raw: Partial<NullpassProduct> & { id: string }
-): NullpassProduct | null {
-  if (!raw.id) return null;
-  const title = (raw.title || "").trim();
-  if (!title) return null;
-
-  return {
-    id: raw.id,
-    title,
-    tagline: (raw.tagline || "").trim(),
-    category: (raw.category || "").trim() || "Outros",
-    badge: normalizeBadge(raw.badge),
-    kind: normalizeKind(raw.kind),
-    bundleIds: normalizeIdList(raw.bundleIds),
-    orderBumpIds: normalizeIdList(raw.orderBumpIds),
-    isOrderBump: !!raw.isOrderBump,
-    posterGradient:
-      (raw.posterGradient || "").trim() || NULLPASS_GRADIENTS[0],
-    coverUrl: raw.coverUrl?.trim() || null,
-    monogram: (raw.monogram || "").trim() || monogramFromTitle(title),
-    description: (raw.description || "").trim(),
-    price: normalizeMoney(raw.price),
-    promoPrice: normalizeMoney(raw.promoPrice),
-    promoActive: !!raw.promoActive,
-    priceLabel: (raw.priceLabel || "").trim() || "Custo membro",
-    priceHint: raw.priceHint?.trim() || undefined,
-    features: Array.isArray(raw.features)
-      ? raw.features.map((f) => String(f).trim()).filter(Boolean)
-      : [],
-    vipFulfillmentNote: (raw.vipFulfillmentNote || "").trim(),
-    active: raw.active !== false,
-    sortOrder:
-      typeof raw.sortOrder === "number" && Number.isFinite(raw.sortOrder)
-        ? raw.sortOrder
-        : 100,
-    createdAt: raw.createdAt || new Date().toISOString(),
-    updatedAt: raw.updatedAt || raw.createdAt || new Date().toISOString(),
-  };
+function buildSeedProducts(): NullpassProduct[] {
+  const now = new Date().toISOString();
+  return NULLPASS_SEED.map((p) =>
+    normalizeProduct({
+      ...p,
+      kind: "single",
+      bundleIds: [],
+      orderBumpIds: [],
+      isOrderBump: false,
+      promoPrice: null,
+      promoActive: false,
+      createdAt: now,
+      updatedAt: now,
+    })
+  ).filter(Boolean) as NullpassProduct[];
 }
 
 interface NullpassState {
   products: NullpassProduct[];
   seeded: boolean;
+  hasHydrated: boolean;
+  source: NullpassSource;
+  /** última mensagem de erro de rede/API (UI admin) */
+  lastError: string | null;
+  setHasHydrated: (v: boolean) => void;
   ensureSeed: () => void;
+  /** Carrega vitrine pública (D1 → fallback local) */
+  loadPublic: () => Promise<void>;
+  /** Carrega lista admin completa */
+  loadAdmin: () => Promise<void>;
   listPublic: () => NullpassProduct[];
   listAll: () => NullpassProduct[];
   getById: (id: string) => NullpassProduct | undefined;
   createProduct: (
     input: NullpassUpsertInput
-  ) => { ok: true; product: NullpassProduct } | { ok: false; error: string };
+  ) => Promise<
+    { ok: true; product: NullpassProduct } | { ok: false; error: string }
+  >;
   updateProduct: (
     id: string,
     input: NullpassUpsertInput
-  ) => { ok: true; product: NullpassProduct } | { ok: false; error: string };
-  deleteProduct: (id: string) => { ok: true } | { ok: false; error: string };
-  resetToSeed: () => void;
+  ) => Promise<
+    { ok: true; product: NullpassProduct } | { ok: false; error: string }
+  >;
+  deleteProduct: (
+    id: string
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  resetToSeed: () => Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
-function validateInput(
-  input: NullpassUpsertInput,
-  selfId?: string
-): { ok: true } | { ok: false; error: string } {
-  const title = input.title.trim();
-  if (title.length < 2) {
-    return { ok: false, error: "Título deve ter pelo menos 2 caracteres." };
-  }
-  if (title.length > 80) {
-    return { ok: false, error: "Título muito longo (máx. 80)." };
-  }
-  if (input.description.trim().length < 8) {
-    return { ok: false, error: "Descrição deve ter pelo menos 8 caracteres." };
-  }
-  if (!input.category.trim()) {
-    return { ok: false, error: "Informe a categoria." };
-  }
-  if (
-    input.price != null &&
-    (!Number.isFinite(input.price) || input.price < 0)
-  ) {
-    return { ok: false, error: "Preço inválido." };
-  }
-  if (
-    input.promoPrice != null &&
-    (!Number.isFinite(input.promoPrice) || input.promoPrice < 0)
-  ) {
-    return { ok: false, error: "Preço promocional inválido." };
-  }
-  if (
-    input.promoActive &&
-    input.promoPrice != null &&
-    input.price != null &&
-    input.promoPrice > input.price
-  ) {
-    return {
-      ok: false,
-      error: "Preço promocional deve ser menor ou igual ao preço cheio.",
-    };
-  }
-  if (input.kind === "combo") {
-    const ids = (input.bundleIds || []).filter((id) => id !== selfId);
-    if (ids.length < 2) {
-      return {
-        ok: false,
-        error: "Combo precisa de pelo menos 2 produtos inclusos.",
-      };
-    }
-  }
-  if (input.coverUrl) {
-    const u = input.coverUrl.trim();
-    if (!u.startsWith("data:image/") && !/^https?:\/\//i.test(u)) {
-      return {
-        ok: false,
-        error: "Capa deve ser URL https ou imagem enviada.",
-      };
-    }
-    if (u.startsWith("data:") && u.length > 1_600_000) {
-      return { ok: false, error: "Imagem da capa muito grande. Comprima." };
-    }
-  }
-  return { ok: true };
+function localCreate(
+  products: NullpassProduct[],
+  input: NullpassUpsertInput
+):
+  | { ok: true; product: NullpassProduct; products: NullpassProduct[] }
+  | { ok: false; error: string } {
+  const v = validateNullpassInput(input);
+  if (!v.ok) return v;
+  const product = inputToProduct(uid("np"), input);
+  if (!product) return { ok: false, error: "Não foi possível criar o produto." };
+  return { ok: true, product, products: [...products, product] };
 }
 
-function toProduct(
+function localUpdate(
+  products: NullpassProduct[],
   id: string,
-  input: NullpassUpsertInput,
-  prev?: NullpassProduct
-): NullpassProduct | null {
-  const now = new Date().toISOString();
-  return normalizeProduct({
-    id,
-    title: input.title,
-    tagline: input.tagline,
-    category: input.category,
-    badge: input.badge ?? null,
-    kind: input.kind || "single",
-    bundleIds: (input.bundleIds || []).filter((x) => x !== id),
-    orderBumpIds: (input.orderBumpIds || []).filter((x) => x !== id),
-    isOrderBump: !!input.isOrderBump,
-    posterGradient: input.posterGradient,
-    coverUrl: input.coverUrl ?? null,
-    monogram: input.monogram || monogramFromTitle(input.title),
-    description: input.description,
-    price: input.price ?? null,
-    promoPrice: input.promoPrice ?? null,
-    promoActive: !!input.promoActive,
-    priceLabel: input.priceLabel,
-    priceHint: input.priceHint,
-    features: input.features,
-    vipFulfillmentNote: input.vipFulfillmentNote,
-    active: input.active !== false,
-    sortOrder: input.sortOrder ?? prev?.sortOrder ?? 100,
-    createdAt: prev?.createdAt || now,
-    updatedAt: now,
-  });
+  input: NullpassUpsertInput
+):
+  | { ok: true; product: NullpassProduct; products: NullpassProduct[] }
+  | { ok: false; error: string } {
+  const v = validateNullpassInput(input, id);
+  if (!v.ok) return v;
+  const prev = products.find((p) => p.id === id);
+  if (!prev) return { ok: false, error: "Produto não encontrado." };
+  const product = inputToProduct(id, input, prev);
+  if (!product) return { ok: false, error: "Dados inválidos." };
+  return {
+    ok: true,
+    product,
+    products: products.map((p) => (p.id === id ? product : p)),
+  };
 }
 
 export const useNullpassStore = create<NullpassState>()(
@@ -229,82 +125,162 @@ export const useNullpassStore = create<NullpassState>()(
     (set, get) => ({
       products: [],
       seeded: false,
+      hasHydrated: false,
+      source: "unknown",
+      lastError: null,
+
+      setHasHydrated: (v) => set({ hasHydrated: v }),
 
       ensureSeed: () => {
-        const { products, seeded } = get();
+        const { products, seeded, source } = get();
+        if (source === "d1") return;
         if (seeded && products.length > 0) return;
         if (products.length > 0) {
           set({ seeded: true });
           return;
         }
-        const seed = NULLPASS_SEED.map((p) =>
-          normalizeProduct({
-            ...p,
-            kind: "single",
-            bundleIds: [],
-            orderBumpIds: [],
-            isOrderBump: false,
-            promoPrice: null,
-            promoActive: false,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          })
-        ).filter(Boolean) as NullpassProduct[];
-        set({ products: seed, seeded: true });
+        set({
+          products: buildSeedProducts(),
+          seeded: true,
+          source: "local",
+        });
+      },
+
+      loadPublic: async () => {
+        const res = await fetchNullpassPublic();
+        if (res.ok && Array.isArray(res.products)) {
+          set({
+            products: res.products,
+            seeded: true,
+            source: "d1",
+            hasHydrated: true,
+            lastError: null,
+          });
+          return;
+        }
+        // Fallback local (dev / D1 down)
+        const { products } = get();
+        if (products.length === 0) {
+          set({
+            products: buildSeedProducts(),
+            seeded: true,
+            source: "local",
+            hasHydrated: true,
+            lastError: res.error || res.code || "API indisponível",
+          });
+        } else {
+          set({
+            source: "local",
+            hasHydrated: true,
+            lastError: res.error || res.code || "API indisponível",
+          });
+        }
+      },
+
+      loadAdmin: async () => {
+        const res = await fetchNullpassAdmin();
+        if (res.ok && Array.isArray(res.products)) {
+          set({
+            products: res.products,
+            seeded: true,
+            source: "d1",
+            hasHydrated: true,
+            lastError: null,
+          });
+          return;
+        }
+        // 401/403 → não sobrescreve com seed falso se já tem d1 em memória
+        if (res.code === "d1_unavailable" || res.error?.includes("D1")) {
+          get().ensureSeed();
+          set({
+            source: "local",
+            hasHydrated: true,
+            lastError:
+              res.error ||
+              "D1 indisponível — editando só neste navegador (dev).",
+          });
+          return;
+        }
+        set({
+          hasHydrated: true,
+          lastError: res.error || "Falha ao carregar catálogo admin",
+        });
+        // se vazio e erro de rede, seed local
+        if (get().products.length === 0) {
+          get().ensureSeed();
+          set({ source: "local" });
+        }
       },
 
       listPublic: () =>
         get()
           .products.filter((p) => p.active !== false)
           .slice()
-          .sort(
-            (a, b) =>
-              (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
-              a.title.localeCompare(b.title, "pt-BR")
-          ),
+          .sort(compareNullpassProducts),
 
-      listAll: () =>
-        get()
-          .products.slice()
-          .sort(
-            (a, b) =>
-              (a.sortOrder ?? 100) - (b.sortOrder ?? 100) ||
-              a.title.localeCompare(b.title, "pt-BR")
-          ),
+      listAll: () => get().products.slice().sort(compareNullpassProducts),
 
       getById: (id) => get().products.find((p) => p.id === id),
 
-      createProduct: (input) => {
-        const v = validateInput(input);
-        if (!v.ok) return v;
-        const product = toProduct(uid("np"), input);
-        if (!product) {
-          return { ok: false, error: "Não foi possível criar o produto." };
+      createProduct: async (input) => {
+        if (get().source === "d1") {
+          const res = await apiCreateNullpass(input);
+          if (!res.ok || !res.product) {
+            return { ok: false, error: res.error || "Falha ao criar." };
+          }
+          set((s) => ({
+            products: [...s.products, res.product!],
+            lastError: null,
+          }));
+          return { ok: true, product: res.product };
         }
-        set((s) => ({ products: [...s.products, product], seeded: true }));
-        return { ok: true, product };
+        const local = localCreate(get().products, input);
+        if (!local.ok) return local;
+        set({ products: local.products, seeded: true, source: "local" });
+        return { ok: true, product: local.product };
       },
 
-      updateProduct: (id, input) => {
-        const v = validateInput(input, id);
-        if (!v.ok) return v;
-        const prev = get().products.find((p) => p.id === id);
-        if (!prev) return { ok: false, error: "Produto não encontrado." };
-        const product = toProduct(id, input, prev);
-        if (!product) {
-          return { ok: false, error: "Dados inválidos." };
+      updateProduct: async (id, input) => {
+        if (get().source === "d1") {
+          const res = await apiUpdateNullpass(id, input);
+          if (!res.ok || !res.product) {
+            return { ok: false, error: res.error || "Falha ao atualizar." };
+          }
+          set((s) => ({
+            products: s.products.map((p) =>
+              p.id === id ? res.product! : p
+            ),
+            lastError: null,
+          }));
+          return { ok: true, product: res.product };
         }
-        set((s) => ({
-          products: s.products.map((p) => (p.id === id ? product : p)),
-        }));
-        return { ok: true, product };
+        const local = localUpdate(get().products, id, input);
+        if (!local.ok) return local;
+        set({ products: local.products });
+        return { ok: true, product: local.product };
       },
 
-      deleteProduct: (id) => {
+      deleteProduct: async (id) => {
+        if (get().source === "d1") {
+          const res = await apiDeleteNullpass(id);
+          if (!res.ok) {
+            return { ok: false, error: res.error || "Falha ao remover." };
+          }
+          set((s) => ({
+            products: s.products
+              .filter((p) => p.id !== id)
+              .map((p) => ({
+                ...p,
+                bundleIds: (p.bundleIds || []).filter((x) => x !== id),
+                orderBumpIds: (p.orderBumpIds || []).filter((x) => x !== id),
+              })),
+            lastError: null,
+          }));
+          return { ok: true };
+        }
         if (!get().products.some((p) => p.id === id)) {
           return { ok: false, error: "Produto não encontrado." };
         }
-        // limpa referências em combos/bumps
         set((s) => ({
           products: s.products
             .filter((p) => p.id !== id)
@@ -317,21 +293,21 @@ export const useNullpassStore = create<NullpassState>()(
         return { ok: true };
       },
 
-      resetToSeed: () => {
-        const seed = NULLPASS_SEED.map((p) =>
-          normalizeProduct({
-            ...p,
-            kind: "single",
-            bundleIds: [],
-            orderBumpIds: [],
-            isOrderBump: false,
-            promoPrice: null,
-            promoActive: false,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          })
-        ).filter(Boolean) as NullpassProduct[];
-        set({ products: seed, seeded: true });
+      resetToSeed: async () => {
+        if (get().source === "d1") {
+          const res = await apiResetNullpassSeed();
+          if (!res.ok) {
+            return { ok: false, error: res.error || "Falha ao restaurar seed." };
+          }
+          await get().loadAdmin();
+          return { ok: true };
+        }
+        set({
+          products: buildSeedProducts(),
+          seeded: true,
+          source: "local",
+        });
+        return { ok: true };
       },
     }),
     {
@@ -346,19 +322,23 @@ export const useNullpassStore = create<NullpassState>()(
         const products = (p.products || [])
           .map((raw) =>
             raw?.id
-              ? normalizeProduct(raw as Partial<NullpassProduct> & { id: string })
+              ? normalizeProduct(
+                  raw as Partial<NullpassProduct> & { id: string }
+                )
               : null
           )
           .filter(Boolean) as NullpassProduct[];
         return { products, seeded: !!p.seeded };
       },
       partialize: (s) => ({
-        products: s.products,
+        // Cache local só útil no fallback; D1 é a verdade em prod
+        products: s.source === "d1" ? [] : s.products,
         seeded: s.seeded,
       }),
       onRehydrateStorage: () => (state) => {
-        if (state && (!state.products || state.products.length === 0)) {
-          state.ensureSeed();
+        // hasHydrated final vem de loadPublic/loadAdmin
+        if (state && state.products?.length === 0) {
+          // não seedar ainda — espera loadPublic
         }
       },
     }

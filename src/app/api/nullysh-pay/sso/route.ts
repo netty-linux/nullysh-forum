@@ -18,8 +18,7 @@ type Body = {
 
 /**
  * Emite code SSO one-time → Nullysh Pay.
- * Auth preferida: Bearer access_token do browser (como /api/videos).
- * Fallback: cookies da request; último recurso em dev: body local.
+ * C3: só JWT Supabase (Bearer) ou cookies de sessão — zero impersonation via body.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -63,71 +62,45 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 3) Fallback: cliente já autenticado no Zustand (mesma origem)
-      //    exige body.forumUserId — só se Bearer/cookie falharam (ex. sessão só localStorage)
-      //    e o ID é um UUID de perfil real no Supabase
-      if (!userId && body.forumUserId && body.email) {
-        const withAnon = getSupabaseFromRequest(req);
-        // Confirma que o profile existe (não inventa conta)
-        if (withAnon) {
-          const { data: profile } = await withAnon
-            .from("profiles")
-            .select("id, name, username, email")
-            .eq("id", body.forumUserId)
-            .maybeSingle();
-          if (profile && (profile as { id: string }).id === body.forumUserId) {
-            userId = body.forumUserId;
-            userEmail =
-              (profile as { email?: string }).email || body.email || "";
-            name = (profile as { name?: string }).name || body.name || "";
-            username =
-              (profile as { username?: string }).username ||
-              body.username ||
-              "";
-          }
-        }
-      }
+      // C3: sem fallback body.forumUserId — impede takeover de conta Pay
 
       if (!userId) {
         return NextResponse.json(
           {
             ok: false,
             error:
-              "Sessão do fórum não encontrada. Atualize a página ou faça login de novo.",
+              "Não autorizado. Faça login no Forum e tente novamente.",
           },
           { status: 401 }
         );
       }
 
       forumUserId = userId;
-      email = userEmail || body.email || "";
+      email = userEmail;
 
-      if (!name || !username) {
-        const sb =
-          (bearer && getSupabaseWithAccessToken(bearer)) ||
-          getSupabaseFromRequest(req);
-        if (sb) {
-          const { data: profile } = await sb
-            .from("profiles")
-            .select("name, username, email")
-            .eq("id", userId)
-            .maybeSingle();
-          if (profile) {
-            name = name || (profile as { name?: string }).name || "";
-            username =
-              username || (profile as { username?: string }).username || "";
-            email =
-              email ||
-              (profile as { email?: string }).email ||
-              body.email ||
-              "";
-          }
+      const sb =
+        (bearer && getSupabaseWithAccessToken(bearer)) ||
+        getSupabaseFromRequest(req);
+      if (sb) {
+        const { data: profile } = await sb
+          .from("profiles")
+          .select("name, username, email")
+          .eq("id", userId)
+          .maybeSingle();
+        if (profile) {
+          name = (profile as { name?: string }).name || "";
+          username = (profile as { username?: string }).username || "";
+          email =
+            email ||
+            (profile as { email?: string }).email ||
+            "";
         }
       }
 
-      name = name || body.name || email.split("@")[0] || "Membro";
-      username = username || body.username || forumUserId.slice(0, 8);
+      name = name || email.split("@")[0] || "Membro";
+      username = username || forumUserId.slice(0, 8);
     } else {
+      // Sem Supabase: só dev local explícito (nunca produção)
       if (process.env.NODE_ENV === "production") {
         return NextResponse.json(
           { ok: false, error: "Auth do fórum indisponível." },
@@ -138,7 +111,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             ok: false,
-            error: "Sessão local: envie forumUserId e email.",
+            error: "Sessão local: envie forumUserId e email (dev only).",
           },
           { status: 400 }
         );

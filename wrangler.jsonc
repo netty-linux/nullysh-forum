@@ -32,6 +32,23 @@
       "bucket_name": "nullysh-videos"
     }
   ],
+  "d1_databases": [
+    {
+      "binding": "NULLYSH_FORUM_DB",
+      "database_name": "nullysh-forum-db",
+      "database_id": "c0101283-d2e0-48dc-9729-96a4ae0d7283"
+    }
+  ],
+  "workers_dev": true,
+  "vars": {
+    "NEXT_PUBLIC_NULLYSH_PAY_URL": "https://pay.nullysh.com",
+    "NULLYSH_PAY_URL": "https://pay.nullysh.com"
+  },
+  // Rotas de zona (não custom_domain) — requer zona nullysh.com na mesma conta
+  "routes": [
+    { "pattern": "nullysh.com/*", "zone_name": "nullysh.com" },
+    { "pattern": "www.nullysh.com/*", "zone_name": "nullysh.com" }
+  ],
   "observability": {
     "enabled": true
   }

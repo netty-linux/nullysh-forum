@@ -25,7 +25,17 @@ export function Avatar({
   frame?: string | null;
   framed?: boolean;
 }) {
-  const letter = (name || "U").slice(0, 1).toUpperCase();
+  const letter = (() => {
+    const n = (name || "U").trim();
+    if (!n) return "U";
+    // Já veio como iniciais ("NB") — preserva até 2 chars
+    if (n.length <= 2 && !/\s/.test(n)) return n.toUpperCase();
+    const parts = n.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return n.slice(0, 1).toUpperCase();
+  })();
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 

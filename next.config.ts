@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_NULLYSH_PAY_URL:
       process.env.NEXT_PUBLIC_NULLYSH_PAY_URL ||
       process.env.NULLYSH_PAY_URL ||
-      "https://nullysh-pay.ngdigitalsuporte.workers.dev",
+      "https://pay.nullysh.com",
   },
 };
 
