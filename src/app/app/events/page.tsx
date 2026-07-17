@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TagList } from "@/components/tag-chips";
 import { useAuth } from "@/hooks/use-auth";
-import { useEventStore } from "@/lib/event-store";
+import { hydrateEventsFromServer, useEventStore } from "@/lib/event-store";
 import { useProgressStore } from "@/lib/progress-store";
 import {
   CalendarBlank,
@@ -43,6 +43,10 @@ export default function EventsPage() {
   const toggleRsvp = useProgressStore((s) => s.toggleRsvp);
   const [filter, setFilter] = useState<"all" | "mine" | "open">("all");
   const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    void hydrateEventsFromServer();
+  }, []);
 
   const list = useMemo(() => {
     let next = [...events].sort(

@@ -37,6 +37,25 @@ export type CreateMaterialInput = {
   createdByName: string;
 };
 
+export async function hydrateMaterialsFromServer(): Promise<void> {
+  try {
+    const res = await fetch("/api/content/materials", { cache: "no-store" });
+    const data = (await res.json()) as { ok?: boolean; items?: Material[] };
+    if (!res.ok || !data.ok || !Array.isArray(data.items)) return;
+    const remote = data.items
+      .map((m) => normalizeMaterial(m as Material))
+      .filter((m): m is Material => !!m);
+    if (!remote.length) return;
+    useMaterialStore.setState((s) => {
+      const byId = new Map(s.materials.map((m) => [m.id, m]));
+      for (const m of remote) byId.set(m.id, m);
+      return { materials: Array.from(byId.values()) };
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 function normalizeType(raw: unknown): MaterialType {
   return MATERIAL_TYPES.includes(raw as MaterialType)
     ? (raw as MaterialType)

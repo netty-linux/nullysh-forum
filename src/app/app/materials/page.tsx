@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { VipBadge } from "@/components/vip-gate";
 import { useAuth } from "@/hooks/use-auth";
 import { redactMaterialsForViewer } from "@/lib/access-control";
-import { useMaterialStore } from "@/lib/material-store";
+import {
+  hydrateMaterialsFromServer,
+  useMaterialStore,
+} from "@/lib/material-store";
 import { formatDate } from "@/lib/utils";
 import {
   Books,
@@ -46,6 +49,10 @@ export default function MaterialsPage() {
   const recordDownload = useMaterialStore((s) => s.recordDownload);
   const [category, setCategory] = useState("Todos");
   const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    void hydrateMaterialsFromServer();
+  }, []);
 
   // AppSec: free nunca recebe URL de material VIP no React tree
   const materials = useMemo(

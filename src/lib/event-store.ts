@@ -32,6 +32,25 @@ export type CreateEventInput = {
   createdByName: string;
 };
 
+export async function hydrateEventsFromServer(): Promise<void> {
+  try {
+    const res = await fetch("/api/content/events", { cache: "no-store" });
+    const data = (await res.json()) as { ok?: boolean; items?: ForumEvent[] };
+    if (!res.ok || !data.ok || !Array.isArray(data.items)) return;
+    const remote = data.items
+      .map((e) => normalizeEvent(e as ForumEvent))
+      .filter((e): e is ForumEvent => !!e);
+    if (!remote.length) return;
+    useEventStore.setState((s) => {
+      const byId = new Map(s.events.map((e) => [e.id, e]));
+      for (const e of remote) byId.set(e.id, e);
+      return { events: Array.from(byId.values()) };
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 function normalizeType(raw: unknown): ForumEventType {
   return EVENT_TYPES.includes(raw as ForumEventType)
     ? (raw as ForumEventType)

@@ -7,7 +7,7 @@ import { TagList } from "@/components/tag-chips";
 import { useAuth } from "@/hooks/use-auth";
 import { useProgressStore } from "@/lib/progress-store";
 import { stripHtml } from "@/lib/trail-html";
-import { useTrailStore } from "@/lib/trail-store";
+import { hydrateTrailsFromServer, useTrailStore } from "@/lib/trail-store";
 import {
   BookOpenText,
   CheckCircle,
@@ -16,13 +16,17 @@ import {
   PlayCircle,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function TrailsPage() {
   const { user, isVip } = useAuth();
   const trails = useTrailStore((s) => s.trails);
   const trailsProgress = useProgressStore((s) => s.trails);
   const [filter, setFilter] = useState<"all" | "mine">("all");
+
+  useEffect(() => {
+    void hydrateTrailsFromServer();
+  }, []);
 
   const list = useMemo(() => {
     if (filter === "mine" && user) {

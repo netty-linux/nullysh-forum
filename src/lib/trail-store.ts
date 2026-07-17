@@ -49,6 +49,29 @@ export type CreateTrailInput = {
   createdByName: string;
 };
 
+/** Merge D1 (Panel) → store local; server-side ganha em conflito de id. */
+export async function hydrateTrailsFromServer(): Promise<void> {
+  try {
+    const res = await fetch("/api/content/trails", { cache: "no-store" });
+    const data = (await res.json()) as {
+      ok?: boolean;
+      items?: LearningTrail[];
+    };
+    if (!res.ok || !data.ok || !Array.isArray(data.items)) return;
+    const remote = data.items
+      .map((t) => normalizeTrail(t as LearningTrail))
+      .filter((t): t is LearningTrail => !!t);
+    if (!remote.length) return;
+    useTrailStore.setState((s) => {
+      const byId = new Map(s.trails.map((t) => [t.id, t]));
+      for (const t of remote) byId.set(t.id, t);
+      return { trails: Array.from(byId.values()) };
+    });
+  } catch {
+    /* offline / D1 empty */
+  }
+}
+
 function normalizeLinks(raw: unknown): TrailLink[] {
   if (!Array.isArray(raw)) return [];
   return raw
