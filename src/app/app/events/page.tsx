@@ -153,9 +153,13 @@ export default function EventsPage() {
           }
           action={
             user?.role === "admin" ? (
-              <Link href="/app/admin">
-                <Button size="sm">Abrir Painel ADM</Button>
-              </Link>
+              <a
+                href="https://panel.nullysh.com/events"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button size="sm">Abrir Nullysh Panel</Button>
+              </a>
             ) : undefined
           }
         />

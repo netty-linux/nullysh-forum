@@ -47,6 +47,8 @@ type NavItem = {
   href: string;
   label: string;
   icon: NavIcon;
+  /** Link externo (ex.: Nullysh Panel) */
+  external?: boolean;
 };
 
 type NavSection = {
@@ -94,10 +96,16 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+const PANEL_URL =
+  (typeof process !== "undefined" &&
+    process.env.NEXT_PUBLIC_NULLYSH_PANEL_URL?.trim()) ||
+  "https://panel.nullysh.com";
+
 const ADMIN_ITEM: NavItem = {
-  href: "/app/admin",
-  label: "Painel ADM",
+  href: PANEL_URL,
+  label: "Nullysh Panel",
   icon: ShieldCheck,
+  external: true,
 };
 
 function isItemActive(pathname: string, href: string) {
@@ -290,26 +298,23 @@ function SidebarBody({ alwaysExpanded, onClose }: SidebarBodyProps) {
                 )}
               >
                 {section.items.map((item) => {
-                  const active = isItemActive(pathname, item.href);
+                  const isPanel = !!item.external;
+                  const active = isPanel
+                    ? false
+                    : isItemActive(pathname, item.href);
                   const Icon = item.icon;
                   const showBadge =
-                    item.href === "/app/admin" && pendingCount > 0 && !active;
-
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={onClose}
-                      title={item.label}
-                      className={cn(
-                        "nav-item relative flex items-center rounded-xl text-sm font-medium",
-                        softReveal,
-                        itemPadClass,
-                        active
-                          ? "bg-[#1f1f1f] text-white shadow-[0_2px_8px_-2px_rgb(0_0_0/0.25)] dark:bg-white/12 dark:text-white dark:shadow-none"
-                          : "text-neutral-600 hover:bg-neutral-100 hover:text-[#1f1f1f] dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-white"
-                      )}
-                    >
+                    isPanel && pendingCount > 0 && !active;
+                  const itemClass = cn(
+                    "nav-item relative flex items-center rounded-xl text-sm font-medium",
+                    softReveal,
+                    itemPadClass,
+                    active
+                      ? "bg-[#1f1f1f] text-white shadow-[0_2px_8px_-2px_rgb(0_0_0/0.25)] dark:bg-white/12 dark:text-white dark:shadow-none"
+                      : "text-neutral-600 hover:bg-neutral-100 hover:text-[#1f1f1f] dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-white"
+                  );
+                  const content = (
+                    <>
                       <Icon
                         size={22}
                         weight={active ? "fill" : "regular"}
@@ -324,22 +329,48 @@ function SidebarBody({ alwaysExpanded, onClose }: SidebarBodyProps) {
                       >
                         {item.label}
                       </span>
-                      {item.href === "/app/admin" && pendingCount > 0 && (
+                      {isPanel && pendingCount > 0 && (
                         <span
                           className={cn(
                             "inline-flex items-center justify-center rounded-full text-[10px] font-medium tabular-nums",
                             alwaysExpanded
                               ? "h-5 min-w-5 px-1.5"
                               : "absolute right-1 top-1 h-4 min-w-4 px-1 group-hover/rail:static group-hover/rail:h-5 group-hover/rail:min-w-5 group-hover/rail:px-1.5",
-                            active
-                              ? "bg-white text-[#1f1f1f] dark:bg-white dark:text-zinc-900"
-                              : "bg-red-500 text-white",
+                            "bg-red-500 text-white",
                             showBadge && "animate-pulse"
                           )}
                         >
                           {pendingCount}
                         </span>
                       )}
+                    </>
+                  );
+
+                  if (isPanel) {
+                    return (
+                      <a
+                        key={item.href}
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={onClose}
+                        title={item.label}
+                        className={itemClass}
+                      >
+                        {content}
+                      </a>
+                    );
+                  }
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={onClose}
+                      title={item.label}
+                      className={itemClass}
+                    >
+                      {content}
                     </Link>
                   );
                 })}

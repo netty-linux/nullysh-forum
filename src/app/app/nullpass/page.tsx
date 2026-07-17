@@ -742,10 +742,10 @@ function NullpassPageInner() {
           </span>
           {user?.role === "admin" && (
             <Link
-              href="/app/admin?tab=nullpass"
+              href="https://panel.nullysh.com/nullpass"
               className="text-[12px] font-semibold text-sky-600 hover:underline"
             >
-              Editar no Painel ADM
+              Editar no Nullysh Panel
             </Link>
           )}
         </div>
@@ -769,14 +769,18 @@ function NullpassPageInner() {
             title="Vault vazio"
             description={
               user?.role === "admin"
-                ? "Cadastre produtos no Painel ADM → aba NullPass."
+                ? "Cadastre produtos no Nullysh Panel → NullPass."
                 : "Em breve novos benefícios entram no NullPass."
             }
             action={
               user?.role === "admin" ? (
-                <Link href="/app/admin?tab=nullpass">
-                  <Button size="sm">Abrir Painel ADM</Button>
-                </Link>
+                <a
+                  href="https://panel.nullysh.com/nullpass"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button size="sm">Abrir Nullysh Panel</Button>
+                </a>
               ) : undefined
             }
           />

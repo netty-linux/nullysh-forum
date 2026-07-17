@@ -162,9 +162,13 @@ export default function MaterialsPage() {
           }
           action={
             user?.role === "admin" ? (
-              <Link href="/app/admin">
-                <Button size="sm">Abrir Painel ADM</Button>
-              </Link>
+              <a
+                href="https://panel.nullysh.com/materials"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button size="sm">Abrir Nullysh Panel</Button>
+              </a>
             ) : undefined
           }
         />
