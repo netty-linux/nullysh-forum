@@ -1,9 +1,11 @@
 /**
- * Anti-spam no cliente (MVP).
+ * Anti-spam no cliente (UX — feedback rápido).
  * Free: limite por janela de 1 minuto.
  * VIP / Admin: bypass total.
  *
- * Limites bem abaixo de padrões de bot (ex.: 20 posts/min, 50 comentários/min).
+ * NÃO confiar só nisto: server-side em `rate-limit-server.ts` + D1
+ * (FIX #2 — OWASP A04). Posts/comentários ainda vão direto ao Supabase
+ * no browser; o client limit reduz spam casual.
  */
 
 export type RateAction = "post" | "comment";
