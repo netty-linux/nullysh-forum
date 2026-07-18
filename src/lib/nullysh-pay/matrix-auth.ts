@@ -3,6 +3,7 @@
  * Fail-closed: assinatura e timestamp obrigatórios.
  */
 
+import { logSecurityEvent } from "@/lib/security-log";
 import {
   getMatrixHmacSecret,
   MATRIX_HMAC_MAX_SKEW_SEC,
@@ -75,6 +76,7 @@ export async function verifyMatrixRequest(
   const auth = req.headers.get("authorization") || "";
   const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
   if (!bearer || !timingSafeEqualStr(bearer, secret)) {
+    logSecurityEvent("hmac_verification_failed", { reason: "bearer" });
     return { ok: false, status: 401, error: "Unauthorized" };
   }
 
@@ -82,6 +84,7 @@ export async function verifyMatrixRequest(
   const sigHeader = (req.headers.get("x-nullysh-signature") || "").toLowerCase();
 
   if (!tsHeader || !sigHeader) {
+    logSecurityEvent("hmac_verification_failed", { reason: "missing_hmac_headers" });
     return {
       ok: false,
       status: 401,
@@ -94,11 +97,13 @@ export async function verifyMatrixRequest(
     !Number.isFinite(ts) ||
     Math.abs(Date.now() / 1000 - ts) > MATRIX_HMAC_MAX_SKEW_SEC
   ) {
+    logSecurityEvent("hmac_verification_failed", { reason: "timestamp" });
     return { ok: false, status: 401, error: "Timestamp inválido" };
   }
 
   const expected = await hmacSha256Hex(secret, `${tsHeader}.${rawBody}`);
   if (!timingSafeEqualStr(expected, sigHeader)) {
+    logSecurityEvent("hmac_verification_failed", { reason: "signature" });
     return { ok: false, status: 401, error: "Assinatura inválida" };
   }
 

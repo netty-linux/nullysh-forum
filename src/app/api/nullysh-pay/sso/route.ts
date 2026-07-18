@@ -1,5 +1,7 @@
 import { getNullyshPayUrl } from "@/lib/nullysh-pay/config";
 import { checkSsoRateLimit, issueSsoCode } from "@/lib/nullysh-pay/sso";
+import { checkServerRateLimit } from "@/lib/rate-limit-server";
+import { logSecurityEvent } from "@/lib/security-log";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   getSupabaseFromRequest,
@@ -124,7 +126,29 @@ export async function POST(req: NextRequest) {
 
     const rl = await checkSsoRateLimit(forumUserId);
     if (!rl.ok) {
+      logSecurityEvent("rate_limit_triggered", {
+        action: "sso",
+        forumUserId,
+        layer: "kv",
+      });
       return NextResponse.json({ ok: false, error: rl.error }, { status: 429 });
+    }
+
+    // FIX #2 — D1 rate limit server-side (defense in depth)
+    const rlServer = await checkServerRateLimit(forumUserId, "sso");
+    if (!rlServer.ok) {
+      logSecurityEvent("rate_limit_triggered", {
+        action: "sso",
+        forumUserId,
+        layer: "d1",
+      });
+      return NextResponse.json(
+        { ok: false, error: rlServer.error },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rlServer.retryAfterSec) },
+        }
+      );
     }
 
     const { code, exp } = await issueSsoCode({
@@ -136,6 +160,8 @@ export async function POST(req: NextRequest) {
 
     const base = getNullyshPayUrl();
     const redirectUrl = `${base}/auth/forum?code=${encodeURIComponent(code)}`;
+
+    logSecurityEvent("sso_code_issued", { forumUserId });
 
     return NextResponse.json(
       {

@@ -9,6 +9,7 @@ import {
   getNullyshPayUrl,
 } from "@/lib/nullysh-pay/config";
 import { matrixSignedHeaders } from "@/lib/nullysh-pay/matrix-auth";
+import { logSecurityEvent } from "@/lib/security-log";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSupabaseFromRequest } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
@@ -100,6 +101,11 @@ export async function POST(req: NextRequest) {
         { status: res.status >= 400 ? res.status : 502 }
       );
     }
+    logSecurityEvent("checkout_created", {
+      forumUserId: user.id,
+      productKey,
+      billingType,
+    });
     return NextResponse.json(data);
   } catch (e) {
     return NextResponse.json(

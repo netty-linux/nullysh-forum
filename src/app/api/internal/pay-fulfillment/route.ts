@@ -10,6 +10,7 @@ import {
   productIdFromNullpassKey,
 } from "@/lib/nullpass/entitlements";
 import { getProductById } from "@/lib/nullpass/repository";
+import { logSecurityEvent } from "@/lib/security-log";
 import { getSupabaseAdmin, isServiceRoleConfigured } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -103,6 +104,12 @@ async function fulfillVip(forumUserId: string, productKey: string, checkoutToken
     );
   }
 
+  logSecurityEvent("vip_fulfillment", {
+    forumUserId,
+    productKey,
+    granted: "vip",
+  });
+
   return NextResponse.json({
     ok: true,
     granted: "vip",
@@ -173,6 +180,13 @@ async function fulfillNullpass(input: {
       { status: 502 }
     );
   }
+
+  logSecurityEvent("vip_fulfillment", {
+    forumUserId: input.forumUserId,
+    productKey: input.productKey,
+    granted: "nullpass",
+    already: result.already,
+  });
 
   return NextResponse.json({
     ok: true,

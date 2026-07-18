@@ -3,6 +3,7 @@
  */
 
 import { notifyPayUserStatus } from "@/lib/nullysh-pay/notify-status";
+import { logSecurityEvent } from "@/lib/security-log";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSupabaseFromRequest } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
@@ -67,6 +68,14 @@ export async function POST(req: NextRequest) {
     forumUserId: targetUserId,
     status: status as "active" | "suspended" | "banned",
     reason,
+  });
+
+  logSecurityEvent("account_status_changed", {
+    adminId: user.id,
+    targetUserId,
+    status,
+    profileUpdated: !upErr,
+    payNotified: pay.ok,
   });
 
   return NextResponse.json({
