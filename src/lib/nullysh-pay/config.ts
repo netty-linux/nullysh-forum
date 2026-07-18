@@ -42,8 +42,8 @@ export function getNullyshPaySsoSecret(): string {
 
 /**
  * Secret HMAC Matriz (APIs internas Forum ↔ Pay).
- * Preferir NULLYSH_MATRIX_HMAC_SECRET; fallback temporário ao SSO
- * só para janela de deploy dual (remover após secrets rodados).
+ * Fail-closed: sem fallback para SSO (blast radius separado).
+ * FIX #5 — OWASP A02
  */
 export function getMatrixHmacSecret(): string {
   const matrix =
@@ -51,16 +51,6 @@ export function getMatrixHmacSecret(): string {
       process.env.NULLYSH_MATRIX_HMAC_SECRET?.trim()) ||
     "";
   if (matrix.length >= 16) return matrix;
-
-  const sso = getNullyshPaySsoSecret();
-  if (sso.length >= 16) {
-    if (process.env.NODE_ENV === "production") {
-      console.warn(
-        "[nullysh-pay] NULLYSH_MATRIX_HMAC_SECRET ausente — fallback SSO (migrar)."
-      );
-    }
-    return sso;
-  }
   return "";
 }
 
