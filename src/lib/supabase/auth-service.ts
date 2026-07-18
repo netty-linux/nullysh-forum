@@ -33,7 +33,7 @@ function mapAuthError(message: string): string {
     return "E-mail inválido. Use um endereço real (ex.: Gmail).";
   }
   if (m.includes("password") && (m.includes("weak") || m.includes("least"))) {
-    return "Senha fraca. Use no mínimo 6 caracteres.";
+    return "Senha fraca. Use no mínimo 10 caracteres com maiúsculas, minúsculas e números.";
   }
   if (
     m.includes("different from the old") ||
@@ -92,10 +92,20 @@ export async function supabaseRegister(input: {
     if (!name || !email || !input.password) {
       return { ok: false, error: "Preencha todos os campos." };
     }
-    if (input.password.length < 6) {
+    if (input.password.length < 10) {
       return {
         ok: false,
-        error: "A senha precisa ter no mínimo 6 caracteres.",
+        error: "A senha precisa ter no mínimo 10 caracteres.",
+      };
+    }
+    const hasUpper = /[A-Z]/.test(input.password);
+    const hasLower = /[a-z]/.test(input.password);
+    const hasNumber = /[0-9]/.test(input.password);
+    if (!hasUpper || !hasLower || !hasNumber) {
+      return {
+        ok: false,
+        error:
+          "A senha deve conter pelo menos uma letra maiúscula, uma minúscula e um número.",
       };
     }
 
