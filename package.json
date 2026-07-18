@@ -4,13 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "preview": "npm run build && opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "npm run build && opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "deploy:wsl": "wsl -e bash -lc \"sed -i 's/\\r$//' /mnt/d/Nullysh.DEV/NULLYSH-FORUM/nullysh-forum/scripts/wsl-deploy.sh; bash /mnt/d/Nullysh.DEV/NULLYSH-FORUM/nullysh-forum/scripts/wsl-deploy.sh\"",
-    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "upload": "npm run build && opennextjs-cloudflare build && opennextjs-cloudflare upload",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "cf:r2": "wrangler r2 bucket create nullysh-forum-videos"
   },

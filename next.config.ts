@@ -24,18 +24,20 @@ const securityHeaders = [
   },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+    // Chat usa câmera/microfone no composer; geolocation no post location
+    value:
+      "camera=(self), microphone=(self), geolocation=(self), browsing-topics=()",
   },
   {
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
-      "style-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' https://api.fontshare.com",
       "img-src 'self' data: blob: https: https://*.supabase.co",
       "media-src 'self' blob: https:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://pay.nullysh.com https://www.asaas.com https://cdn.jsdelivr.net",
-      "font-src 'self' data:",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://pay.nullysh.com https://www.asaas.com https://cdn.jsdelivr.net https://api.fontshare.com https://cdn.fontshare.com",
+      "font-src 'self' data: https://cdn.fontshare.com https://api.fontshare.com",
       "worker-src 'self' blob:",
       "frame-ancestors 'none'",
       "base-uri 'self'",
