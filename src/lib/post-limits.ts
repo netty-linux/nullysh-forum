@@ -2,10 +2,30 @@
  * Limites de postagem por plano.
  * Free: 200 chars · VIP / Admin: 1000 chars
  * Download de anexos de posts: exclusivo VIP / Admin
+ *
+ * FIX #11 — allowlist de domínios no download (SSRF / OWASP A10)
  */
 
 export const MAX_POST_CHARS_FREE = 200;
 export const MAX_POST_CHARS_VIP = 1000;
+
+const ALLOWED_ATTACHMENT_DOMAINS = [
+  "rijnjymmivsftkjnhnup.supabase.co",
+  "nullysh.com",
+  "pay.nullysh.com",
+];
+
+function isAllowedAttachmentUrl(url: string): boolean {
+  if (url.startsWith("data:") || url.startsWith("blob:")) return true;
+  try {
+    const parsed = new URL(url);
+    return ALLOWED_ATTACHMENT_DOMAINS.some(
+      (d) => parsed.hostname === d || parsed.hostname.endsWith("." + d)
+    );
+  } catch {
+    return false;
+  }
+}
 
 export function maxPostChars(isVip: boolean): number {
   return isVip ? MAX_POST_CHARS_VIP : MAX_POST_CHARS_FREE;
@@ -21,6 +41,10 @@ export async function downloadPostAttachment(
   filename = "nullysh-anexo"
 ): Promise<void> {
   if (!url) throw new Error("Anexo indisponível.");
+
+  if (!isAllowedAttachmentUrl(url)) {
+    throw new Error("URL de anexo não permitida.");
+  }
 
   // data: / blob: — download direto
   if (url.startsWith("data:") || url.startsWith("blob:")) {
