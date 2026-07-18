@@ -106,6 +106,56 @@ export function fileToObjectUrl(file: File): string {
   return URL.createObjectURL(file);
 }
 
+/**
+ * Extrai a primeira imagem do clipboard (Ctrl+V / colar print).
+ * Desktop: capturas de tela, copiar imagem do browser, etc.
+ * Retorna null se não houver imagem (deixa o paste de texto normal).
+ */
+export function getImageFileFromClipboard(
+  data: DataTransfer | null | undefined
+): File | null {
+  if (!data) return null;
+
+  // 1) Arquivos colados (alguns browsers preenchem files)
+  if (data.files?.length) {
+    for (let i = 0; i < data.files.length; i++) {
+      const f = data.files.item(i);
+      if (f && f.type.startsWith("image/")) return f;
+    }
+  }
+
+  // 2) Items (prints Windows/macOS, "Copiar imagem")
+  const items = data.items;
+  if (items?.length) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item || item.kind !== "file") continue;
+      if (!item.type.startsWith("image/")) continue;
+      const file = item.getAsFile();
+      if (file) {
+        // Alguns browsers entregam File sem nome — nome útil pro crop/upload
+        if (!file.name || file.name === "image.png" || file.name === "blob") {
+          const ext =
+            file.type === "image/jpeg"
+              ? "jpg"
+              : file.type === "image/webp"
+                ? "webp"
+                : file.type === "image/gif"
+                  ? "gif"
+                  : "png";
+          return new File([file], `paste-${Date.now()}.${ext}`, {
+            type: file.type || "image/png",
+            lastModified: Date.now(),
+          });
+        }
+        return file;
+      }
+    }
+  }
+
+  return null;
+}
+
 export function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

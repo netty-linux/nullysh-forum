@@ -22,7 +22,11 @@ import {
   searchGifs,
   type GifItem,
 } from "@/lib/giphy";
-import { fileToObjectUrl, revokeObjectUrl } from "@/lib/image";
+import {
+  fileToObjectUrl,
+  getImageFileFromClipboard,
+  revokeObjectUrl,
+} from "@/lib/image";
 import { maxPostChars } from "@/lib/post-limits";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import type { PostMusic } from "@/lib/types";
@@ -41,6 +45,7 @@ import {
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
+  type ClipboardEvent,
   FormEvent,
   useCallback,
   useEffect,
@@ -316,6 +321,14 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     setShowGif(false);
   }
 
+  /** Desktop: Ctrl+V / colar print no modal de post */
+  function onComposerPaste(e: ClipboardEvent) {
+    const file = getImageFileFromClipboard(e.clipboardData);
+    if (!file) return;
+    e.preventDefault();
+    onPickImage(file);
+  }
+
   function clearImage() {
     setImageUrl(null);
     releaseCropSource();
@@ -538,6 +551,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
               {/* Body */}
               <form
                 onSubmit={onSubmit}
+                onPaste={onComposerPaste}
                 className="flex min-h-0 flex-1 flex-col"
               >
                 <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -562,6 +576,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                           );
                         }}
                         onKeyDown={hashtagSuggest.onKeyDown}
+                        onPaste={onComposerPaste}
                         onClick={(e) => {
                           const el = e.currentTarget;
                           hashtagSuggest.refreshFromCaret(
@@ -889,8 +904,8 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                           fileRef.current?.click();
                         }}
                         className="inline-flex h-10 w-10 items-center justify-center rounded-full text-sky-500 transition hover:bg-sky-500/10"
-                        title="Imagem"
-                        aria-label="Adicionar imagem"
+                        title="Imagem (ou Ctrl+V)"
+                        aria-label="Adicionar imagem. No desktop, cole com Ctrl+V."
                       >
                         <ImageIcon size={22} />
                       </button>

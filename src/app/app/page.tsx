@@ -25,7 +25,11 @@ import {
   searchGifs,
   type GifItem,
 } from "@/lib/giphy";
-import { fileToObjectUrl, revokeObjectUrl } from "@/lib/image";
+import {
+  fileToObjectUrl,
+  getImageFileFromClipboard,
+  revokeObjectUrl,
+} from "@/lib/image";
 import { maxPostChars } from "@/lib/post-limits";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import type { PostMusic } from "@/lib/types";
@@ -44,6 +48,7 @@ import {
 } from "@phosphor-icons/react";
 import { useSearchParams } from "next/navigation";
 import {
+  type ClipboardEvent,
   FormEvent,
   useCallback,
   useEffect,
@@ -375,6 +380,14 @@ export default function FeedPage() {
     clearGif();
   }
 
+  /** Desktop: Ctrl+V / colar print no compositor do feed */
+  function onComposerPaste(e: ClipboardEvent) {
+    const file = getImageFileFromClipboard(e.clipboardData);
+    if (!file) return;
+    e.preventDefault();
+    onPickImage(file);
+  }
+
   function clearImage() {
     setImageUrl(null);
     releaseCropSource();
@@ -575,6 +588,7 @@ export default function FeedPage() {
       <form
         id="feed-composer"
         onSubmit={onCreate}
+        onPaste={onComposerPaste}
         className="relative z-10 mb-4 rounded-2xl border border-neutral-200/90 bg-white shadow-[0_1px_3px_rgb(0_0_0/0.04)] transition-[box-shadow] duration-300 dark:border-zinc-800 dark:bg-[#141414]"
       >
         <div className="flex gap-3 p-4 sm:p-5">
@@ -599,6 +613,7 @@ export default function FeedPage() {
                 );
               }}
               onKeyDown={hashtagSuggest.onKeyDown}
+              onPaste={onComposerPaste}
               onClick={(e) => {
                 const el = e.currentTarget;
                 hashtagSuggest.refreshFromCaret(
@@ -828,8 +843,8 @@ export default function FeedPage() {
                     fileRef.current?.click();
                   }}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-full text-sky-500 transition hover:bg-sky-500/10"
-                  title="Adicionar imagem"
-                  aria-label="Adicionar imagem"
+                  title="Adicionar imagem (ou Ctrl+V)"
+                  aria-label="Adicionar imagem. No desktop, cole com Ctrl+V."
                 >
                   <ImageIcon size={20} />
                 </button>
