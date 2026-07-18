@@ -108,6 +108,20 @@ export async function uploadUserMedia(opts: {
       return { ok: false, error: error.message };
     }
 
+    // Bucket posts é privado (FIX #12) — URL assinada (7 dias)
+    if (opts.bucket === "posts") {
+      const { data: signed, error: signErr } = await supabase.storage
+        .from(opts.bucket)
+        .createSignedUrl(path, 60 * 60 * 24 * 7);
+      if (signErr || !signed?.signedUrl) {
+        return {
+          ok: false,
+          error: signErr?.message || "Falha ao assinar URL do anexo.",
+        };
+      }
+      return { ok: true, publicUrl: signed.signedUrl };
+    }
+
     const { data } = supabase.storage.from(opts.bucket).getPublicUrl(path);
     return { ok: true, publicUrl: data.publicUrl };
   } catch (e) {
