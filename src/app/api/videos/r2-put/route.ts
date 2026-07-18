@@ -76,12 +76,17 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function OPTIONS() {
+  // FIX #8 — CORS restritivo em produção
+  const allowedOrigin =
+    process.env.NODE_ENV === "production" ? "https://nullysh.com" : "*";
+
   return new NextResponse(null, {
     status: 204,
     headers: {
+      "Access-Control-Allow-Origin": allowedOrigin,
       "Access-Control-Allow-Methods": "PUT, OPTIONS",
-      "Access-Control-Allow-Headers":
-        "Content-Type, Authorization",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Max-Age": "86400",
     },
   });
 }
