@@ -37,6 +37,8 @@ let loadPromise: Promise<FFmpeg> | null = null;
 
 const FFMPEG_PKG = "0.12.15";
 const CORE_VERSION = "0.12.10";
+// FIX #13 — CDN sem SRI: CSP permite só cdn.jsdelivr.net (next.config).
+// TODO(security): self-host em /public/ffmpeg/ e carregar via toBlobURL local.
 const FFMPEG_BASE = `https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@${FFMPEG_PKG}/dist/esm`;
 const CORE_BASE = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
 
