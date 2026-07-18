@@ -94,10 +94,19 @@ export async function POST(req: NextRequest) {
       headers: signed.headers,
       body: payload,
     });
-    const data = await res.json().catch(() => ({}));
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+    };
     if (!res.ok) {
+      const rawErr = (data.error || "").trim();
+      // Cloudflare WAF devolve HTML → sem error JSON
+      const error =
+        rawErr ||
+        (res.status === 403
+          ? "Checkout bloqueado (WAF/403). Tente de novo em instantes."
+          : `Pay HTTP ${res.status}`);
       return NextResponse.json(
-        { error: (data as { error?: string }).error || `Pay HTTP ${res.status}` },
+        { error },
         { status: res.status >= 400 ? res.status : 502 }
       );
     }

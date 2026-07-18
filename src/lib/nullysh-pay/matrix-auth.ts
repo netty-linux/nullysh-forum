@@ -133,6 +133,8 @@ export async function matrixSignedHeaders(
       Authorization: `Bearer ${secret}`,
       "X-Nullysh-Timestamp": ts,
       "X-Nullysh-Signature": signature,
+      // WAF zone nullysh.com bloqueia UA vazio — Workers devem se identificar
+      "User-Agent": "Nullysh-Forum-Worker/1.0 (matrix)",
     },
   };
 }
