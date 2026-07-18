@@ -1,3 +1,5 @@
+import { logSecurityEvent } from "@/lib/security-log";
+import { timingSafeEqualStr } from "@/lib/nullysh-pay/matrix-auth";
 import {
   getSupabaseFromRequest,
   getSupabaseServer,
@@ -27,16 +29,33 @@ async function profileIsAdmin(
   };
 }
 
+function fail(
+  error: string,
+  status: number,
+  reason: string
+): AdminAuthResult {
+  logSecurityEvent("admin_auth_failed", { reason, status });
+  return { ok: false, error, status };
+}
+
+function success(adminId: string, adminName: string): AdminAuthResult {
+  logSecurityEvent("admin_auth_success", {
+    adminId,
+    via: "session_or_secret",
+  });
+  return { ok: true, adminId, adminName };
+}
+
 /**
  * Autoriza mutações admin (vídeos, etc.).
  *
- * Produção (Cloudflare):
- * 1. Authorization: Bearer <access_token> da sessão Supabase (preferido)
+ * 1. Authorization: Bearer <access_token> Supabase
  * 2. Cookies de sessão no Request (OpenNext/Workers)
- * 3. cookies() via next/headers (fallback)
- * 4. x-admin-secret === ADMIN_API_SECRET (só server / CI — nunca no browser)
+ * 3. cookies() via next/headers
+ * 4. x-admin-secret === ADMIN_API_SECRET (CI / automação)
+ * 5. Dev: exige ADMIN_API_SECRET + header (sem bypass irrestrito)
  *
- * Dev local (sem secret): headers x-admin-* apenas se NODE_ENV=development.
+ * FIX #7 — OWASP A01
  */
 export async function assertVideoAdmin(
   req: NextRequest
@@ -58,18 +77,16 @@ export async function assertVideoAdmin(
         if (!error && user) {
           const admin = await profileIsAdmin(supabase, user.id);
           if (admin) {
-            return {
-              ok: true,
-              adminId: admin.id,
-              adminName: admin.name || user.email || "Admin",
-            };
+            return success(
+              admin.id,
+              admin.name || user.email || "Admin"
+            );
           }
-          return {
-            ok: false,
-            error:
-              "Sessão válida, mas o perfil não é admin (profiles.role).",
-            status: 403,
-          };
+          return fail(
+            "Sessão válida, mas o perfil não é admin (profiles.role).",
+            403,
+            "not_admin_role"
+          );
         }
       }
     } catch {
@@ -87,18 +104,16 @@ export async function assertVideoAdmin(
       if (user) {
         const admin = await profileIsAdmin(supabase, user.id);
         if (admin) {
-          return {
-            ok: true,
-            adminId: admin.id,
-            adminName: admin.name || user.email || "Admin",
-          };
+          return success(
+            admin.id,
+            admin.name || user.email || "Admin"
+          );
         }
-        return {
-          ok: false,
-          error:
-            "Sessão válida, mas o perfil não é admin (profiles.role).",
-          status: 403,
-        };
+        return fail(
+          "Sessão válida, mas o perfil não é admin (profiles.role).",
+          403,
+          "not_admin_role"
+        );
       }
     }
   } catch {
@@ -115,11 +130,10 @@ export async function assertVideoAdmin(
       if (user) {
         const admin = await profileIsAdmin(supabase, user.id);
         if (admin) {
-          return {
-            ok: true,
-            adminId: admin.id,
-            adminName: admin.name || user.email || "Admin",
-          };
+          return success(
+            admin.id,
+            admin.name || user.email || "Admin"
+          );
         }
       }
     }
@@ -128,31 +142,30 @@ export async function assertVideoAdmin(
   }
 
   // ── 4) Secret server-side (CI / automação) ─────────────────────
-  if (secret && headerSecret && headerSecret === secret) {
-    return {
-      ok: true,
-      adminId: req.headers.get("x-admin-id")?.trim() || "admin-service",
-      adminName: req.headers.get("x-admin-name")?.trim() || "Admin Service",
-    };
+  if (secret && headerSecret && timingSafeEqualStr(headerSecret, secret)) {
+    return success(
+      req.headers.get("x-admin-id")?.trim() || "admin-service",
+      req.headers.get("x-admin-name")?.trim() || "Admin Service"
+    );
   }
 
-  // ── 5) Dev local ONLY ──────────────────────────────────────────
-  if (process.env.NODE_ENV === "development" && !secret) {
-    const role = req.headers.get("x-admin-role")?.trim();
-    const adminId = req.headers.get("x-admin-id")?.trim();
-    if (role === "admin" && adminId) {
-      return {
-        ok: true,
-        adminId,
-        adminName: req.headers.get("x-admin-name")?.trim() || "Admin",
-      };
+  // ── 5) Dev local: exige ADMIN_API_SECRET (sem bypass irrestrito)
+  if (process.env.NODE_ENV === "development") {
+    if (!secret) {
+      return fail(
+        "DEV: Configure ADMIN_API_SECRET no .env.local para testar rotas admin.",
+        503,
+        "dev_missing_admin_secret"
+      );
+    }
+    if (!headerSecret || !timingSafeEqualStr(headerSecret, secret)) {
+      return fail("DEV: x-admin-secret inválido.", 401, "dev_bad_secret");
     }
   }
 
-  return {
-    ok: false,
-    error:
-      "Não autorizado. Faça login como admin (profiles.role = admin). A API usa a sessão Supabase (Bearer/cookies).",
-    status: 401,
-  };
+  return fail(
+    "Não autorizado. Faça login como admin (profiles.role = admin). A API usa a sessão Supabase (Bearer/cookies).",
+    401,
+    "unauthorized"
+  );
 }
