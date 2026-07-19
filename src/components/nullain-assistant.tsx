@@ -133,7 +133,7 @@ export function NullainAssistant() {
             media={
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src="/brand/nullain.png"
+                src="/brand/nullain.jpeg"
                 alt=""
                 width={56}
                 height={56}
@@ -197,7 +197,7 @@ export function NullainAssistant() {
                 />
                 <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full ring-2 ring-white/25 shadow-lg">
                   <Image
-                    src="/brand/nullain.png"
+                    src="/brand/nullain.jpeg"
                     alt="Nullain"
                     width={44}
                     height={44}
@@ -242,7 +242,7 @@ export function NullainAssistant() {
                     {m.role === "assistant" && (
                       <div className="mt-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-full ring-1 ring-black/10 dark:ring-white/10">
                         <Image
-                          src="/brand/nullain.png"
+                          src="/brand/nullain.jpeg"
                           alt=""
                           width={28}
                           height={28}
@@ -267,7 +267,7 @@ export function NullainAssistant() {
                   <div className="flex items-center gap-2">
                     <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full ring-1 ring-black/10">
                       <Image
-                        src="/brand/nullain.png"
+                        src="/brand/nullain.jpeg"
                         alt=""
                         width={28}
                         height={28}

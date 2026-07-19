@@ -105,7 +105,7 @@ export default function NullainAgentPage() {
                 )}
               >
                 <Image
-                  src="/brand/nullain.png"
+                  src="/brand/nullain.jpeg"
                   alt="Nullain Agent"
                   width={96}
                   height={96}
