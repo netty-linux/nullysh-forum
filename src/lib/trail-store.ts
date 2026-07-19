@@ -13,7 +13,8 @@ import { uid } from "./utils";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-const STORAGE_VERSION = 3;
+/** v4: D1 (Panel) é fonte da verdade — limpa fantasmas do localStorage. */
+const STORAGE_VERSION = 4;
 
 /** IDs das trilhas seed antigas — purgar do localStorage */
 const LEGACY_TRAIL_IDS = new Set([
@@ -49,7 +50,11 @@ export type CreateTrailInput = {
   createdByName: string;
 };
 
-/** Merge D1 (Panel) → store local; server-side ganha em conflito de id. */
+/**
+ * Sincroniza trilhas com o D1 (escrito pelo Nullysh Panel).
+ * D1 é a fonte da verdade: itens removidos no Panel somem do Forum.
+ * Em falha de rede/API, mantém o cache local (offline).
+ */
 export async function hydrateTrailsFromServer(): Promise<void> {
   try {
     const res = await fetch("/api/content/trails", { cache: "no-store" });
@@ -61,14 +66,10 @@ export async function hydrateTrailsFromServer(): Promise<void> {
     const remote = data.items
       .map((t) => normalizeTrail(t as LearningTrail))
       .filter((t): t is LearningTrail => !!t);
-    if (!remote.length) return;
-    useTrailStore.setState((s) => {
-      const byId = new Map(s.trails.map((t) => [t.id, t]));
-      for (const t of remote) byId.set(t.id, t);
-      return { trails: Array.from(byId.values()) };
-    });
+    // Substitui o store inteiro — inclusive lista vazia (delete no Panel).
+    useTrailStore.setState({ trails: remote });
   } catch {
-    /* offline / D1 empty */
+    /* offline — mantém cache local */
   }
 }
 
@@ -309,7 +310,11 @@ export const useTrailStore = create<TrailState>()(
       name: "nullysh-trails",
       version: STORAGE_VERSION,
       partialize: (s) => ({ trails: s.trails }),
-      migrate: (persisted) => {
+      migrate: (persisted, fromVersion) => {
+        // Antes de v4 o hydrate só fazia merge e nunca removia deletes do D1.
+        if (fromVersion < 4) {
+          return { trails: [] } as never;
+        }
         const p = (persisted || {}) as { trails?: LearningTrail[] };
         const trails = (p.trails || [])
           .map((t) => normalizeTrail(t as LearningTrail))

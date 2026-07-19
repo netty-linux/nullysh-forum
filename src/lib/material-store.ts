@@ -5,7 +5,8 @@ import { uid } from "./utils";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-const STORAGE_VERSION = 1;
+/** v2: D1 é fonte da verdade (delete no Panel limpa o Forum). */
+const STORAGE_VERSION = 2;
 
 /** IDs do seed antigo (mock-data) — purgar se ainda estiverem no localStorage */
 const LEGACY_MATERIAL_IDS = new Set([
@@ -37,6 +38,10 @@ export type CreateMaterialInput = {
   createdByName: string;
 };
 
+/**
+ * D1 (Panel) é a fonte da verdade. Lista vazia no servidor limpa o cache local.
+ * Em falha de rede, mantém o cache offline.
+ */
 export async function hydrateMaterialsFromServer(): Promise<void> {
   try {
     const res = await fetch("/api/content/materials", { cache: "no-store" });
@@ -45,14 +50,9 @@ export async function hydrateMaterialsFromServer(): Promise<void> {
     const remote = data.items
       .map((m) => normalizeMaterial(m as Material))
       .filter((m): m is Material => !!m);
-    if (!remote.length) return;
-    useMaterialStore.setState((s) => {
-      const byId = new Map(s.materials.map((m) => [m.id, m]));
-      for (const m of remote) byId.set(m.id, m);
-      return { materials: Array.from(byId.values()) };
-    });
+    useMaterialStore.setState({ materials: remote });
   } catch {
-    /* ignore */
+    /* offline — mantém cache local */
   }
 }
 
@@ -228,7 +228,10 @@ export const useMaterialStore = create<MaterialState>()(
     {
       name: "nullysh-materials",
       version: STORAGE_VERSION,
-      migrate: (persisted) => {
+      migrate: (persisted, fromVersion) => {
+        if (fromVersion < 2) {
+          return { materials: [] };
+        }
         const state = (persisted || {}) as { materials?: unknown[] };
         const list = Array.isArray(state.materials) ? state.materials : [];
         return {

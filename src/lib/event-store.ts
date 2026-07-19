@@ -5,7 +5,8 @@ import { uid } from "./utils";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-const STORAGE_VERSION = 1;
+/** v2: D1 é fonte da verdade (delete no Panel limpa o Forum). */
+const STORAGE_VERSION = 2;
 
 /** IDs do seed antigo (catalog FORUM_EVENTS) */
 const LEGACY_EVENT_IDS = new Set(["ev1", "ev2", "ev3", "ev4", "ev5"]);
@@ -32,6 +33,10 @@ export type CreateEventInput = {
   createdByName: string;
 };
 
+/**
+ * D1 (Panel) é a fonte da verdade. Lista vazia no servidor limpa o cache local.
+ * Em falha de rede, mantém o cache offline.
+ */
 export async function hydrateEventsFromServer(): Promise<void> {
   try {
     const res = await fetch("/api/content/events", { cache: "no-store" });
@@ -40,14 +45,9 @@ export async function hydrateEventsFromServer(): Promise<void> {
     const remote = data.items
       .map((e) => normalizeEvent(e as ForumEvent))
       .filter((e): e is ForumEvent => !!e);
-    if (!remote.length) return;
-    useEventStore.setState((s) => {
-      const byId = new Map(s.events.map((e) => [e.id, e]));
-      for (const e of remote) byId.set(e.id, e);
-      return { events: Array.from(byId.values()) };
-    });
+    useEventStore.setState({ events: remote });
   } catch {
-    /* ignore */
+    /* offline — mantém cache local */
   }
 }
 
@@ -234,7 +234,10 @@ export const useEventStore = create<EventState>()(
     {
       name: "nullysh-events",
       version: STORAGE_VERSION,
-      migrate: (persisted) => {
+      migrate: (persisted, fromVersion) => {
+        if (fromVersion < 2) {
+          return { events: [] };
+        }
         const state = (persisted || {}) as { events?: unknown[] };
         const list = Array.isArray(state.events) ? state.events : [];
         return {
