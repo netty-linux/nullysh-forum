@@ -17,8 +17,10 @@ import {
   CrownSimple,
   Handshake,
   House,
+  Lock,
   Path,
   PlayCircle,
+  Robot,
   ShieldCheck,
   SignOut,
   UserCircle,
@@ -49,6 +51,11 @@ type NavItem = {
   icon: NavIcon;
   /** Link externo (ex.: Nullysh Panel) */
   external?: boolean;
+  /**
+   * Visível para todos; uso pleno só para admin.
+   * Não-admin: estilo fantasma + cadeado (ainda navega à página bloqueada).
+   */
+  adminOnly?: boolean;
 };
 
 type NavSection = {
@@ -85,6 +92,18 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/app/nullpass", label: "NullPass", icon: Vault },
       { href: "/app/nullysh-pay", label: "Nullysh Pay", icon: CreditCard },
+    ],
+  },
+  {
+    id: "ferramentas",
+    label: "Ferramentas",
+    items: [
+      {
+        href: "/app/tools/nullain",
+        label: "Nullain Agent",
+        icon: Robot,
+        adminOnly: true,
+      },
     ],
   },
   {
@@ -148,12 +167,14 @@ function SidebarBody({ alwaysExpanded, onClose }: SidebarBodyProps) {
     return NAV_SECTIONS;
   }, [user?.role]);
 
+  const isAdmin = user?.role === "admin";
+
   /** Seções abertas — auto-abre a que tem rota ativa */
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(
     () => {
       const init: Record<string, boolean> = {};
       for (const s of NAV_SECTIONS) {
-        init[s.id] = s.id === "principal";
+        init[s.id] = s.id === "principal" || s.id === "ferramentas";
       }
       init.staff = true;
       return init;
@@ -299,9 +320,11 @@ function SidebarBody({ alwaysExpanded, onClose }: SidebarBodyProps) {
               >
                 {section.items.map((item) => {
                   const isPanel = !!item.external;
-                  const active = isPanel
-                    ? false
-                    : isItemActive(pathname, item.href);
+                  const locked = !!item.adminOnly && !isAdmin;
+                  const active =
+                    isPanel || locked
+                      ? false
+                      : isItemActive(pathname, item.href);
                   const Icon = item.icon;
                   const showBadge =
                     isPanel && pendingCount > 0 && !active;
@@ -309,26 +332,45 @@ function SidebarBody({ alwaysExpanded, onClose }: SidebarBodyProps) {
                     "nav-item relative flex items-center rounded-xl text-sm font-medium",
                     softReveal,
                     itemPadClass,
-                    active
-                      ? "bg-[#1f1f1f] text-white shadow-[0_2px_8px_-2px_rgb(0_0_0/0.25)] dark:bg-white/12 dark:text-white dark:shadow-none"
-                      : "text-neutral-600 hover:bg-neutral-100 hover:text-[#1f1f1f] dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-white"
+                    locked
+                      ? "cursor-default text-neutral-400/55 hover:bg-transparent dark:text-zinc-500/45"
+                      : active
+                        ? "bg-[#1f1f1f] text-white shadow-[0_2px_8px_-2px_rgb(0_0_0/0.25)] dark:bg-white/12 dark:text-white dark:shadow-none"
+                        : "text-neutral-600 hover:bg-neutral-100 hover:text-[#1f1f1f] dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-white"
                   );
+                  const title = locked
+                    ? `${item.label} · só administradores`
+                    : item.label;
                   const content = (
                     <>
                       <Icon
                         size={22}
                         weight={active ? "fill" : "regular"}
-                        className="shrink-0"
+                        className={cn("shrink-0", locked && "opacity-60")}
                         aria-hidden
                       />
                       <span
                         className={cn(
                           "min-w-0 flex-1 truncate whitespace-nowrap",
-                          labelClass
+                          labelClass,
+                          locked && "text-neutral-400/70 dark:text-zinc-500/55"
                         )}
                       >
                         {item.label}
                       </span>
+                      {locked && (
+                        <Lock
+                          size={14}
+                          weight="bold"
+                          className={cn(
+                            "shrink-0 text-neutral-400/70 dark:text-zinc-500/50",
+                            alwaysExpanded
+                              ? "opacity-100"
+                              : "absolute right-1.5 top-1.5 opacity-100 group-hover/rail:static group-hover/rail:opacity-100"
+                          )}
+                          aria-hidden
+                        />
+                      )}
                       {isPanel && pendingCount > 0 && (
                         <span
                           className={cn(
@@ -354,7 +396,7 @@ function SidebarBody({ alwaysExpanded, onClose }: SidebarBodyProps) {
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={onClose}
-                        title={item.label}
+                        title={title}
                         className={itemClass}
                       >
                         {content}
@@ -367,7 +409,8 @@ function SidebarBody({ alwaysExpanded, onClose }: SidebarBodyProps) {
                       key={item.href}
                       href={item.href}
                       onClick={onClose}
-                      title={item.label}
+                      title={title}
+                      aria-disabled={locked || undefined}
                       className={itemClass}
                     >
                       {content}
