@@ -13,13 +13,17 @@ import {
 } from "@/lib/nullain-agent";
 import { cn } from "@/lib/utils";
 import {
+  ArrowRight,
   ArrowSquareOut,
   Brain,
   CircleNotch,
+  Cpu,
   Lightning,
   Lock,
+  Robot,
   ShieldCheck,
   Sparkle,
+  TerminalWindow,
   WaveSine,
 } from "@phosphor-icons/react";
 import { motion, useReducedMotion } from "motion/react";
@@ -29,18 +33,27 @@ import Link from "next/link";
 const CAPABILITIES = [
   {
     icon: Brain,
-    title: "Raciocínio contextual",
-    desc: "Entende o domínio Nullysh e responde com precisão operacional.",
+    title: "Raciocínio Contextual",
+    desc: "Entende o domínio Nullysh, estrutura de dados e responde com precisão operacional.",
+    accent: "text-violet-500 bg-violet-500/10 dark:bg-violet-500/20",
   },
   {
     icon: Lightning,
-    title: "Resposta em tempo real",
-    desc: "Sessão dedicada no Railway, pronta para uso imediato da staff.",
+    title: "Execução em Tempo Real",
+    desc: "Sessão de alta performance hospedada no Railway pronta para uso imediato.",
+    accent: "text-amber-500 bg-amber-500/10 dark:bg-amber-500/20",
   },
   {
     icon: WaveSine,
-    title: "Fluxo de agente",
-    desc: "Interface pensada para tarefas longas, prompts e iterações.",
+    title: "Workflows Autônomos",
+    desc: "Interface projetada para tarefas longas, prompts estruturados e iterações complexas.",
+    accent: "text-sky-500 bg-sky-500/10 dark:bg-sky-500/20",
+  },
+  {
+    icon: TerminalWindow,
+    title: "Comandos & Diagnósticos",
+    desc: "Executa rotinas internas, auditorias de sistema e automação para a equipe staff.",
+    accent: "text-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/20",
   },
 ] as const;
 
@@ -51,130 +64,139 @@ export default function NullainAgentPage() {
 
   if (!hydrated || !user) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center gap-2 text-[13px] text-[var(--text-tertiary)]">
-        <CircleNotch size={16} className="animate-spin" aria-hidden />
-        Carregando…
+      <div className="flex min-h-[40vh] items-center justify-center gap-2 text-xs text-neutral-400">
+        <CircleNotch size={18} className="animate-spin text-violet-500" aria-hidden />
+        Iniciando Nullain Agent OS…
       </div>
     );
   }
 
   return (
-    <div className="app-page mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      {/* Hero card */}
+    <div className="app-page mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+      {/* Header section */}
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-violet-50/80 px-3 py-1 text-[12px] font-semibold text-violet-900 dark:border-violet-900/50 dark:bg-violet-950/40 dark:text-violet-300 mb-3">
+            <Robot size={15} weight="fill" />
+            Agente de Inteligência Artificial Autônomo
+          </div>
+          <h1 className="font-display text-[1.75rem] font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-50 sm:text-[2.25rem]">
+            {NULLAIN_AGENT_LABEL}
+          </h1>
+          <p className="mt-2 max-w-[55ch] text-[14px] leading-relaxed text-neutral-500 dark:text-zinc-400">
+            Seu copiloto operacional e assistente avançado do Nullysh Forum. Planejamento, diagnósticos e automação em tempo real.
+          </p>
+        </div>
+      </div>
+
+      {/* Hero Console Card */}
       <section
         className={cn(
-          "relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)]",
-          "bg-[var(--surface-elevated)] shadow-[var(--shadow-sm)]"
+          "relative overflow-hidden rounded-3xl border border-neutral-200/90 bg-white shadow-xl dark:border-zinc-800 dark:bg-[#141414]",
+          "transition-all duration-300"
         )}
       >
-        {/* Ambient AI mesh — só transform/opacity friendly, estático */}
+        {/* Ambient AI Background Effects */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(99,102,241,0.14),transparent_55%),radial-gradient(ellipse_at_90%_20%,rgba(16,185,129,0.1),transparent_50%),linear-gradient(180deg,rgba(10,10,10,0.04)_0%,transparent_45%)] dark:bg-[radial-gradient(ellipse_at_20%_0%,rgba(129,140,248,0.18),transparent_55%),radial-gradient(ellipse_at_90%_20%,rgba(52,211,153,0.12),transparent_50%),linear-gradient(180deg,rgba(255,255,255,0.03)_0%,transparent_50%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(139,92,246,0.12),transparent_55%),radial-gradient(ellipse_at_90%_20%,rgba(16,185,129,0.1),transparent_50%)] dark:bg-[radial-gradient(ellipse_at_20%_0%,rgba(139,92,246,0.2),transparent_55%),radial-gradient(ellipse_at_90%_20%,rgba(16,185,129,0.12),transparent_50%)]"
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-violet-500/10 blur-3xl dark:bg-violet-400/15"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -bottom-24 -left-10 h-48 w-48 rounded-full bg-emerald-500/10 blur-3xl dark:bg-emerald-400/10"
+          className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl dark:bg-violet-500/20"
         />
 
         <div
           className={cn(
-            "relative p-6 sm:p-8",
+            "relative p-6 sm:p-8 md:p-10",
             !isAdmin && "select-none"
           )}
         >
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-            {/* Avatar + pulse */}
+            {/* Avatar with pulse ring */}
             <div className="relative mx-auto shrink-0 sm:mx-0">
               {!reduce && isAdmin && (
                 <span
                   aria-hidden
-                  className="absolute -inset-1 rounded-full bg-emerald-400/25 blur-[2px] [animation:fab-breathe_3.2s_ease-in-out_infinite]"
+                  className="absolute -inset-1 rounded-full bg-emerald-500/30 blur-sm animate-pulse"
                 />
               )}
               <div
                 className={cn(
-                  "relative h-20 w-20 overflow-hidden rounded-full ring-2 shadow-[var(--shadow-md)] sm:h-24 sm:w-24",
+                  "relative h-24 w-24 overflow-hidden rounded-full ring-4 shadow-lg sm:h-28 sm:w-28",
                   isAdmin
-                    ? "ring-emerald-400/40"
-                    : "ring-[var(--border)] opacity-45 grayscale"
+                    ? "ring-emerald-500/40"
+                    : "ring-neutral-200 opacity-50 grayscale dark:ring-zinc-800"
                 )}
               >
                 <Image
                   src="/brand/nullain.jpeg"
                   alt="Nullain Agent"
-                  width={96}
-                  height={96}
+                  width={112}
+                  height={112}
                   className="h-full w-full object-cover"
                   priority
                 />
               </div>
               {isAdmin && (
-                <span className="absolute bottom-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-[var(--surface-elevated)]">
-                  <span className="sr-only">Online</span>
+                <span className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#141414]">
+                  <span className="h-2 w-2 rounded-full bg-white" />
                 </span>
               )}
             </div>
 
+            {/* Agent Info & Controls */}
             <div className="min-w-0 flex-1 text-center sm:text-left">
               <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                  <Sparkle size={11} weight="fill" aria-hidden />
-                  Agente de IA
+                <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-100/80 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-neutral-700 dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-zinc-300">
+                  <Sparkle size={12} weight="fill" className="text-violet-500" />
+                  Agente Autônomo
                 </span>
                 <span
                   className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.06em]",
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider",
                     isAdmin
-                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                      : "bg-[var(--surface)] text-[var(--text-tertiary)]"
+                      ? "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                      : "bg-neutral-100 text-neutral-500 dark:bg-zinc-800 dark:text-zinc-400"
                   )}
                 >
                   {isAdmin ? (
                     <>
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-emerald-500"
-                        aria-hidden
-                      />
-                      Online
+                      <Cpu size={12} weight="fill" className="text-emerald-500" />
+                      Sistema Online
                     </>
                   ) : (
                     <>
-                      <Lock size={11} weight="bold" aria-hidden />
-                      Staff only
+                      <Lock size={12} weight="bold" />
+                      Staff Exclusivo
                     </>
                   )}
                 </span>
               </div>
 
-              <h1
+              <h2
                 className={cn(
-                  "font-display mt-3 text-balance text-[var(--text-24)] font-semibold tracking-[-0.02em] sm:text-[var(--text-32)]",
+                  "font-display mt-3 text-balance text-2xl font-bold tracking-tight sm:text-3xl",
                   isAdmin
-                    ? "text-[var(--text-primary)]"
-                    : "text-[var(--text-tertiary)]"
+                    ? "text-[#1f1f1f] dark:text-zinc-50"
+                    : "text-neutral-400 dark:text-zinc-600"
                 )}
               >
                 {NULLAIN_AGENT_LABEL}
-              </h1>
+              </h2>
+
               <p
                 className={cn(
-                  "mx-auto mt-2 max-w-xl text-[var(--text-15)] leading-relaxed sm:mx-0",
+                  "mx-auto mt-2 max-w-xl text-xs sm:text-sm leading-relaxed sm:mx-0",
                   isAdmin
-                    ? "text-[var(--text-secondary)]"
-                    : "text-[var(--text-tertiary)]"
+                    ? "text-neutral-600 dark:text-zinc-400"
+                    : "text-neutral-400 dark:text-zinc-600"
                 )}
               >
-                Seu copiloto operacional da plataforma. Planeje, diagnostique e
-                execute com um agente dedicado — reservado à equipe
-                administrativa do Nullysh Forum.
+                Seu copiloto operacional da plataforma. Planeje, diagnostique e execute automações com um agente dedicado — reservado à equipe administrativa do Nullysh Forum.
               </p>
 
-              <div className="mt-5 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-start">
+              <div className="mt-6 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-start">
                 {isAdmin ? (
                   <>
                     <a
@@ -183,35 +205,35 @@ export default function NullainAgentPage() {
                       rel="noopener noreferrer"
                       className="inline-flex"
                     >
-                      <Button size="lg" className="w-full gap-2 sm:w-auto">
+                      <Button
+                        size="lg"
+                        className="h-12 w-full gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-7 font-semibold text-white shadow-lg transition-all hover:from-violet-500 hover:to-indigo-500 hover:scale-[1.02] sm:w-auto"
+                      >
                         Abrir Nullain Agent
-                        <ArrowSquareOut size={16} weight="bold" aria-hidden />
+                        <ArrowSquareOut size={18} weight="bold" />
                       </Button>
                     </a>
-                    <span className="text-center text-[13px] text-[var(--text-tertiary)] sm:text-left">
-                      Abre em nova aba · sessão staff
+                    <span className="text-center text-xs text-neutral-400 sm:text-left">
+                      Abre em nova aba · Sessão Staff Autenticada
                     </span>
                   </>
                 ) : (
                   <div
-                    className={cn(
-                      "flex w-full flex-col items-center gap-3 rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] bg-[var(--surface)]/60 px-4 py-4 sm:items-start"
-                    )}
+                    className="flex w-full flex-col items-center gap-3 rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/80 p-5 dark:border-zinc-800 dark:bg-zinc-900/40 sm:items-start"
                     role="status"
                   >
-                    <div className="flex items-center gap-2 text-[var(--text-tertiary)]">
-                      <Lock size={18} weight="bold" aria-hidden />
-                      <span className="text-[15px] font-medium">
-                        Acesso bloqueado
+                    <div className="flex items-center gap-2 text-neutral-500 dark:text-zinc-400">
+                      <Lock size={18} weight="bold" />
+                      <span className="text-sm font-semibold">
+                        Acesso Restrito ao Staff
                       </span>
                     </div>
-                    <p className="max-w-[36ch] text-center text-[13px] leading-relaxed text-[var(--text-tertiary)] sm:text-left">
-                      O Nullain Agent está disponível apenas para administradores
-                      da plataforma. Membros veem a ferramenta em modo fantasma.
+                    <p className="max-w-md text-center text-xs leading-relaxed text-neutral-500 dark:text-zinc-400 sm:text-left">
+                      O Nullain Agent é uma ferramenta reservada exclusivamente aos administradores da plataforma.
                     </p>
                     <Link href="/app" className="inline-flex">
-                      <Button variant="outline" size="sm">
-                        Voltar ao feed
+                      <Button variant="outline" size="sm" className="rounded-full">
+                        Voltar ao Feed <ArrowRight size={12} className="ml-1" />
                       </Button>
                     </Link>
                   </div>
@@ -220,69 +242,93 @@ export default function NullainAgentPage() {
             </div>
           </div>
         </div>
-      </section>
 
-      {/* Capabilities */}
-      <section
-        className={cn("mt-6 grid gap-3 sm:grid-cols-3", !isAdmin && "opacity-40")}
-        aria-hidden={!isAdmin}
-      >
-        {CAPABILITIES.map((cap, i) => {
-          const Icon = cap.icon;
-          return (
-            <motion.article
-              key={cap.title}
-              initial={reduce ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                delay: reduce ? 0 : 0.05 * i,
-                duration: 0.25,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-              className={cn(
-                "rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface-elevated)] p-4",
-                "shadow-[var(--shadow-sm)]"
-              )}
-            >
-              <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] bg-[var(--surface)] text-[var(--text-primary)]">
-                <Icon size={18} weight="duotone" aria-hidden />
+        {/* Live Technical Specs Panel (Admin Only) */}
+        {isAdmin && (
+          <div className="border-t border-neutral-100 bg-neutral-50/80 p-4 px-6 dark:border-zinc-800/80 dark:bg-zinc-900/40">
+            <div className="grid gap-4 text-xs font-mono sm:grid-cols-4">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                <span className="text-neutral-400 dark:text-zinc-500">Status:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">Online & Ativo</span>
               </div>
-              <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--text-primary)]">
-                {cap.title}
-              </h2>
-              <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">
-                {cap.desc}
-              </p>
-            </motion.article>
-          );
-        })}
+              <div>
+                <span className="text-neutral-400 dark:text-zinc-500">Ambiente:</span>{" "}
+                <span className="font-semibold text-neutral-800 dark:text-zinc-200">Railway Dedicated</span>
+              </div>
+              <div>
+                <span className="text-neutral-400 dark:text-zinc-500">Permissão:</span>{" "}
+                <span className="font-semibold text-violet-600 dark:text-violet-400">Admin Root</span>
+              </div>
+              <div>
+                <span className="text-neutral-400 dark:text-zinc-500">Latência:</span>{" "}
+                <span className="font-semibold text-neutral-800 dark:text-zinc-200">&lt; 120ms</span>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
-      {/* Staff note */}
+      {/* Capabilities Section */}
+      <div className="mt-10">
+        <h2 className="mb-4 font-display text-base font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-50">
+          Capacidade & Recursos do Agente
+        </h2>
+
+        <div className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-4", !isAdmin && "opacity-50")}>
+          {CAPABILITIES.map((cap, i) => {
+            const Icon = cap.icon;
+            return (
+              <motion.article
+                key={cap.title}
+                initial={reduce ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  delay: reduce ? 0 : 0.05 * i,
+                  duration: 0.25,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
+                className="group relative flex flex-col justify-between rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-md dark:border-zinc-800 dark:bg-[#141414] dark:hover:border-zinc-700"
+              >
+                <div>
+                  <div className={`mb-3.5 inline-flex h-11 w-11 items-center justify-center rounded-xl transition-transform group-hover:scale-105 ${cap.accent}`}>
+                    <Icon size={22} weight="fill" />
+                  </div>
+                  <h3 className="font-display text-sm font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-50">
+                    {cap.title}
+                  </h3>
+                  <p className="mt-1.5 text-xs leading-relaxed text-neutral-600 dark:text-zinc-400">
+                    {cap.desc}
+                  </p>
+                </div>
+              </motion.article>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Staff Policy Note */}
       <aside
         className={cn(
-          "mt-6 flex gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]/80 px-4 py-3",
-          !isAdmin && "opacity-45"
+          "mt-8 flex items-start gap-3 rounded-2xl border border-neutral-200/80 bg-neutral-50/80 p-4 dark:border-zinc-800/80 dark:bg-[#141414]/60",
+          !isAdmin && "opacity-50"
         )}
       >
         <ShieldCheck
           size={20}
           weight="fill"
-          className="mt-0.5 shrink-0 text-[var(--text-secondary)]"
-          aria-hidden
+          className="mt-0.5 shrink-0 text-violet-500"
         />
         <div className="min-w-0">
-          <p className="text-[13px] font-medium text-[var(--text-primary)]">
-            Ferramenta da categoria Staff · Ferramentas
+          <p className="text-xs font-semibold text-[#1f1f1f] dark:text-zinc-100">
+            Política de Execução & Segurança Staff
           </p>
-          <p className="mt-0.5 text-[13px] leading-relaxed text-[var(--text-secondary)]">
-            Visível no menu para toda a comunidade; execução liberada somente
-            para contas com papel{" "}
-            <span className="font-medium text-[var(--text-primary)]">admin</span>
-            .
+          <p className="mt-0.5 text-xs leading-relaxed text-neutral-500 dark:text-zinc-400">
+            Ferramenta visível no catálogo de tools da plataforma; a execução de agentes e comandos autônomos é liberada exclusivamente para contas com papel de <span className="font-medium text-neutral-900 dark:text-zinc-200">administrador</span>.
           </p>
         </div>
       </aside>
     </div>
   );
 }
+
