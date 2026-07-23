@@ -73,8 +73,9 @@ export default function LoginPage() {
 
                 <Button
                   type="button"
+                  variant="outline"
                   onClick={handleGoogleLogin}
-                  className="relative flex w-full items-center justify-center gap-3 rounded-xl border border-neutral-300 bg-white px-5 py-3.5 text-sm font-semibold text-neutral-800 shadow-sm transition-all hover:bg-neutral-50 hover:border-neutral-400 active:scale-[0.98] disabled:opacity-50"
+                  className="relative flex w-full items-center justify-center gap-3 rounded-xl border border-neutral-300 bg-white px-5 py-3.5 text-sm font-semibold !text-black shadow-sm transition-all hover:bg-neutral-50 hover:border-neutral-400 active:scale-[0.98] disabled:opacity-50"
                   size="lg"
                   loading={loading}
                 >
@@ -98,7 +99,7 @@ export default function LoginPage() {
                       />
                     </svg>
                   )}
-                  <span>{loading ? "Conectando ao Google..." : "Entrar com Google"}</span>
+                  <span className="font-semibold !text-black">{loading ? "Conectando ao Google..." : "Entrar com Google"}</span>
                 </Button>
               </div>
 
