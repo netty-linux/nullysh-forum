@@ -24,7 +24,6 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      // Se não houver redirect imediato pelo Supabase OAuth, redireciona localmente
       if (!isSupabaseConfigured()) {
         router.push("/app");
       }
@@ -38,7 +37,6 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[#ebebeb]">
-      {/* Barra preta de marca - contraste de topo */}
       <div className="h-1.5 w-full bg-black" />
       <div className="border-b border-neutral-300 bg-white px-4 py-4 sm:px-6">
         <Logo />
@@ -57,7 +55,17 @@ export default function LoginPage() {
             </div>
 
             <div className="p-6 sm:p-8">
-              <p className="text-sm leading-relaxed text-neutral-600">
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed space-y-1">
+                <p className="font-semibold flex items-center gap-1.5 text-amber-950">
+                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                  Estamos em Desenvolvimento
+                </p>
+                <p>
+                  O fórum está em acesso restrito. Apenas contas pré-autorizadas pela equipe conseguem realizar login.
+                </p>
+              </div>
+
+              <p className="mt-4 text-sm leading-relaxed text-neutral-600">
                 Acesse sua conta para visualizar o feed, participar dos assuntos e acessar os materiais exclusivos.
               </p>
 

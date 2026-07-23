@@ -17,6 +17,7 @@ import {
   offloadUserMedia,
 } from "./media-storage";
 import { normalizeFavoriteTracks } from "./music";
+import { isEmailAllowed } from "./access-control";
 import { isSupabaseConfigured } from "./supabase/config";
 import {
   fetchAllProfiles,
@@ -407,7 +408,7 @@ export const useAuthStore = create<AuthState>()(
 
       applyRemoteSession: ({ currentUser, users }) => {
         // Logout explícito (SIGNED_OUT / INITIAL_SESSION sem JWT)
-        if (!currentUser) {
+        if (!currentUser || !isEmailAllowed(currentUser.email)) {
           set((s) => ({
             remoteMode: true,
             // Mescla perfis públicos recebidos; NÃO zera o catálogo

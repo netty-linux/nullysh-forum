@@ -55,7 +55,17 @@ export default function RegisterPage() {
             </div>
 
             <div className="p-6 sm:p-8">
-              <p className="text-sm leading-relaxed text-neutral-600">
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed space-y-1">
+                <p className="font-semibold flex items-center gap-1.5 text-amber-950">
+                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                  Estamos em Desenvolvimento
+                </p>
+                <p>
+                  O fórum está em acesso privado. Novos cadastros estão restritos a e-mails autorizados.
+                </p>
+              </div>
+
+              <p className="mt-4 text-sm leading-relaxed text-neutral-600">
                 Junte-se à comunidade Nullysh em apenas 1 clique usando sua conta do Google.
               </p>
 

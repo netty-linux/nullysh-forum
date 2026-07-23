@@ -15,6 +15,7 @@ import {
   fetchProfileById,
 } from "@/lib/supabase/auth-service";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
+import { isEmailAllowed } from "@/lib/access-control";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import type { UserPublic } from "@/lib/types";
 import { useEffect, useRef } from "react";
@@ -157,6 +158,17 @@ export function SupabaseAuthBridge({
             remoteMode: true,
             currentUserId: sessionUserId,
           });
+          return;
+        }
+
+        if (me && !isEmailAllowed(me.email)) {
+          console.warn(
+            "[supabase-bridge] E-mail não autorizado durante o desenvolvimento:",
+            me.email
+          );
+          const client = getSupabaseBrowser();
+          if (client) await client.auth.signOut();
+          applyRemoteSession({ currentUser: null, users: profiles });
           return;
         }
 

@@ -32,3 +32,21 @@ export function canAccessVipContent(opts: {
 }): boolean {
   return !!opts.isVip || opts.role === "admin";
 }
+
+/**
+ * Lista VIP de e-mails permitidos durante o período de desenvolvimento privado.
+ */
+export const ALLOWED_EMAILS = [
+  "elevateiamedusax@gmail.com",
+  "contatodilon7@gmail.com",
+  "playandogamer150@gmail.com",
+] as const;
+
+export const DEVELOPMENT_BLOCKED_MESSAGE =
+  "Estamos em Desenvolvimento. O Nullysh Forum está em acesso privado restrito no momento.";
+
+export function isEmailAllowed(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  return ALLOWED_EMAILS.some((e) => e.toLowerCase() === normalized);
+}
