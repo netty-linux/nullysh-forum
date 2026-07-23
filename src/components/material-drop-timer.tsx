@@ -100,68 +100,78 @@ export function MaterialDropTimer({ className }: { className?: string }) {
       <div className="relative z-10 flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:p-6">
         <div className="min-w-0 flex-1 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white ring-1 ring-white/15">
-              <Gift size={13} weight="fill" className="text-white" />
-              Drop de materiais
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-300 ring-1 ring-amber-500/30">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+              </span>
+              <Gift size={13} weight="fill" className="text-amber-300" />
+              Drop de Materiais
             </span>
             {isVip ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#ffffff] px-2 py-0.5 text-[10px] font-bold tracking-wide text-[#0a0a0a]">
-                <CrownSimple size={11} weight="fill" />
-                VIP · 6h
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-400 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-neutral-950 shadow-sm">
+                <CrownSimple size={12} weight="fill" />
+                VIP · Drops a cada 6h
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white/80 ring-1 ring-white/15">
-                Free · 24h
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-white/80 ring-1 ring-white/15">
+                Free · Drops a cada 24h
               </span>
             )}
           </div>
 
           <div>
-            <p className="flex items-center gap-2 text-sm font-semibold text-white sm:text-base">
-              <ClockCountdown size={18} weight="bold" className="shrink-0" />
+            <p className="flex items-center gap-2 text-base font-semibold text-white">
+              <ClockCountdown size={20} weight="bold" className="shrink-0 text-amber-400" />
               {isVip
-                ? "Próximo material VIP em"
-                : "Próximo material free em"}
+                ? "Próximo Drop Exclusivo VIP em"
+                : "Próximo Drop Gratuito em"}
             </p>
-            <p className="mt-1.5 max-w-md text-xs leading-relaxed text-white/65 sm:text-[13px]">
+            <p className="mt-1.5 max-w-lg text-xs leading-relaxed text-white/70 sm:text-[13px]">
               {isVip ? (
                 <>
-                  Como VIP, um material novo dropa a cada{" "}
-                  <strong className="font-semibold text-white">6 horas</strong>.
-                  Membros free recebem um drop a cada{" "}
-                  <strong className="font-semibold text-white">24 horas</strong>.
+                  Como assinante VIP, você recebe drops novos do staff a cada{" "}
+                  <strong className="font-semibold text-amber-300">6 horas</strong>!
                 </>
               ) : (
                 <>
-                  A cada{" "}
-                  <strong className="font-semibold text-white">24 horas</strong>{" "}
-                  dropa um material novo para membros free.{" "}
-                  <span className="text-white/90">
-                    VIPs recebem drops a cada 6 horas
-                  </span>
-                  .
+                  Membros Free recebem drops novos a cada{" "}
+                  <strong className="font-semibold text-white">24 horas</strong>. Assinantes VIP recebem drops{" "}
+                  <strong className="font-semibold text-amber-300">4x mais frequentes (a cada 6h)</strong>.
                 </>
               )}
             </p>
           </div>
         </div>
 
-        {/* Cronômetro */}
-        <div
-          className="flex shrink-0 items-end gap-1.5 sm:gap-2"
-          role="timer"
-          aria-live="polite"
-          aria-label={`Tempo restante: ${hours} horas, ${minutes} minutos e ${seconds} segundos`}
-        >
-          <DigitBlock value={hours} label="hrs" />
-          <span className="mb-6 font-mono text-xl font-bold text-white/40 sm:text-2xl">
-            :
-          </span>
-          <DigitBlock value={minutes} label="min" />
-          <span className="mb-6 font-mono text-xl font-bold text-white/40 sm:text-2xl">
-            :
-          </span>
-          <DigitBlock value={seconds} label="seg" />
+        {/* Cronômetro + CTA */}
+        <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
+          <div
+            className="flex items-end gap-1.5 sm:gap-2"
+            role="timer"
+            aria-live="polite"
+            aria-label={`Tempo restante: ${hours} horas, ${minutes} minutos e ${seconds} segundos`}
+          >
+            <DigitBlock value={hours} label="hrs" />
+            <span className="mb-6 font-mono text-xl font-bold text-white/40 sm:text-2xl">
+              :
+            </span>
+            <DigitBlock value={minutes} label="min" />
+            <span className="mb-6 font-mono text-xl font-bold text-white/40 sm:text-2xl">
+              :
+            </span>
+            <DigitBlock value={seconds} label="seg" />
+          </div>
+
+          {!isVip && (
+            <a
+              href="/pricing"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300 transition-colors hover:text-amber-200 hover:underline"
+            >
+              <CrownSimple size={13} weight="fill" />
+              Drops 4x mais rápidos com VIP →
+            </a>
+          )}
         </div>
       </div>
     </div>
