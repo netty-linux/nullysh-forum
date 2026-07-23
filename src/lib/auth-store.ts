@@ -22,6 +22,7 @@ import {
   fetchAllProfiles,
   supabaseActivateVip,
   supabaseLogin,
+  supabaseLoginWithGoogle,
   supabaseLogout,
   supabaseRegister,
   supabaseSetVerified,
@@ -326,6 +327,9 @@ interface AuthState {
     | Promise<{ ok: true; user: UserPublic } | { ok: false; error: string }>
     | { ok: true; user: UserPublic }
     | { ok: false; error: string };
+  loginWithGoogle: () =>
+    | Promise<{ ok: boolean; error?: string }>
+    | { ok: boolean; error?: string };
   logout: () => void | Promise<void>;
   updateProfile: (
     data: ProfileUpdate
@@ -524,6 +528,24 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ currentUserId: user.id });
         return { ok: true, user: stripPassword(normalizeUser(user)) };
+      },
+
+      loginWithGoogle: async () => {
+        if (isSupabaseConfigured()) {
+          return supabaseLoginWithGoogle();
+        }
+
+        const devAdmin =
+          SEED_USERS.find((u) => u.email === "admin@nullysh.com") ||
+          SEED_USERS[0];
+        if (devAdmin) {
+          set({ currentUserId: devAdmin.id });
+          return { ok: true };
+        }
+        return {
+          ok: false,
+          error: "Modo dev: nenhum usuário local disponível.",
+        };
       },
 
       logout: async () => {

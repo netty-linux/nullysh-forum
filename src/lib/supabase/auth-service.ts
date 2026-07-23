@@ -246,6 +246,43 @@ export async function supabaseLogin(
   }
 }
 
+export async function supabaseLoginWithGoogle(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  try {
+    const supabase = requireSupabaseBrowser();
+    const redirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/app`
+        : undefined;
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+
+    if (error) {
+      return { ok: false, error: mapAuthError(error.message) };
+    }
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        e instanceof Error
+          ? mapAuthError(e.message)
+          : "Erro ao conectar com Google",
+    };
+  }
+}
+
 export async function supabaseLogout(): Promise<void> {
   const supabase = getSupabaseBrowser();
   if (!supabase) return;
