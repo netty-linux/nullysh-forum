@@ -1,6 +1,6 @@
 name: Deploy Cloudflare Worker
 
-# Build no Linux (OpenNext não é estável no Windows) e publica no Worker free.
+# Build no Linux (OpenNext não é estável no Windows) e publica no Worker.
 on:
   push:
     branches: [master]
@@ -21,14 +21,27 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Check Cloudflare Token
+        id: check_token
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "::warning title=Cloudflare Token Missing::CLOUDFLARE_API_TOKEN secret is not set in GitHub Repository Secrets. Skipping CI deploy step."
+            echo "has_token=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_token=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build OpenNext
+        if: steps.check_token.outputs.has_token == 'true'
         run: npx opennextjs-cloudflare build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
       - name: Deploy Worker
+        if: steps.check_token.outputs.has_token == 'true'
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
