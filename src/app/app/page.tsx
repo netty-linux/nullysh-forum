@@ -129,6 +129,12 @@ export default function FeedPage() {
     maxChars,
   });
 
+  const activeLineNumber = useMemo(() => {
+    if (!hashtagSuggest.open || !hashtagSuggest.query) return 0;
+    const textBeforeHash = content.slice(0, hashtagSuggest.query.start);
+    return (textBeforeHash.match(/\n/g) || []).length;
+  }, [content, hashtagSuggest.open, hashtagSuggest.query]);
+
   const reposts = useForumStore((s) => s.reposts);
 
   // Ranking: qualidade × freshness + reposts no feed
@@ -642,7 +648,10 @@ export default function FeedPage() {
                 activeIndex={hashtagSuggest.activeIndex}
                 onSelect={hashtagSuggest.select}
                 onHover={hashtagSuggest.setActiveIndex}
-                className="absolute left-0 right-0 top-full z-30 mt-1"
+                className="absolute left-0 z-40 mt-0.5 w-72 max-w-full shadow-xl"
+                style={{
+                  top: `${Math.min((activeLineNumber + 1) * 26 + 4, 100)}px`,
+                }}
               />
             )}
 

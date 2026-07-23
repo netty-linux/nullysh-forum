@@ -124,6 +124,7 @@ export function useHashtagSuggest(opts: {
 
   return {
     open,
+    query,
     items,
     activeIndex,
     setActiveIndex,

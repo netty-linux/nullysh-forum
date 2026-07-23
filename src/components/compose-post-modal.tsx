@@ -49,6 +49,7 @@ import {
   FormEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -128,6 +129,12 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     textareaRef,
     maxChars,
   });
+
+  const activeLineNumber = useMemo(() => {
+    if (!hashtagSuggest.open || !hashtagSuggest.query) return 0;
+    const textBeforeHash = content.slice(0, hashtagSuggest.query.start);
+    return (textBeforeHash.match(/\n/g) || []).length;
+  }, [content, hashtagSuggest.open, hashtagSuggest.query]);
 
   const reset = useCallback(() => {
     setContent("");
@@ -510,61 +517,53 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                 "max-h-[min(92dvh,720px)] overflow-hidden",
                 "rounded-t-3xl border-2 border-[#1f1f1f] bg-white sm:rounded-3xl",
                 "shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_24px_64px_-12px_rgb(0_0_0/0.45),0_8px_24px_-8px_rgb(0_0_0/0.2)]",
-                "dark:border-zinc-100 dark:bg-[#141414]",
-                "dark:shadow-[0_0_0_1px_rgb(255_255_255/0.08),0_24px_64px_-12px_rgb(0_0_0/0.7)]"
+                "dark:border-zinc-100 dark:bg-[#141414]"
               )}
             >
-              {/* Handle mobile */}
-              <div className="flex justify-center pt-2 sm:hidden">
-                <span className="h-1 w-10 rounded-full bg-neutral-300 dark:bg-zinc-600" />
-              </div>
-
               {/* Header */}
-              <div className="flex items-center justify-between gap-3 border-b-2 border-[#1f1f1f]/10 px-5 pb-3 pt-3 dark:border-zinc-700 sm:pt-4">
-                <div className="min-w-0">
-                  <h2
-                    id="compose-modal-title"
-                    className="text-base font-bold tracking-tight text-[#1f1f1f] dark:text-zinc-50"
-                  >
-                    Nova postagem
-                  </h2>
-                  <p className="mt-0.5 text-xs text-neutral-500">
-                    Compartilhe com a comunidade Nullysh
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  className={cn(
-                    "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                    "border-2 border-[#1f1f1f] bg-white text-[#1f1f1f]",
-                    "shadow-[0_2px_8px_-2px_rgb(0_0_0/0.2)]",
-                    "transition hover:bg-neutral-50 active:scale-95",
-                    "dark:border-zinc-100 dark:bg-zinc-900 dark:text-zinc-100"
-                  )}
-                  aria-label="Fechar"
-                >
-                  <X size={16} weight="bold" />
-                </button>
+              <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4 dark:border-zinc-800/80">
+              <div>
+                <h2 className="font-display text-lg font-semibold text-[#1f1f1f] dark:text-zinc-50">
+                  Nova postagem
+                </h2>
+                <p className="text-xs text-neutral-500 dark:text-zinc-400">
+                  Compartilhe com a comunidade Nullysh
+                </p>
               </div>
-
-              {/* Body */}
-              <form
-                onSubmit={onSubmit}
-                onPaste={onComposerPaste}
-                className="flex min-h-0 flex-1 flex-col"
+              <button
+                type="button"
+                onClick={handleClose}
+                className={cn(
+                  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+                  "border-2 border-[#1f1f1f] bg-white text-[#1f1f1f]",
+                  "shadow-[0_2px_8px_-2px_rgb(0_0_0/0.2)]",
+                  "transition hover:bg-neutral-50 active:scale-95",
+                  "dark:border-zinc-100 dark:bg-zinc-900 dark:text-zinc-100"
+                )}
+                aria-label="Fechar"
               >
-                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-                  <div className="flex gap-3">
-                    <Avatar
-                      name={user?.name || "U"}
-                      src={user?.avatarUrl}
-                      size="md"
-                    />
-                    <div className="relative min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
-                        {user?.name || "Você"}
-                      </p>
+                <X size={16} weight="bold" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form
+              onSubmit={onSubmit}
+              onPaste={onComposerPaste}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                <div className="flex gap-3">
+                  <Avatar
+                    name={user?.name || "U"}
+                    src={user?.avatarUrl}
+                    size="md"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
+                      {user?.name || "Você"}
+                    </p>
+                    <div className="relative mt-1">
                       <textarea
                         ref={textareaRef}
                         value={content}
@@ -590,7 +589,7 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                         placeholder={placeholder}
                         rows={3}
                         className={cn(
-                          "composer-input mt-1 w-full resize-none border-0 bg-transparent",
+                          "composer-input w-full resize-none border-0 bg-transparent",
                           "text-[16px] leading-relaxed text-[#0f1419]",
                           "placeholder:text-neutral-400 outline-none",
                           "dark:text-zinc-100 dark:placeholder:text-zinc-500",
@@ -603,11 +602,15 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                           activeIndex={hashtagSuggest.activeIndex}
                           onSelect={hashtagSuggest.select}
                           onHover={hashtagSuggest.setActiveIndex}
-                          className="absolute left-0 right-0 top-full z-40 mt-1"
+                          className="absolute left-0 z-50 mt-0.5 w-72 max-w-full shadow-xl"
+                          style={{
+                            top: `${Math.min((activeLineNumber + 1) * 26 + 4, 120)}px`,
+                          }}
                         />
                       )}
                     </div>
                   </div>
+                </div>
 
                   {imageUrl && !gifUrl && (
                     <div

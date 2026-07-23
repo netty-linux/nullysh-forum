@@ -14,6 +14,7 @@ type Props = {
   onSelect: (community: Community) => void;
   onHover: (index: number) => void;
   className?: string;
+  style?: React.CSSProperties;
 };
 
 /**
@@ -25,6 +26,7 @@ export function HashtagSuggestMenu({
   onSelect,
   onHover,
   className,
+  style,
 }: Props) {
   if (items.length === 0) return null;
 
@@ -32,6 +34,7 @@ export function HashtagSuggestMenu({
     <div
       role="listbox"
       aria-label="Assuntos"
+      style={style}
       className={cn(
         "overflow-hidden rounded-xl border border-neutral-200/90 bg-white",
         "shadow-[0_8px_30px_-8px_rgb(0_0_0/0.18),0_0_0_1px_rgb(0_0_0/0.04)]",
@@ -43,7 +46,7 @@ export function HashtagSuggestMenu({
       <p className="border-b border-neutral-100 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400 dark:border-zinc-800">
         Assuntos
       </p>
-      <ul className="max-h-[220px] overflow-y-auto py-1">
+      <ul className="max-h-[170px] overflow-y-auto py-1">
         {items.map((c, i) => {
           const active = i === activeIndex;
           const vip = c.access === "vip" || c.vipOnly;
