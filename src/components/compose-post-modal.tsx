@@ -596,18 +596,6 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                           "min-h-[88px]"
                         )}
                       />
-                      {hashtagSuggest.open && (
-                        <HashtagSuggestMenu
-                          items={hashtagSuggest.items}
-                          activeIndex={hashtagSuggest.activeIndex}
-                          onSelect={hashtagSuggest.select}
-                          onHover={hashtagSuggest.setActiveIndex}
-                          className="absolute left-0 z-50 mt-0.5 w-72 max-w-full shadow-xl"
-                          style={{
-                            top: `${Math.min((activeLineNumber + 1) * 26 + 4, 120)}px`,
-                          }}
-                        />
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1024,6 +1012,20 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                   </div>
                 </div>
               </form>
+
+              {hashtagSuggest.open && (
+                <HashtagSuggestMenu
+                  items={hashtagSuggest.items}
+                  activeIndex={hashtagSuggest.activeIndex}
+                  onSelect={hashtagSuggest.select}
+                  onHover={hashtagSuggest.setActiveIndex}
+                  className="absolute z-50 w-72 max-w-[calc(100%-3rem)] shadow-2xl"
+                  style={{
+                    left: "68px",
+                    top: `${Math.min(108 + activeLineNumber * 26, 240)}px`,
+                  }}
+                />
+              )}
             </motion.div>
           </div>
         )}

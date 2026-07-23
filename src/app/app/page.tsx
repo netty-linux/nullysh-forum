@@ -642,19 +642,6 @@ export default function FeedPage() {
               )}
             />
 
-            {hashtagSuggest.open && (
-              <HashtagSuggestMenu
-                items={hashtagSuggest.items}
-                activeIndex={hashtagSuggest.activeIndex}
-                onSelect={hashtagSuggest.select}
-                onHover={hashtagSuggest.setActiveIndex}
-                className="absolute left-0 z-40 mt-0.5 w-72 max-w-full shadow-xl"
-                style={{
-                  top: `${Math.min((activeLineNumber + 1) * 26 + 4, 100)}px`,
-                }}
-              />
-            )}
-
             {/* Preview — proporção definida no editor de crop */}
             {imageUrl && (
               <div className="relative mt-2 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 dark:border-zinc-700 dark:bg-zinc-900">
@@ -1050,6 +1037,20 @@ export default function FeedPage() {
             </div>
           </div>
         </div>
+
+        {hashtagSuggest.open && (
+          <HashtagSuggestMenu
+            items={hashtagSuggest.items}
+            activeIndex={hashtagSuggest.activeIndex}
+            onSelect={hashtagSuggest.select}
+            onHover={hashtagSuggest.setActiveIndex}
+            className="absolute z-50 w-72 max-w-[calc(100%-3rem)] shadow-2xl"
+            style={{
+              left: "64px",
+              top: `${Math.min(52 + activeLineNumber * 26, 180)}px`,
+            }}
+          />
+        )}
       </form>
 
       <div className="space-y-3">
