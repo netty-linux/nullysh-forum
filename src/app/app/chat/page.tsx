@@ -28,9 +28,12 @@ import { useForumStore } from "@/lib/forum-store";
 import type { UserPublic } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
+  ChatTeardropText,
   ChatsCircle,
   Hash,
+  MagnifyingGlass,
   UserCircle,
+  UsersThree,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -42,7 +45,7 @@ import {
   useState,
 } from "react";
 
-/** Badge de não lidas estilo WhatsApp (verde / contador) */
+/** Badge de não lidas estilo Messenger / WhatsApp */
 function UnreadBadge({
   count,
   selected,
@@ -55,10 +58,10 @@ function UnreadBadge({
   return (
     <span
       className={cn(
-        "ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums leading-none",
+        "ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums leading-none transition-all",
         selected
-          ? "bg-white text-black dark:bg-black dark:text-white"
-          : "bg-[#25d366] text-white"
+          ? "bg-white text-neutral-950 dark:bg-zinc-100 dark:text-neutral-950 shadow-xs"
+          : "bg-emerald-500 text-white shadow-xs"
       )}
       aria-label={`${count} não lida${count > 1 ? "s" : ""}`}
     >
@@ -90,12 +93,13 @@ function ChatPageInner() {
     kind: "channel",
     id: chatChannels[0].id,
   });
+  const [searchQuery, setSearchQuery] = useState("");
   const [reactionError, setReactionError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
 
-  // Erro de reação (RPC/sessão/migration)
+  // Erro de reação
   useEffect(() => {
     function onErr(e: Event) {
       const detail = (e as CustomEvent<{ error?: string }>).detail;
@@ -108,7 +112,7 @@ function ChatPageInner() {
       window.removeEventListener("nullysh:chat-reaction-error", onErr);
   }, []);
 
-  // Abre sala quando vem de ?channel=ch1 (ex.: notif de reação no lobby)
+  // Abre sala quando vem de ?channel=ch1
   useEffect(() => {
     if (!channelParam || dmParam) return;
     const ch = chatChannels.find(
@@ -122,8 +126,7 @@ function ChatPageInner() {
     );
   }, [channelParam, dmParam]);
 
-  // Abre DM quando vem de ?dm=userId (ex.: botão Conversar no match)
-  // Depende de userId (primitivo), não do objeto user inteiro.
+  // Abre DM quando vem de ?dm=userId
   const userId = user?.id;
   useEffect(() => {
     if (!userId || !dmParam || dmParam === userId) return;
@@ -143,7 +146,7 @@ function ChatPageInner() {
     });
   }, [dmParam, userId, users, isEitherBlocked, blocks]);
 
-  // Lista de DMs recentes (canais dm_* em que o usuário participa)
+  // Lista de DMs recentes
   const dmPeers = useMemo(() => {
     if (!user) return [] as { peer: UserPublic; channelId: string; lastAt: string }[];
 
@@ -160,7 +163,7 @@ function ChatPageInner() {
       if (isEitherBlocked(user.id, peerId)) continue;
       const peerUser = users.find((u) => u.id === peerId);
       if (!peerUser) continue;
-      // strip password shape — users from store include password
+
       const { password: _pw, ...peerRest } = peerUser;
       const peer: UserPublic = {
         ...peerRest,
@@ -179,7 +182,6 @@ function ChatPageInner() {
       }
     }
 
-    // Inclui DM aberta via URL mesmo sem mensagens ainda
     if (
       active.kind === "dm" &&
       !map.has(active.peerId) &&
@@ -206,6 +208,25 @@ function ChatPageInner() {
       (a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
     );
   }, [messages, user, users, active, isEitherBlocked, blocks]);
+
+  // Filtro de salas e DMs pela busca
+  const filteredChannels = useMemo(() => {
+    if (!searchQuery.trim()) return chatChannels;
+    const q = searchQuery.toLowerCase().trim();
+    return chatChannels.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)
+    );
+  }, [searchQuery]);
+
+  const filteredDmPeers = useMemo(() => {
+    if (!searchQuery.trim()) return dmPeers;
+    const q = searchQuery.toLowerCase().trim();
+    return dmPeers.filter(
+      (item) =>
+        item.peer.name.toLowerCase().includes(q) ||
+        item.peer.username.toLowerCase().includes(q)
+    );
+  }, [dmPeers, searchQuery]);
 
   const channelId =
     active.kind === "channel" ? active.id : active.channelId;
@@ -274,13 +295,11 @@ function ChatPageInner() {
     !!user &&
     isEitherBlocked(user.id, active.peerId);
 
-  // Marca sala como lida ao abrir / ao receber msgs enquanto está aberta
   useEffect(() => {
     if (!user || locked || dmBlocked) return;
     void markChannelAsRead(channelId);
   }, [channelId, user?.id, locked, dmBlocked, channelMessages.length]);
 
-  // Auto-scroll só se o user já está perto do fim (conversa flui sem puxar se leu o histórico)
   useEffect(() => {
     if (!stickToBottomRef.current) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -290,7 +309,6 @@ function ChatPageInner() {
     stickToBottomRef.current = true;
   }, [channelId]);
 
-  // Se a DM ativa ficou bloqueada, volta para sala pública
   useEffect(() => {
     if (dmBlocked) {
       setActive({ kind: "channel", id: chatChannels[0].id });
@@ -338,9 +356,9 @@ function ChatPageInner() {
   const headerSub =
     active.kind === "dm"
       ? dmBlocked
-        ? "Conversa indisponível · bloqueio ativo"
-        : "Mensagem direta · privado entre vocês"
-      : publicChannel?.description ?? "";
+        ? "Conversa indisponível · Bloqueio ativo"
+        : "Mensagem Direta · Privado entre vocês"
+      : publicChannel?.description ?? "Canal de conversas";
 
   const placeholder =
     active.kind === "dm"
@@ -350,186 +368,238 @@ function ChatPageInner() {
       : `Mensagem em #${publicChannel?.name ?? "sala"}`;
 
   return (
-    <div className="app-page mx-auto flex h-[calc(100dvh-3.5rem)] max-w-5xl flex-col px-0 sm:h-[100dvh] sm:px-6 sm:py-6 lg:h-[100dvh]">
+    <div className="app-page mx-auto flex h-[calc(100dvh-4rem)] max-w-6xl flex-col px-2 sm:px-6 sm:py-6 lg:h-[calc(100dvh-2.5rem)]">
       {reactionError && (
         <div
           role="alert"
-          className="mx-3 mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700 sm:mx-0 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+          className="mx-3 mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 sm:mx-0 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300"
         >
           {reactionError}
         </div>
       )}
-      <div className="flex min-h-0 flex-1 overflow-hidden border-2 border-black bg-white sm:rounded-2xl dark:border-zinc-700 dark:bg-[#141414]">
-        {/* Sidebar */}
-        <aside className="hidden w-60 shrink-0 border-r-2 border-black dark:border-zinc-700 md:flex md:flex-col">
-          <div className="border-b-2 border-black bg-black p-4 text-white">
-            <h1 className="text-sm font-bold tracking-tight">Bate-papo</h1>
-            <p className="mt-0.5 text-xs text-neutral-400">
-              Salas e mensagens diretas
-            </p>
-          </div>
 
-          <div className="thin-scroll flex-1 overflow-y-auto p-2">
-            <p className="px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-400">
-              Salas
-            </p>
-            <div className="space-y-0.5">
-              {chatChannels.map((ch) => {
-                const selected =
-                  active.kind === "channel" && active.id === ch.id;
-                const unread = unreadByChannel[ch.id] ?? 0;
-                return (
-                  <button
-                    key={ch.id}
-                    type="button"
-                    onClick={() => openChannel(ch.id)}
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors",
-                      selected
-                        ? "bg-black text-white dark:bg-white dark:text-black"
-                        : "text-neutral-600 hover:bg-neutral-100 hover:text-black dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white",
-                      unread > 0 && !selected && "font-bold text-neutral-900 dark:text-zinc-100"
-                    )}
-                  >
-                    <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
-                      <Hash size={14} weight="bold" className="shrink-0 opacity-60" />
-                      <span className="truncate">{ch.name}</span>
-                    </span>
-                    {ch.vipOnly && unread === 0 && (
-                      <span
-                        className={cn(
-                          "shrink-0 text-[9px] font-semibold uppercase",
-                          selected ? "opacity-80" : "text-neutral-400"
-                        )}
-                      >
-                        VIP
-                      </span>
-                    )}
-                    <UnreadBadge count={unread} selected={selected} />
-                  </button>
-                );
-              })}
+      {/* Main Glass Messenger Frame */}
+      <div className="flex min-h-0 flex-1 overflow-hidden rounded-3xl border border-neutral-200/90 bg-white shadow-xl dark:border-zinc-800 dark:bg-[#141414]">
+        {/* Left Sidebar */}
+        <aside className="hidden w-72 shrink-0 border-r border-neutral-200/80 bg-neutral-50/60 dark:border-zinc-800 dark:bg-[#101010]/90 md:flex md:flex-col">
+          {/* Sidebar Header */}
+          <div className="border-b border-neutral-200/80 p-4 dark:border-zinc-800/80">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-900 text-white dark:bg-zinc-100 dark:text-neutral-950">
+                <ChatTeardropText size={18} weight="fill" />
+              </span>
+              <div>
+                <h1 className="font-display text-sm font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-100">
+                  Bate-Papo
+                </h1>
+                <p className="text-[11px] text-neutral-500 dark:text-zinc-400">
+                  Salas & Mensagens Diretas
+                </p>
+              </div>
             </div>
 
-            <p className="mt-4 flex items-center gap-1.5 px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-400">
-              <ChatsCircle size={12} weight="bold" />
-              Diretas
-            </p>
-            <div className="space-y-0.5">
-              {dmPeers.length === 0 && (
-                <p className="px-3 py-2 text-xs leading-relaxed text-neutral-400">
-                  Nenhuma DM ainda. Use{" "}
-                  <strong className="font-semibold text-neutral-500">
-                    Conversar
-                  </strong>{" "}
-                  no match de mentorias.
-                </p>
-              )}
-              {dmPeers.map(({ peer, channelId: cid }) => {
-                const selected =
-                  active.kind === "dm" && active.channelId === cid;
-                const unread = unreadByChannel[cid] ?? 0;
-                return (
-                  <button
-                    key={cid}
-                    type="button"
-                    onClick={() => openDm(peer.id)}
-                    className={cn(
-                      "flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors",
-                      selected
-                        ? "bg-black text-white dark:bg-white dark:text-black"
-                        : "text-neutral-700 hover:bg-neutral-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                    )}
-                  >
-                    <Avatar
-                      name={peer.name}
-                      src={peer.avatarUrl}
-                      size="sm"
-                      frame={peer.isVip ? peer.avatarFrame : null}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className={cn(
-                          "flex items-center gap-1 truncate text-sm",
-                          unread > 0 ? "font-bold" : "font-semibold"
-                        )}
-                      >
-                        <span className="truncate">{peer.name}</span>
-                        {peer.isVerified && (
-                          <VerifiedBadge
-                            size={12}
-                            className={selected ? "opacity-90" : undefined}
-                          />
-                        )}
+            {/* Quick Filter Input */}
+            <div className="relative mt-3">
+              <MagnifyingGlass
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 dark:text-zinc-500"
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar conversas..."
+                className="w-full rounded-xl border border-neutral-200/80 bg-white py-1.5 pl-8 pr-3 text-xs text-neutral-900 placeholder-neutral-400 transition-all focus:border-neutral-400 focus:outline-none dark:border-zinc-800 dark:bg-[#18181b] dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-zinc-700"
+              />
+            </div>
+          </div>
+
+          {/* Sidebar Conversations List */}
+          <div className="thin-scroll flex-1 overflow-y-auto p-2 space-y-4">
+            {/* Community Channels */}
+            <div>
+              <p className="flex items-center gap-1.5 px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-zinc-500">
+                <UsersThree size={13} weight="bold" />
+                Salas da Comunidade
+              </p>
+              <div className="space-y-1">
+                {filteredChannels.map((ch) => {
+                  const selected =
+                    active.kind === "channel" && active.id === ch.id;
+                  const unread = unreadByChannel[ch.id] ?? 0;
+                  return (
+                    <button
+                      key={ch.id}
+                      type="button"
+                      onClick={() => openChannel(ch.id)}
+                      className={cn(
+                        "group flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-all",
+                        selected
+                          ? "bg-[#1f1f1f] text-white shadow-sm dark:bg-zinc-100 dark:text-neutral-950 font-semibold"
+                          : "text-neutral-700 hover:bg-neutral-200/60 dark:text-zinc-300 dark:hover:bg-zinc-800/80",
+                        unread > 0 && !selected && "font-bold text-neutral-950 dark:text-white"
+                      )}
+                    >
+                      <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
+                        <Hash
+                          size={15}
+                          weight="bold"
+                          className={cn(
+                            "shrink-0 transition-opacity",
+                            selected ? "opacity-100" : "opacity-40 group-hover:opacity-70"
+                          )}
+                        />
+                        <span className="truncate">{ch.name}</span>
                       </span>
-                      <span
-                        className={cn(
-                          "block truncate text-[11px]",
-                          selected ? "opacity-70" : "text-neutral-400",
-                          unread > 0 && !selected && "font-medium text-neutral-600 dark:text-zinc-300"
-                        )}
-                      >
-                        {unread > 0
-                          ? `${unread} nova${unread > 1 ? "s" : ""}`
-                          : "Direct"}
+                      {ch.vipOnly && unread === 0 && (
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
+                            selected
+                              ? "bg-amber-400 text-neutral-950"
+                              : "bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
+                          )}
+                        >
+                          VIP
+                        </span>
+                      )}
+                      <UnreadBadge count={unread} selected={selected} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Direct Messages */}
+            <div>
+              <p className="flex items-center gap-1.5 px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-zinc-500">
+                <ChatsCircle size={13} weight="bold" />
+                Mensagens Diretas
+              </p>
+              <div className="space-y-1">
+                {filteredDmPeers.length === 0 && (
+                  <p className="px-3 py-3 text-xs leading-relaxed text-neutral-400 dark:text-zinc-500 italic">
+                    Nenhuma conversa iniciada. Clique em <strong className="font-semibold text-neutral-600 dark:text-zinc-300">Conversar</strong> no perfil de um membro.
+                  </p>
+                )}
+                {filteredDmPeers.map(({ peer, channelId: cid }) => {
+                  const selected =
+                    active.kind === "dm" && active.channelId === cid;
+                  const unread = unreadByChannel[cid] ?? 0;
+                  return (
+                    <button
+                      key={cid}
+                      type="button"
+                      onClick={() => openDm(peer.id)}
+                      className={cn(
+                        "group flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-all",
+                        selected
+                          ? "bg-[#1f1f1f] text-white shadow-sm dark:bg-zinc-100 dark:text-neutral-950"
+                          : "text-neutral-700 hover:bg-neutral-200/60 dark:text-zinc-300 dark:hover:bg-zinc-800/80"
+                      )}
+                    >
+                      <div className="relative shrink-0">
+                        <Avatar
+                          name={peer.name}
+                          src={peer.avatarUrl}
+                          size="sm"
+                          frame={peer.isVip ? peer.avatarFrame : null}
+                        />
+                        <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#101010]" />
+                      </div>
+                      <span className="min-w-0 flex-1">
+                        <span
+                          className={cn(
+                            "flex items-center gap-1 truncate text-xs",
+                            unread > 0 || selected ? "font-bold" : "font-semibold"
+                          )}
+                        >
+                          <span className="truncate">{peer.name}</span>
+                          {peer.isVerified && (
+                            <VerifiedBadge
+                              size={12}
+                              className={selected ? "opacity-90" : undefined}
+                            />
+                          )}
+                        </span>
+                        <span
+                          className={cn(
+                            "block truncate text-[11px]",
+                            selected ? "opacity-70" : "text-neutral-400 dark:text-zinc-400",
+                            unread > 0 && !selected && "font-semibold text-emerald-600 dark:text-emerald-400"
+                          )}
+                        >
+                          {unread > 0
+                            ? `${unread} nova${unread > 1 ? "s" : ""}`
+                            : "Direct Privado"}
+                        </span>
                       </span>
-                    </span>
-                    <UnreadBadge count={unread} selected={selected} />
-                  </button>
-                );
-              })}
+                      <UnreadBadge count={unread} selected={selected} />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </aside>
 
-        {/* Main */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center justify-between gap-3 border-b border-neutral-200/70 px-4 py-3 dark:border-zinc-800">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
+        {/* Main Conversation Stream */}
+        <div className="flex min-w-0 flex-1 flex-col bg-white dark:bg-[#141414]">
+          {/* Header Bar */}
+          <div className="flex items-center justify-between gap-3 border-b border-neutral-200/80 px-5 py-3.5 dark:border-zinc-800/80">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-3">
                 {active.kind === "dm" && dmPeer ? (
                   <Link
                     href={`/app/u/${dmPeer.id}`}
-                    className="avatar-link shrink-0"
+                    className="avatar-link shrink-0 transition-transform hover:scale-105"
                   >
-                    <Avatar
-                      name={dmPeer.name}
-                      src={dmPeer.avatarUrl}
-                      size="sm"
-                      frame={dmPeer.isVip ? dmPeer.avatarFrame : null}
-                    />
+                    <div className="relative">
+                      <Avatar
+                        name={dmPeer.name}
+                        src={dmPeer.avatarUrl}
+                        size="md"
+                        frame={dmPeer.isVip ? dmPeer.avatarFrame : null}
+                      />
+                      <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#141414]" />
+                    </div>
                   </Link>
-                ) : null}
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-100 text-neutral-800 dark:bg-zinc-800 dark:text-zinc-200">
+                    <Hash size={20} weight="bold" />
+                  </span>
+                )}
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h2 className="truncate text-[13px] font-semibold tracking-[-0.02em] text-neutral-950 dark:text-zinc-100">
+                    <h2 className="font-display text-sm font-semibold tracking-tight text-[#1f1f1f] dark:text-zinc-50 sm:text-base truncate">
                       {headerTitle}
                     </h2>
                     {publicChannel?.vipOnly && <VipBadge />}
                     {active.kind === "dm" && (
-                      <span className="shrink-0 rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-600 dark:bg-zinc-800 dark:text-zinc-300">
-                        DM
+                      <span className="shrink-0 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-800 dark:bg-sky-950/50 dark:text-sky-300 border border-sky-200/60 dark:border-sky-800/60">
+                        Direct
                       </span>
                     )}
                     {active.kind === "dm" && dmPeer?.isVerified && (
-                      <VerifiedBadge size={14} />
+                      <VerifiedBadge size={15} />
                     )}
                   </div>
-                  <p className="truncate text-xs text-neutral-400">{headerSub}</p>
+                  <p className="truncate text-xs text-neutral-500 dark:text-zinc-400">{headerSub}</p>
                 </div>
               </div>
             </div>
+
             {active.kind === "dm" && dmPeer && (
               <Link href={`/app/u/${dmPeer.id}`} className="shrink-0">
-                <Button size="sm" variant="outline">
+                <Button size="sm" variant="outline" className="rounded-full text-xs gap-1.5">
                   <UserCircle size={15} weight="bold" />
-                  Perfil
+                  Ver Perfil
                 </Button>
               </Link>
             )}
           </div>
 
-          {/* Mobile: salas + DMs */}
+          {/* Mobile Filter Tabs */}
           <div className="flex gap-2 overflow-x-auto border-b border-neutral-100 px-4 py-2 md:hidden dark:border-zinc-800">
             {chatChannels.map((ch) => {
               const selected =
@@ -541,9 +611,9 @@ function ChatPageInner() {
                   type="button"
                   onClick={() => openChannel(ch.id)}
                   className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium",
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all",
                     selected
-                      ? "bg-neutral-950 text-white dark:bg-white dark:text-black"
+                      ? "bg-neutral-900 text-white dark:bg-zinc-100 dark:text-neutral-950 font-semibold"
                       : "bg-neutral-100 text-neutral-600 dark:bg-zinc-800 dark:text-zinc-400"
                   )}
                 >
@@ -554,7 +624,7 @@ function ChatPageInner() {
                         "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold",
                         selected
                           ? "bg-white text-black"
-                          : "bg-[#25d366] text-white"
+                          : "bg-emerald-500 text-white"
                       )}
                     >
                       {unread > 99 ? "99+" : unread}
@@ -573,9 +643,9 @@ function ChatPageInner() {
                   type="button"
                   onClick={() => openDm(peer.id)}
                   className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all",
                     selected
-                      ? "bg-neutral-950 text-white dark:bg-white dark:text-black"
+                      ? "bg-neutral-900 text-white dark:bg-zinc-100 dark:text-neutral-950 font-semibold"
                       : "bg-neutral-100 text-neutral-600 dark:bg-zinc-800 dark:text-zinc-400"
                   )}
                 >
@@ -587,7 +657,7 @@ function ChatPageInner() {
                         "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold",
                         selected
                           ? "bg-white text-black"
-                          : "bg-[#25d366] text-white"
+                          : "bg-emerald-500 text-white"
                       )}
                     >
                       {unread > 99 ? "99+" : unread}
@@ -598,6 +668,7 @@ function ChatPageInner() {
             })}
           </div>
 
+          {/* Messages Body */}
           {locked ? (
             <div className="flex flex-1 items-center justify-center p-6">
               <VipGate
@@ -609,7 +680,7 @@ function ChatPageInner() {
             <>
               <div
                 ref={listRef}
-                className="thin-scroll flex-1 space-y-4 overflow-y-auto p-4"
+                className="thin-scroll flex-1 space-y-4 overflow-y-auto p-4 sm:p-6"
                 onScroll={(e) => {
                   const el = e.currentTarget;
                   const dist =
@@ -618,8 +689,8 @@ function ChatPageInner() {
                 }}
               >
                 {active.kind === "dm" && channelMessages.length === 0 && (
-                  <div className="mx-auto max-w-sm py-10 text-center">
-                    <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-neutral-100 dark:bg-zinc-800">
+                  <div className="mx-auto max-w-sm py-12 text-center">
+                    <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-neutral-100 dark:bg-zinc-800 ring-4 ring-neutral-50 dark:ring-zinc-900">
                       {dmPeer ? (
                         <Avatar
                           name={dmPeer.name}
@@ -628,12 +699,11 @@ function ChatPageInner() {
                         />
                       ) : null}
                     </div>
-                    <p className="text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
-                      Direct com {dmPeer?.name ?? "usuário"}
-                    </p>
-                    <p className="mt-1 text-xs leading-relaxed text-neutral-500">
-                      Conversa privada. Envie a primeira mensagem para iniciar a
-                      mentoria ou networking.
+                    <h3 className="font-display text-sm font-semibold text-[#1f1f1f] dark:text-zinc-100">
+                      Conversa Direta com {dmPeer?.name ?? "usuário"}
+                    </h3>
+                    <p className="mt-1 text-xs leading-relaxed text-neutral-500 dark:text-zinc-400">
+                      Canal privado e seguro. Envie uma mensagem para iniciar o papo ou mentoria.
                     </p>
                   </div>
                 )}
@@ -669,18 +739,21 @@ function ChatPageInner() {
 
                 {active.kind === "channel" &&
                   channelMessages.length === 0 && (
-                    <p className="py-12 text-center text-sm text-neutral-400">
-                      Nenhuma mensagem ainda. Comece a conversa.
-                    </p>
+                    <div className="py-16 text-center text-xs text-neutral-400 dark:text-zinc-500">
+                      Nenhuma mensagem ainda neste canal. Envie a primeira!
+                    </div>
                   )}
                 <div ref={bottomRef} />
               </div>
 
-              <ChatComposer
-                placeholder={placeholder}
-                disabled={dmBlocked || locked}
-                onSend={onSend}
-              />
+              {/* Bottom Composer */}
+              <div className="border-t border-neutral-100 bg-white p-3 dark:border-zinc-800 dark:bg-[#141414]">
+                <ChatComposer
+                  placeholder={placeholder}
+                  disabled={dmBlocked || locked}
+                  onSend={onSend}
+                />
+              </div>
             </>
           )}
         </div>
@@ -693,8 +766,8 @@ export default function ChatPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[40vh] items-center justify-center text-sm text-neutral-400">
-          Carregando chat…
+        <div className="flex min-h-[40vh] items-center justify-center text-xs text-neutral-400">
+          Carregando bate-papo…
         </div>
       }
     >
@@ -702,3 +775,4 @@ export default function ChatPage() {
     </Suspense>
   );
 }
+
