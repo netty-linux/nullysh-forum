@@ -1095,3 +1095,10 @@ html.dark .hero-grid {
   border-radius: 2px;
   padding: 0 1px;
 }
+
+/* ─── Pixel art (assets de marca Nullain) ───
+   Mantém as bordas duras do sprite em qualquer escala. */
+.pixel-art {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
