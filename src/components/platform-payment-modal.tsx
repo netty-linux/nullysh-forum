@@ -118,7 +118,10 @@ export function PlatformPaymentModal({
   const listCents = Math.round(listPriceBrl * 100);
   const btcPreviewCents = Math.round(listCents * 0.85);
 
-  useEffect(() => {
+  // Reset ao fechar — durante a renderização, sem efeito.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
     if (!open) {
       setResult(null);
       setError("");
@@ -131,14 +134,19 @@ export function PlatformPaymentModal({
       setFulfillWait(false);
       setFulfillTimeout(false);
     }
-  }, [open]);
+  }
 
-  // QR Bitcoin in-app
+  // QR Bitcoin in-app — sem endereço, some sem esperar geração assíncrona
+  // (durante a renderização, sem efeito).
+  const btcAddress = result?.btc?.btcAddress ?? null;
+  const [prevBtcAddress, setPrevBtcAddress] = useState(btcAddress);
+  if (prevBtcAddress !== btcAddress) {
+    setPrevBtcAddress(btcAddress);
+    if (btcAddress === null) setBtcQrDataUrl("");
+  }
+
   useEffect(() => {
-    if (!result?.btc?.btcAddress) {
-      setBtcQrDataUrl("");
-      return;
-    }
+    if (!result?.btc?.btcAddress) return;
     const uri = bitcoinUri(
       result.btc.btcAddress,
       result.btc.expectedSats,
@@ -186,7 +194,9 @@ export function PlatformPaymentModal({
     if (payStatus === "paid") return;
 
     const type = result.billingType || billing;
-    void pollStatus(result.checkoutToken, type);
+    // Fora do corpo síncrono do efeito: primeira consulta ao gateway é uma
+    // chamada de rede real, não derivação de props/state.
+    queueMicrotask(() => void pollStatus(result.checkoutToken!, type));
 
     const id = window.setInterval(() => {
       void pollStatus(result.checkoutToken!, type);
@@ -198,17 +208,21 @@ export function PlatformPaymentModal({
   useEffect(() => {
     if (payStatus !== "paid") return;
     if (kind !== "vip") {
-      setVipReady(true);
+      queueMicrotask(() => setVipReady(true));
       return;
     }
     if (user?.isVip) {
-      setVipReady(true);
-      setFulfillWait(false);
+      queueMicrotask(() => {
+        setVipReady(true);
+        setFulfillWait(false);
+      });
       return;
     }
 
-    setFulfillWait(true);
-    setFulfillTimeout(false);
+    queueMicrotask(() => {
+      setFulfillWait(true);
+      setFulfillTimeout(false);
+    });
     let cancelled = false;
     const started = Date.now();
 

@@ -123,8 +123,10 @@ export default function MaterialsPage() {
     if (!focusId) return;
     const item = materials.find((m) => m.id === focusId);
     if (item) {
-      setSelectedCategory("Todos");
-      setFormatFilter("all");
+      queueMicrotask(() => {
+        setSelectedCategory("Todos");
+        setFormatFilter("all");
+      });
     }
     const t = window.setTimeout(() => {
       document

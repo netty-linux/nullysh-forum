@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useMounted } from "@/hooks/use-mounted";
 import {
   COMMUNITY_ICONS,
   type CommunityIconName,
@@ -66,7 +67,7 @@ export function CreateCommunityModal({
 }: Props) {
   const reduce = useReducedMotion();
   const createCommunity = useCommunityStore((s) => s.createCommunity);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [hashtag, setHashtag] = useState("");
@@ -74,10 +75,6 @@ export function CreateCommunityModal({
   const [icon, setIcon] = useState<CommunityIconName>("UsersThree");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!open) return;

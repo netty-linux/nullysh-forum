@@ -68,7 +68,7 @@ export default function EventsPage() {
   // Deep-link da notificação: mostra o evento e rola até ele
   useEffect(() => {
     if (!focusId) return;
-    setFilter("all");
+    queueMicrotask(() => setFilter("all"));
     const t = window.setTimeout(() => {
       document
         .getElementById(`event-${focusId}`)

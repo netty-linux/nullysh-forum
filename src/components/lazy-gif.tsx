@@ -43,9 +43,9 @@ export function LazyGif({
     const el = rootRef.current;
     if (!el) return;
 
-    // Já na viewport (SSR/hydration) — ativa sem esperar
+    // Sem suporte a IntersectionObserver — ativa sem esperar viewport
     if (typeof IntersectionObserver === "undefined") {
-      setActive(true);
+      queueMicrotask(() => setActive(true));
       return;
     }
 

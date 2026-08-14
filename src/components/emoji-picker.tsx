@@ -17,7 +17,6 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import {
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -94,7 +93,10 @@ export function EmojiPicker({
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  // Reset ao fechar — durante a renderização, sem efeito.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
     if (!open) {
       setQuery("");
       setCreating(false);
@@ -103,7 +105,7 @@ export function EmojiPicker({
       setName("");
       setSaving(false);
     }
-  }, [open]);
+  }
 
   const filteredUnicode = useMemo(() => {
     const q = query.trim().toLowerCase();

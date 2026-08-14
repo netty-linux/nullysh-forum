@@ -231,11 +231,11 @@ export function PostFeedMusic({
     }
 
     let cancelled = false;
-    setLoading(true);
     const withSound =
       isPostMusicAudioUnlocked() || userGesture.current;
 
     (async () => {
+      setLoading(true);
       const YT = await loadYouTubeApi();
       if (cancelled || !wantPlay.current) return;
 

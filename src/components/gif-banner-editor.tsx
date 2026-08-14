@@ -13,7 +13,6 @@ import {
   X,
 } from "@phosphor-icons/react";
 import {
-  useEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -51,10 +50,13 @@ export function GifBannerEditor({
   } | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    setFit(initialFit ?? DEFAULT_BANNER_FIT);
-  }, [open, imageSrc, initialFit]);
+  // Reset ao (re)abrir para uma nova imagem — durante a renderização, sem efeito.
+  const openKey = open ? imageSrc : null;
+  const [prevOpenKey, setPrevOpenKey] = useState(openKey);
+  if (prevOpenKey !== openKey) {
+    setPrevOpenKey(openKey);
+    if (openKey !== null) setFit(initialFit ?? DEFAULT_BANNER_FIT);
+  }
 
   if (!open) return null;
 

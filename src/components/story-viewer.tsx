@@ -2,6 +2,7 @@
 
 import { StoryOverlays } from "@/components/story-overlays";
 import { Avatar } from "@/components/ui/avatar";
+import { useMounted } from "@/hooks/use-mounted";
 import type { Story, StoryAuthorGroup } from "@/lib/social-store";
 import { useSocialStore } from "@/lib/social-store";
 import { cn, formatRelative } from "@/lib/utils";
@@ -34,7 +35,7 @@ export function StoryViewer({
 }: Props) {
   const markStoryViewed = useSocialStore((s) => s.markStoryViewed);
   const reduce = useReducedMotion();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [gIdx, setGIdx] = useState(0);
   const [sIdx, setSIdx] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -47,10 +48,6 @@ export function StoryViewer({
   const durationRef = useRef(FALLBACK_IMAGE_MS);
   const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
   const dragging = useRef(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const group = groups[gIdx] ?? null;
   const story: Story | null = group?.stories[sIdx] ?? null;
@@ -107,15 +104,19 @@ export function StoryViewer({
     }
   }, [gIdx]);
 
-  // reset ao abrir / trocar grupo inicial
-  useEffect(() => {
-    if (!open) return;
-    setGIdx(Math.max(0, Math.min(startGroupIndex, groups.length - 1)));
-    setSIdx(0);
-    setProgress(0);
-    setPaused(false);
-    setSlideX(0);
-  }, [open, startGroupIndex, groups.length]);
+  // reset ao abrir / trocar grupo inicial — durante a renderização, sem efeito.
+  const openResetKey = open ? startGroupIndex : null;
+  const prevOpenResetKeyRef = useRef(openResetKey);
+  if (prevOpenResetKeyRef.current !== openResetKey) {
+    prevOpenResetKeyRef.current = openResetKey;
+    if (openResetKey !== null) {
+      setGIdx(Math.max(0, Math.min(openResetKey, groups.length - 1)));
+      setSIdx(0);
+      setProgress(0);
+      setPaused(false);
+      setSlideX(0);
+    }
+  }
 
   // marca visualização
   useEffect(() => {
@@ -123,7 +124,14 @@ export function StoryViewer({
     markStoryViewed(story.id, viewerId);
   }, [open, story?.id, viewerId, markStoryViewed]);
 
-  // prepara duração ao trocar story
+  // progresso zera assim que troca de story — durante a renderização, sem efeito.
+  const [prevStoryId, setPrevStoryId] = useState(story?.id ?? null);
+  if (story && prevStoryId !== story.id) {
+    setPrevStoryId(story.id);
+    setProgress(0);
+  }
+
+  // prepara duração e sincroniza o elemento de vídeo ao trocar story
   useEffect(() => {
     if (!story) return;
     const d =
@@ -132,7 +140,6 @@ export function StoryViewer({
         : story.durationMs || FALLBACK_IMAGE_MS;
     durationRef.current = d;
     leftRef.current = d;
-    setProgress(0);
     startRef.current = performance.now();
 
     if (story.mediaType === "video" && videoRef.current) {

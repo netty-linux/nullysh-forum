@@ -64,8 +64,16 @@ export function MaterialDropTimer({ className }: { className?: string }) {
     msUntilNextDrop(cycleMs, Date.now())
   );
 
+  // Ciclo muda (VIP ↔ free) e o timer de 1s: ambos dependem de Date.now(),
+  // uma função impura — precisam ficar em efeito (sincronização real com
+  // relógio do sistema), não podem virar cálculo de render.
   useEffect(() => {
-    setRemaining(msUntilNextDrop(cycleMs, Date.now()));
+    // Fora do corpo síncrono do efeito: Date.now() muda a cada chamada,
+    // então esse recálculo é reação ao relógio externo, não derivação
+    // pura de props/state.
+    queueMicrotask(() => {
+      setRemaining(msUntilNextDrop(cycleMs, Date.now()));
+    });
     const id = window.setInterval(() => {
       setRemaining(msUntilNextDrop(cycleMs, Date.now()));
     }, 1000);

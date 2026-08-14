@@ -138,7 +138,7 @@ function VideosPageInner() {
   // Handle deep-link focus
   useEffect(() => {
     if (!focusId) return;
-    setCategory("Todos");
+    queueMicrotask(() => setCategory("Todos"));
     const t = window.setTimeout(() => {
       document
         .getElementById(`video-${focusId}`)

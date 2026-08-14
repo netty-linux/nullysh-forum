@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { VerifiedBadge } from "@/components/verified-badge";
 import { useAuth } from "@/hooks/use-auth";
+import { useMounted } from "@/hooks/use-mounted";
 import { useAuthStore } from "@/lib/auth-store";
 import { useBlockStore } from "@/lib/block-store";
 import { useSocialStore } from "@/lib/social-store";
@@ -92,15 +93,11 @@ export function FollowListModal({
   const unfollow = useSocialStore((s) => s.unfollow);
   const isEitherBlocked = useBlockStore((s) => s.isEitherBlocked);
   const [query, setQuery] = useState("");
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [resolving, setResolving] = useState(false);
 
   // re-render com grafo social
   void follows;
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!open) return;

@@ -272,8 +272,9 @@ export default function FeedPage() {
   useEffect(() => {
     if (!showGif) return;
     let cancelled = false;
-    setGifLoading(true);
     const t = window.setTimeout(async () => {
+      if (cancelled) return;
+      setGifLoading(true);
       try {
         const list = gifQ.trim()
           ? await searchGifs(gifQ, 24)
@@ -292,22 +293,23 @@ export default function FeedPage() {
   }, [showGif, gifQ]);
 
   // Busca de locais com debounce (Nominatim)
+  const locationQueryTooShort = locationQuery.trim().length < 2;
   useEffect(() => {
     if (!showLocation) return;
     const q = locationQuery.trim();
     if (q.length < 2) {
-      setPlaceResults([]);
-      setPlaceLoading(false);
+      searchAbort.current?.abort();
       return;
     }
 
-    setPlaceLoading(true);
-    setPlaceError("");
     searchAbort.current?.abort();
     const ac = new AbortController();
     searchAbort.current = ac;
 
     const t = window.setTimeout(async () => {
+      if (ac.signal.aborted) return;
+      setPlaceLoading(true);
+      setPlaceError("");
       try {
         const results = await searchPlaces(q, ac.signal);
         if (!ac.signal.aborted) {
@@ -329,6 +331,8 @@ export default function FeedPage() {
       ac.abort();
     };
   }, [locationQuery, showLocation]);
+  const visiblePlaceResults = locationQueryTooShort ? [] : placeResults;
+  const visiblePlaceLoading = locationQueryTooShort ? false : placeLoading;
 
   const insertAtCursor = useCallback(
     (chunk: string) => {
@@ -354,9 +358,12 @@ export default function FeedPage() {
   );
 
   // Se o plano mudar (ou hidratar), corta texto acima do limite
-  useEffect(() => {
-    setContent((c) => (c.length > maxChars ? c.slice(0, maxChars) : c));
-  }, [maxChars]);
+  // — durante a renderização, sem efeito.
+  const [prevMaxChars, setPrevMaxChars] = useState(maxChars);
+  if (prevMaxChars !== maxChars) {
+    setPrevMaxChars(maxChars);
+    if (content.length > maxChars) setContent(content.slice(0, maxChars));
+  }
 
   function releaseCropSource() {
     revokeObjectUrl(cropSourceRef.current);
@@ -759,33 +766,33 @@ export default function FeedPage() {
                   </div>
                 )}
 
-                {(placeLoading ||
-                  placeResults.length > 0 ||
+                {(visiblePlaceLoading ||
+                  visiblePlaceResults.length > 0 ||
                   placeError ||
                   (locationQuery.trim().length >= 2 &&
-                    !placeLoading &&
-                    placeResults.length === 0)) && (
+                    !visiblePlaceLoading &&
+                    visiblePlaceResults.length === 0)) && (
                   <ul className="max-h-48 overflow-y-auto border-t border-neutral-200 dark:border-zinc-700">
-                    {placeLoading && (
+                    {visiblePlaceLoading && (
                       <li className="flex items-center gap-2 px-3 py-2.5 text-xs text-neutral-500">
                         <SpinnerGap size={14} className="animate-spin" />
                         Buscando locais reais…
                       </li>
                     )}
-                    {placeError && !placeLoading && (
+                    {placeError && !visiblePlaceLoading && (
                       <li className="px-3 py-2.5 text-xs text-red-600">
                         {placeError}
                       </li>
                     )}
-                    {!placeLoading &&
+                    {!visiblePlaceLoading &&
                       !placeError &&
                       locationQuery.trim().length >= 2 &&
-                      placeResults.length === 0 && (
+                      visiblePlaceResults.length === 0 && (
                         <li className="px-3 py-2.5 text-xs text-neutral-500">
                           Nenhum local encontrado. Tente outro termo.
                         </li>
                       )}
-                    {placeResults.map((p) => (
+                    {visiblePlaceResults.map((p) => (
                       <li key={p.id}>
                         <button
                           type="button"

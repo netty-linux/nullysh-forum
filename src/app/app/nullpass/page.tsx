@@ -139,11 +139,16 @@ function PosterCard({
   featured?: boolean;
 }) {
   const reduce = useReducedMotion();
-  const [imgFailed, setImgFailed] = useState(false);
 
-  useEffect(() => {
-    setImgFailed(false);
-  }, [product.coverUrl, product.id]);
+  // Reseta ao trocar de produto/capa — durante a renderização, sem efeito.
+  const imgResetKey = `${product.id}:${product.coverUrl ?? ""}`;
+  const [prevImgResetKey, setPrevImgResetKey] = useState(imgResetKey);
+  const [imgFailedRaw, setImgFailed] = useState(false);
+  const imgFailed =
+    prevImgResetKey === imgResetKey ? imgFailedRaw : false;
+  if (prevImgResetKey !== imgResetKey) {
+    setPrevImgResetKey(imgResetKey);
+  }
 
   const showCover = Boolean(product.coverUrl) && !imgFailed;
 
@@ -359,7 +364,17 @@ function ProductModal({
   catalog: NullpassProduct[];
 }) {
   const reduce = useReducedMotion();
-  const [imgFailed, setImgFailed] = useState(false);
+
+  // Reseta ao trocar de produto/capa — durante a renderização, sem efeito.
+  const imgResetKey = `${product.id}:${product.coverUrl ?? ""}`;
+  const [prevImgResetKey, setPrevImgResetKey] = useState(imgResetKey);
+  const [imgFailedRaw, setImgFailed] = useState(false);
+  const imgFailed =
+    prevImgResetKey === imgResetKey ? imgFailedRaw : false;
+  if (prevImgResetKey !== imgResetKey) {
+    setPrevImgResetKey(imgResetKey);
+  }
+
   const byId = (id: string) => catalog.find((p) => p.id === id);
   const bundleItems = (product.bundleIds || [])
     .map(byId)
@@ -369,10 +384,6 @@ function ProductModal({
     .filter(Boolean) as NullpassProduct[];
   const compareAt = formatNullpassCompareAt(product);
   const showCover = Boolean(product.coverUrl) && !imgFailed;
-
-  useEffect(() => {
-    setImgFailed(false);
-  }, [product.coverUrl, product.id]);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -657,7 +668,7 @@ function NullpassPageInner() {
 
   useEffect(() => {
     if (!focusId || !hasHydrated) return;
-    if (getById(focusId)) setActiveId(focusId);
+    if (getById(focusId)) queueMicrotask(() => setActiveId(focusId));
   }, [focusId, getById, hasHydrated]);
 
   const openProduct = useCallback((id: string) => {

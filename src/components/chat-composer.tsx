@@ -171,9 +171,10 @@ export function ChatComposer({ placeholder, disabled, onSend }: Props) {
   useEffect(() => {
     if (panel !== "gifs") return;
     let cancelled = false;
-    setGifLoading(true);
-    setGifEmpty(false);
     const t = window.setTimeout(async () => {
+      if (cancelled) return;
+      setGifLoading(true);
+      setGifEmpty(false);
       try {
         const list = gifQ.trim()
           ? await searchGifs(gifQ, 32)

@@ -3,6 +3,7 @@
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useMounted } from "@/hooks/use-mounted";
 import { useAuthStore } from "@/lib/auth-store";
 import { useBlockStore } from "@/lib/block-store";
 import { dmChannelId } from "@/lib/dm";
@@ -39,7 +40,7 @@ export function ForwardPostModal({ open, onClose, post }: Props) {
   const isEitherBlocked = useBlockStore((s) => s.isEitherBlocked);
   const sendMessage = useForumStore((s) => s.sendMessage);
 
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -49,9 +50,19 @@ export function ForwardPostModal({ open, onClose, post }: Props) {
 
   void follows;
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Reset do formulário ao (re)abrir — durante a renderização, sem efeito.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
+    if (!open) {
+      setQuery("");
+      setSelectedId(null);
+      setNote("");
+      setError("");
+      setSent(false);
+      setSending(false);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -66,17 +77,6 @@ export function ForwardPostModal({ open, onClose, post }: Props) {
       window.removeEventListener("keydown", onKey);
     };
   }, [open, sending, onClose]);
-
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setSelectedId(null);
-      setNote("");
-      setError("");
-      setSent(false);
-      setSending(false);
-    }
-  }, [open]);
 
   const candidates = useMemo(() => {
     if (!me) return [];

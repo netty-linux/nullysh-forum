@@ -112,21 +112,24 @@ function ChatPageInner() {
       window.removeEventListener("nullysh:chat-reaction-error", onErr);
   }, []);
 
-  // Abre sala quando vem de ?channel=ch1
+  // Abre sala quando vem de ?channel=ch1 — reage à URL (sistema externo),
+  // não a props/state do próprio componente.
   useEffect(() => {
     if (!channelParam || dmParam) return;
     const ch = chatChannels.find(
       (c) => c.id === channelParam || c.name === channelParam
     );
     if (!ch) return;
-    setActive((prev) =>
-      prev.kind === "channel" && prev.id === ch.id
-        ? prev
-        : { kind: "channel", id: ch.id }
-    );
+    queueMicrotask(() => {
+      setActive((prev) =>
+        prev.kind === "channel" && prev.id === ch.id
+          ? prev
+          : { kind: "channel", id: ch.id }
+      );
+    });
   }, [channelParam, dmParam]);
 
-  // Abre DM quando vem de ?dm=userId
+  // Abre DM quando vem de ?dm=userId — reage à URL (sistema externo).
   const userId = user?.id;
   useEffect(() => {
     if (!userId || !dmParam || dmParam === userId) return;
@@ -134,15 +137,17 @@ function ChatPageInner() {
     const peer = users.find((u) => u.id === dmParam);
     if (!peer) return;
     const channelId = dmChannelId(userId, peer.id);
-    setActive((prev) => {
-      if (
-        prev.kind === "dm" &&
-        prev.peerId === peer.id &&
-        prev.channelId === channelId
-      ) {
-        return prev;
-      }
-      return { kind: "dm", peerId: peer.id, channelId };
+    queueMicrotask(() => {
+      setActive((prev) => {
+        if (
+          prev.kind === "dm" &&
+          prev.peerId === peer.id &&
+          prev.channelId === channelId
+        ) {
+          return prev;
+        }
+        return { kind: "dm", peerId: peer.id, channelId };
+      });
     });
   }, [dmParam, userId, users, isEitherBlocked, blocks]);
 
@@ -311,7 +316,9 @@ function ChatPageInner() {
 
   useEffect(() => {
     if (dmBlocked) {
-      setActive({ kind: "channel", id: chatChannels[0].id });
+      queueMicrotask(() => {
+        setActive({ kind: "channel", id: chatChannels[0].id });
+      });
     }
   }, [dmBlocked]);
 

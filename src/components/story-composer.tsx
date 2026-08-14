@@ -6,6 +6,7 @@ import {
   StoryTrashZone,
 } from "@/components/story-overlays";
 import { useAuth } from "@/hooks/use-auth";
+import { useMounted } from "@/hooks/use-mounted";
 import { useEmojiStore } from "@/lib/emoji-store";
 import {
   reverseGeocode,
@@ -93,7 +94,7 @@ export function StoryComposer({ open, user, onClose, onCreated }: Props) {
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const emojiPanelRef = useRef<HTMLDivElement>(null);
 
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<StoryMediaType>("image");
   const [aspect, setAspect] = useState<StoryAspect>("9:16");
@@ -118,10 +119,6 @@ export function StoryComposer({ open, user, onClose, onCreated }: Props) {
   const selected = overlays.find((o) => o.id === selectedId) ?? null;
   const vipPlan = !!isVip;
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const reset = useCallback(() => {
     setMediaUrl(null);
     setMediaType("image");
@@ -141,12 +138,19 @@ export function StoryComposer({ open, user, onClose, onCreated }: Props) {
     setLoadingFile(false);
     setDragging(false);
     setOverTrash(false);
-    if (fileRef.current) fileRef.current.value = "";
   }, []);
 
-  useEffect(() => {
+  // Reset ao fechar — durante a renderização, sem efeito.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
     if (!open) reset();
-  }, [open, reset]);
+  }
+
+  // Efeito colateral real de DOM (input file não-controlado) — mantém em effect.
+  useEffect(() => {
+    if (!open && fileRef.current) fileRef.current.value = "";
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -202,16 +206,16 @@ export function StoryComposer({ open, user, onClose, onCreated }: Props) {
   }, [tool]);
 
   // busca local
+  const locationQueryTrimmed = locationQuery.trim();
+  const locationQueryTooShort =
+    tool === "location" && locationQueryTrimmed.length < 2;
   useEffect(() => {
-    if (tool !== "location") return;
-    const q = locationQuery.trim();
-    if (q.length < 2) {
-      setPlaceResults([]);
-      return;
-    }
+    if (tool !== "location" || locationQueryTooShort) return;
+    const q = locationQueryTrimmed;
     let cancelled = false;
-    setPlaceLoading(true);
     const t = window.setTimeout(async () => {
+      if (cancelled) return;
+      setPlaceLoading(true);
       try {
         const res = await searchPlaces(q);
         if (!cancelled) setPlaceResults(res);
@@ -225,7 +229,9 @@ export function StoryComposer({ open, user, onClose, onCreated }: Props) {
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [locationQuery, tool]);
+  }, [locationQuery, tool, locationQueryTrimmed, locationQueryTooShort]);
+
+  const visiblePlaceResults = locationQueryTooShort ? [] : placeResults;
 
   function onFile(file: File | null) {
     if (!file) return;
@@ -936,7 +942,7 @@ export function StoryComposer({ open, user, onClose, onCreated }: Props) {
                         <p className="mt-2 text-xs text-white/45">Buscando…</p>
                       )}
                       <ul className="mt-2 max-h-44 space-y-0.5 overflow-y-auto">
-                        {placeResults.map((p) => (
+                        {visiblePlaceResults.map((p) => (
                           <li key={p.id}>
                             <button
                               type="button"

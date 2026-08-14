@@ -5,7 +5,7 @@ import { FabShell } from "@/components/fab-shell";
 import { cn } from "@/lib/utils";
 import { Plus } from "@phosphor-icons/react";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Evento legado — abre o modal de postagem */
 export const COMPOSE_FOCUS_EVENT = "nullysh:compose-focus";
@@ -37,15 +37,22 @@ export function ComposeFab({ className }: { className?: string }) {
     };
   }, [openModal]);
 
+  // Abre via ?compose=1 na URL — só na primeira montagem (deep link).
+  const checkedComposeParam = useRef(false);
   useEffect(() => {
+    if (checkedComposeParam.current) return;
+    checkedComposeParam.current = true;
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("compose") !== "1") return;
-    openModal();
     const onFeed = pathname === "/app" || pathname === "/app/";
     if (onFeed) {
       router.replace("/app", { scroll: false });
     }
+    // Fora do corpo síncrono do efeito: dispara no próximo microtask,
+    // já que abrir o modal aqui é resposta a um deep link (URL), não
+    // sincronização derivada de props/state do próprio componente.
+    queueMicrotask(openModal);
   }, [pathname, router, openModal]);
 
   function onPublished() {

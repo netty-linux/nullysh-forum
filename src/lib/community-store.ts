@@ -260,7 +260,7 @@ export const useCommunityStore = create<CommunityState>()(
           };
         }
 
-        let baseSlug = slugify(name);
+        const baseSlug = slugify(name);
         let slug = baseSlug;
         let n = 2;
         while (existing.some((c) => c.slug === slug)) {

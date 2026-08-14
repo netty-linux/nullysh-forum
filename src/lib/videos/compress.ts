@@ -151,7 +151,7 @@ export async function compressVideoForTelegram(
         ? Math.floor((COMPRESS_TARGET_BYTES * 8 * 0.92) / durationSec)
         : 1_200_000;
     const audioBitrate = 96_000;
-    let videoBitrate = Math.max(250_000, targetBitsPerSec - audioBitrate);
+    const videoBitrate = Math.max(250_000, targetBitsPerSec - audioBitrate);
 
     const attempts: Array<{ crf?: number; vb?: number; scale: string }> = [
       { vb: videoBitrate, scale: "scale='min(1280,iw)':-2" },

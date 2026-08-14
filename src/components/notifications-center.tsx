@@ -368,6 +368,10 @@ export function NotificationsCenter() {
     return () => window.clearInterval(id);
   }, [user, events, rsvps, catalogSeen.eventStarts, markEventStartSeen]);
 
+  const goToLive = useCallback(() => {
+    if (live) goToNotification(live);
+  }, [live, goToNotification]);
+
   if (!user) return null;
 
   const showLive = live && live.userId === user.id;
@@ -377,8 +381,9 @@ export function NotificationsCenter() {
       {/* Toast live — compacto estilo IG, paleta Nullysh (superfície + 1 acento) */}
       <AnimatePresence>
         {showLive && (() => {
-          const liveType = live!.type;
-          const typeMeta = TYPE_ICON[liveType] ?? TYPE_ICON.like;
+          const liveNotification = live!;
+          const typeMeta =
+            TYPE_ICON[liveNotification.type] ?? TYPE_ICON.like;
           const LiveIcon = typeMeta.Icon;
           return (
           <motion.div
@@ -395,11 +400,11 @@ export function NotificationsCenter() {
             <div
               role="button"
               tabIndex={0}
-              onClick={() => goToNotification(live!)}
+              onClick={goToLive}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  goToNotification(live!);
+                  goToLive();
                 }
               }}
               className={cn(

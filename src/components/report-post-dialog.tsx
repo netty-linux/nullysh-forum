@@ -6,6 +6,7 @@ import {
   type ReportReason,
   useReportStore,
 } from "@/lib/report-store";
+import { useMounted } from "@/hooks/use-mounted";
 import { cn } from "@/lib/utils";
 import { Flag, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -34,25 +35,27 @@ export function ReportPostDialog({
 }: Props) {
   const reportPost = useReportStore((s) => s.reportPost);
   const reduce = useReducedMotion();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [reason, setReason] = useState<ReportReason>("spam");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    setReason("spam");
-    setNote("");
-    setError("");
-    setDone(false);
-    setLoading(false);
-  }, [open, postId]);
+  // Reset do formulário ao (re)abrir para um novo post — sem efeito,
+  // segue o padrão React de resetar estado durante a renderização.
+  const openKey = open ? postId : null;
+  const [prevOpenKey, setPrevOpenKey] = useState(openKey);
+  if (prevOpenKey !== openKey) {
+    setPrevOpenKey(openKey);
+    if (openKey !== null) {
+      setReason("spam");
+      setNote("");
+      setError("");
+      setDone(false);
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;

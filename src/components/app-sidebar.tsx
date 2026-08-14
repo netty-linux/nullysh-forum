@@ -182,12 +182,16 @@ function SidebarBody({ alwaysExpanded, onClose }: SidebarBodyProps) {
   );
 
   useEffect(() => {
-    setOpenSections((prev) => {
-      const next = { ...prev };
-      for (const s of sections) {
-        if (sectionHasActive(pathname, s)) next[s.id] = true;
-      }
-      return next;
+    // Reage à rota atual (sistema externo via usePathname), não a
+    // props/state do próprio componente.
+    queueMicrotask(() => {
+      setOpenSections((prev) => {
+        const next = { ...prev };
+        for (const s of sections) {
+          if (sectionHasActive(pathname, s)) next[s.id] = true;
+        }
+        return next;
+      });
     });
   }, [pathname, sections]);
 

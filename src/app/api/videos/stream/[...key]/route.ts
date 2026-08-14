@@ -42,7 +42,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           );
         }
         const size = head.size;
-        let start = m[1] === "" ? 0 : parseInt(m[1], 10);
+        const start = m[1] === "" ? 0 : parseInt(m[1], 10);
         let end = m[2] === "" ? size - 1 : parseInt(m[2], 10);
         if (
           Number.isNaN(start) ||

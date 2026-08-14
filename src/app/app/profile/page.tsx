@@ -164,7 +164,12 @@ export default function ProfilePage() {
   const bioEmojiPanelRef = useRef<HTMLDivElement>(null);
   const [showBioEmoji, setShowBioEmoji] = useState(false);
 
-  useEffect(() => {
+  // Hidrata o form quando troca de usuário (login/logout) — durante a
+  // renderização, sem efeito. Usa user?.id como chave para não resetar
+  // os campos a cada atualização otimista do próprio usuário.
+  const [prevUserId, setPrevUserId] = useState(user?.id ?? null);
+  if (prevUserId !== (user?.id ?? null)) {
+    setPrevUserId(user?.id ?? null);
     if (user) {
       setName(user.name);
       setUsername(displayUsername(user));
@@ -183,7 +188,7 @@ export default function ProfilePage() {
       setBadgesUnlocked(user.badgesUnlocked ?? []);
       setBadgeEquipped(user.badgeEquipped ?? null);
     }
-  }, [user]);
+  }
 
   // Avalia conquistas (VIP, tempo, engajamento…) e grava se mudou
   useEffect(() => {
@@ -194,16 +199,16 @@ export default function ProfilePage() {
     const changed =
       unlocked.length !== prev.size || unlocked.some((id) => !prev.has(id));
     if (!changed) {
-      setBadgesUnlocked(user.badgesUnlocked ?? []);
+      queueMicrotask(() => setBadgesUnlocked(user.badgesUnlocked ?? []));
       return;
     }
-    setBadgesUnlocked(unlocked);
+    queueMicrotask(() => setBadgesUnlocked(unlocked));
     // equipado inválido? limpa
     const eq =
       user.badgeEquipped && unlocked.includes(user.badgeEquipped)
         ? user.badgeEquipped
         : null;
-    setBadgeEquipped(eq);
+    queueMicrotask(() => setBadgeEquipped(eq));
     void updateProfile({
       badgesUnlocked: unlocked,
       badgeEquipped: eq,

@@ -2,6 +2,7 @@
 
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { useMounted } from "@/hooks/use-mounted";
 import { cn, displayUsername } from "@/lib/utils";
 import type { AvatarFrameId } from "@/lib/types";
 import {
@@ -12,7 +13,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
 type Props = {
@@ -60,13 +61,9 @@ export function BlockUserModal({
   user,
 }: Props) {
   const reduce = useReducedMotion();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const handle = displayUsername(user);
   const firstName = user.name.trim().split(/\s+/)[0] || user.name;
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!open) return;

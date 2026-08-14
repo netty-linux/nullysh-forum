@@ -197,20 +197,21 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     el.style.height = `${Math.min(Math.max(el.scrollHeight, 88), 220)}px`;
   }, [content, open]);
 
+  const locationQueryTooShort = locationQuery.trim().length < 2;
   useEffect(() => {
     if (!showLocation || !open) return;
     const q = locationQuery.trim();
     if (q.length < 2) {
-      setPlaceResults([]);
-      setPlaceLoading(false);
+      searchAbort.current?.abort();
       return;
     }
-    setPlaceLoading(true);
-    setPlaceError("");
     searchAbort.current?.abort();
     const ac = new AbortController();
     searchAbort.current = ac;
     const t = window.setTimeout(async () => {
+      if (ac.signal.aborted) return;
+      setPlaceLoading(true);
+      setPlaceError("");
       try {
         const results = await searchPlaces(q, ac.signal);
         if (!ac.signal.aborted) {
@@ -231,13 +232,16 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
       ac.abort();
     };
   }, [locationQuery, showLocation, open]);
+  const visiblePlaceResults = locationQueryTooShort ? [] : placeResults;
+  const visiblePlaceLoading = locationQueryTooShort ? false : placeLoading;
 
   // Busca / trending de GIFs
   useEffect(() => {
     if (!showGif || !open) return;
     let cancelled = false;
-    setGifLoading(true);
     const t = window.setTimeout(async () => {
+      if (cancelled) return;
+      setGifLoading(true);
       try {
         const list = gifQ.trim()
           ? await searchGifs(gifQ, 24)
@@ -278,9 +282,13 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
     [content, maxChars]
   );
 
-  useEffect(() => {
-    setContent((c) => (c.length > maxChars ? c.slice(0, maxChars) : c));
-  }, [maxChars]);
+  // Clampa o conteúdo se o limite de caracteres cair (ex.: perde VIP)
+  // — durante a renderização, sem efeito.
+  const [prevMaxChars, setPrevMaxChars] = useState(maxChars);
+  if (prevMaxChars !== maxChars) {
+    setPrevMaxChars(maxChars);
+    if (content.length > maxChars) setContent(content.slice(0, maxChars));
+  }
 
   function releaseCropSource() {
     revokeObjectUrl(cropSourceRef.current);
@@ -813,11 +821,11 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                           </span>
                         </div>
                       )}
-                      {(placeLoading ||
-                        placeResults.length > 0 ||
+                      {(visiblePlaceLoading ||
+                        visiblePlaceResults.length > 0 ||
                         placeError) && (
                         <ul className="max-h-36 overflow-y-auto border-t border-[#1f1f1f]/10 dark:border-zinc-700">
-                          {placeLoading && (
+                          {visiblePlaceLoading && (
                             <li className="flex items-center gap-2 px-3 py-2 text-xs text-neutral-500">
                               <SpinnerGap
                                 size={14}
@@ -826,12 +834,12 @@ export function ComposePostModal({ open, onClose, onPublished }: Props) {
                               Buscando…
                             </li>
                           )}
-                          {placeError && !placeLoading && (
+                          {placeError && !visiblePlaceLoading && (
                             <li className="px-3 py-2 text-xs text-red-600">
                               {placeError}
                             </li>
                           )}
-                          {placeResults.map((p) => (
+                          {visiblePlaceResults.map((p) => (
                             <li key={p.id}>
                               <button
                                 type="button"

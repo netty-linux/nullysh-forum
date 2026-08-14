@@ -147,7 +147,7 @@ export function PostCard({
   // Deep-link: abre comentários
   useEffect(() => {
     if (forceOpenComments || focusCommentId) {
-      setOpenComments(true);
+      queueMicrotask(() => setOpenComments(true));
     }
   }, [forceOpenComments, focusCommentId]);
 
@@ -305,8 +305,9 @@ export function PostCard({
   useEffect(() => {
     if (!gifPanelOpen) return;
     let cancelled = false;
-    setGifLoading(true);
     const t = window.setTimeout(async () => {
+      if (cancelled) return;
+      setGifLoading(true);
       try {
         const list = gifQ.trim()
           ? await searchGifs(gifQ, 24)

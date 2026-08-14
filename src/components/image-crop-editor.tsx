@@ -8,7 +8,7 @@ import {
   MagnifyingGlassPlus,
   X,
 } from "@phosphor-icons/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
 
 export type CropKind = "avatar" | "banner" | "post";
@@ -134,16 +134,20 @@ export function ImageCropEditor({
   const [postAspectId, setPostAspectId] =
     useState<PostAspectId>(initialPostAspect);
 
-  // Reset ao abrir nova imagem
-  useEffect(() => {
-    if (!open) return;
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
-    setCroppedAreaPixels(null);
-    setError("");
-    setSaving(false);
-    setPostAspectId(initialPostAspect);
-  }, [open, imageSrc, initialPostAspect]);
+  // Reset ao (re)abrir para uma nova imagem — durante a renderização, sem efeito.
+  const openKey = open ? imageSrc : null;
+  const [prevOpenKey, setPrevOpenKey] = useState(openKey);
+  if (prevOpenKey !== openKey) {
+    setPrevOpenKey(openKey);
+    if (openKey !== null) {
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setCroppedAreaPixels(null);
+      setError("");
+      setSaving(false);
+      setPostAspectId(initialPostAspect);
+    }
+  }
 
   const postAspect = useMemo(
     () =>
@@ -196,12 +200,18 @@ export function ImageCropEditor({
     };
   }, [kind, postAspect]);
 
-  // Ao trocar proporção no post, recentraliza e volta a um zoom “seguro”
-  useEffect(() => {
-    if (kind !== "post") return;
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
-  }, [postAspectId, kind]);
+  // Ao trocar proporção no post, recentraliza e volta a um zoom "seguro"
+  // — durante a renderização, sem efeito.
+  const aspectResetKey = kind === "post" ? postAspectId : null;
+  const [prevAspectResetKey, setPrevAspectResetKey] =
+    useState(aspectResetKey);
+  if (prevAspectResetKey !== aspectResetKey) {
+    setPrevAspectResetKey(aspectResetKey);
+    if (aspectResetKey !== null) {
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+    }
+  }
 
   const onCropComplete = useCallback((_: Area, pixels: Area) => {
     setCroppedAreaPixels(pixels);
